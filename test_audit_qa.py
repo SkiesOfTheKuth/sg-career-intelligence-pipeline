@@ -155,5 +155,69 @@ class CareerIntelligenceAuditTestSuite(unittest.TestCase):
         self.assertIn("text/csv", res_csv.headers["Content-Type"])
         self.assertGreater(len(res_csv.content), 1_000_000)
 
+    # =========================================================================
+    # 6. UX & PRODUCT EXTENSION TESTS
+    # =========================================================================
+    def test_12_single_job_lookup(self):
+        """Verify single job lookup by ID and proper 404 handling."""
+        res = self.client.get("/api/jobs/SG-OPP-0001", headers=self.auth_header)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("job", data)
+        self.assertEqual(data["job"]["col_01_id"], "SG-OPP-0001")
+        self.assertIn("BANDAI NAMCO", data["job"]["col_02_company"])
+
+        # Non-existent ID returns 404
+        res_404 = self.client.get("/api/jobs/NON_EXISTENT_ID_9999", headers=self.auth_header)
+        self.assertEqual(res_404.status_code, 404)
+
+    def test_13_thai_only_filter(self):
+        """Verify thai_only boolean filter returns only Thai-relevant positions."""
+        res = self.client.get("/api/jobs?thai_only=true&limit=100", headers=self.auth_header)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertGreater(data["total"], 50)
+        for job in data["items"]:
+            is_thai = (
+                "thai" in job.get("col_24_thai_relevance", "").lower()
+                or "thai" in job.get("col_04_category", "").lower()
+                or "thai" in job.get("col_03_title", "").lower()
+            )
+            self.assertTrue(is_thai, f"Job {job.get('col_01_id')} should be Thai-relevant!")
+
+    def test_14_sort_by_options(self):
+        """Verify sorting by score, title, and company."""
+        # By title
+        res_title = self.client.get("/api/jobs?sort_by=title&limit=10", headers=self.auth_header)
+        self.assertEqual(res_title.status_code, 200)
+        titles = [j.get("col_03_title").lower() for j in res_title.json()["items"]]
+        self.assertEqual(titles, sorted(titles))
+
+        # By company
+        res_comp = self.client.get("/api/jobs?sort_by=company&limit=10", headers=self.auth_header)
+        self.assertEqual(res_comp.status_code, 200)
+        comps = [j.get("col_02_company").lower() for j in res_comp.json()["items"]]
+        self.assertEqual(comps, sorted(comps))
+
+    def test_15_ux_redesign_components(self):
+        """Verify redesigned UI contains Spotlight, Explorer, Shortlist, and Dossier Drawer without telemetry leaks."""
+        res = self.client.get("/", headers=self.auth_header)
+        self.assertEqual(res.status_code, 200)
+        text = res.text
+        # Essential IA tabs
+        self.assertIn("id=\"tab-btn-spotlight\"", text)
+        self.assertIn("id=\"tab-btn-explorer\"", text)
+        self.assertIn("id=\"tab-btn-shortlist\"", text)
+        # Interactive Role Dossier Drawer
+        self.assertIn("id=\"drawer-overlay\"", text)
+        self.assertIn("id=\"dossier-title\"", text)
+        # Telemetry removed from candidate hero view
+        self.assertNotIn("Apify Scraping Budget Invested", text)
+        # Candidate value KPIs present
+        self.assertIn("Total Verified Vacancies", text)
+        self.assertIn("Tier 1 Direct Matches", text)
+        self.assertIn("Thai Bilingual Advantage", text)
+        self.assertIn("Salary Disclosed", text)
+
 if __name__ == '__main__':
     unittest.main()

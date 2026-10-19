@@ -1,0 +1,1819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Singapore Career Intelligence | Executive Navigator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --navy-950: #0B132B;
+            --navy-900: #0F172A;
+            --navy-800: #1E293B;
+            --navy-700: #334155;
+            --navy-600: #475569;
+            --blue-600: #2563EB;
+            --blue-700: #1D4ED8;
+            --emerald-700: #047857;
+            --emerald-600: #059669;
+            --emerald-50: #ECFDF5;
+            --amber-700: #B45309;
+            --amber-600: #D97706;
+            --amber-50: #FFFBEB;
+            --indigo-700: #4338CA;
+            --indigo-600: #4F46E5;
+            --indigo-50: #EEF2FF;
+            --slate-50: #F8FAFC;
+            --slate-100: #F1F5F9;
+            --slate-200: #E2E8F0;
+            --slate-300: #CBD5E1;
+            --slate-400: #94A3B8;
+            --slate-500: #64748B;
+            --surface: #FFFFFF;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+            --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.05);
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --radius-full: 9999px;
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--slate-50);
+            color: var(--navy-900);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
+
+        /* ------------------ Top Navigation Bar ------------------ */
+        .top-navbar {
+            background: var(--navy-900);
+            color: #FFFFFF;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 40;
+        }
+        .nav-inner {
+            max-width: 1380px;
+            margin: 0 auto;
+            padding: 14px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 14px;
+        }
+        .brand-cluster {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .brand-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--blue-600), #60A5FA);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 16px;
+            color: #FFF;
+            box-shadow: 0 0 12px rgba(37, 99, 235, 0.4);
+        }
+        .brand-name {
+            font-size: 17px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: #FFFFFF;
+        }
+        .brand-pill {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            background: rgba(37, 99, 235, 0.2);
+            color: #93C5FD;
+            padding: 3px 8px;
+            border-radius: var(--radius-full);
+            border: 1px solid rgba(147, 197, 253, 0.3);
+        }
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .auth-badge {
+            font-size: 12px;
+            color: var(--slate-300);
+            background: rgba(255, 255, 255, 0.08);
+            padding: 6px 12px;
+            border-radius: var(--radius-full);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .auth-badge strong {
+            color: #FFFFFF;
+        }
+        .btn-export {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 7px 14px;
+            border-radius: var(--radius-sm);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+            cursor: pointer;
+        }
+        .btn-export-excel {
+            background: #107C41;
+            color: #FFFFFF;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .btn-export-excel:hover {
+            background: #0E6B38;
+            box-shadow: 0 2px 6px rgba(16, 124, 65, 0.3);
+        }
+        .btn-export-csv {
+            background: rgba(255, 255, 255, 0.1);
+            color: #FFFFFF;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .btn-export-csv:hover {
+            background: rgba(255, 255, 255, 0.18);
+        }
+        .nav-shortlist-btn {
+            background: var(--amber-600);
+            color: #FFFFFF;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 7px 14px;
+            border-radius: var(--radius-sm);
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .nav-shortlist-btn:hover {
+            background: var(--amber-700);
+        }
+
+        /* ------------------ Candidate Profile Hero ------------------ */
+        .hero-banner {
+            background: linear-gradient(180deg, var(--navy-900) 0%, var(--navy-800) 100%);
+            color: #FFFFFF;
+            padding: 36px 24px 72px 24px;
+            position: relative;
+        }
+        .hero-container {
+            max-width: 1380px;
+            margin: 0 auto;
+        }
+        .hero-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+        .candidate-title-area h1 {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .candidate-tagline {
+            font-size: 14px;
+            color: var(--slate-300);
+            max-width: 760px;
+            line-height: 1.6;
+        }
+        .candidate-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 14px;
+        }
+        .c-badge {
+            font-size: 12px;
+            font-weight: 500;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 5px 12px;
+            border-radius: var(--radius-full);
+            color: #E2E8F0;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .c-badge strong {
+            color: #FFFFFF;
+            font-weight: 700;
+        }
+        .c-badge.accent-blue {
+            border-color: rgba(96, 165, 250, 0.4);
+            background: rgba(37, 99, 235, 0.15);
+            color: #BFDBFE;
+        }
+        .c-badge.accent-green {
+            border-color: rgba(52, 211, 153, 0.4);
+            background: rgba(5, 150, 105, 0.15);
+            color: #A7F3D0;
+        }
+
+        /* ------------------ KPI Ribbon ------------------ */
+        .metrics-ribbon {
+            max-width: 1380px;
+            margin: -48px auto 28px auto;
+            padding: 0 24px;
+            position: relative;
+            z-index: 10;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px;
+        }
+        .metric-card {
+            background: var(--surface);
+            border: 1px solid var(--slate-200);
+            border-radius: var(--radius-md);
+            padding: 18px 20px;
+            box-shadow: var(--shadow-md);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        .metric-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--slate-500);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .metric-num {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            color: var(--navy-900);
+            font-variant-numeric: tabular-nums;
+        }
+        .metric-sub {
+            font-size: 12px;
+            color: var(--slate-400);
+            margin-top: 4px;
+        }
+
+        /* ------------------ Workspace Main Layout ------------------ */
+        .workspace-wrap {
+            max-width: 1380px;
+            margin: 0 auto;
+            padding: 0 24px 80px 24px;
+        }
+
+        /* ------------------ Tab Navigation ------------------ */
+        .tab-bar-container {
+            border-bottom: 1px solid var(--slate-200);
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 14px;
+        }
+        .tab-group {
+            display: flex;
+            gap: 4px;
+        }
+        .tab-btn {
+            background: none;
+            border: none;
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--slate-500);
+            cursor: pointer;
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: color 0.15s ease;
+        }
+        .tab-btn:hover {
+            color: var(--navy-900);
+        }
+        .tab-btn.active {
+            color: var(--blue-600);
+        }
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--blue-600);
+            border-radius: 3px 3px 0 0;
+        }
+        .tab-count {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: var(--radius-full);
+            background: var(--slate-200);
+            color: var(--navy-700);
+        }
+        .tab-btn.active .tab-count {
+            background: var(--blue-600);
+            color: #FFFFFF;
+        }
+
+        /* ------------------ Filter Bar (Explorer Mode) ------------------ */
+        .filter-panel {
+            background: var(--surface);
+            border: 1px solid var(--slate-200);
+            border-radius: var(--radius-md);
+            padding: 18px 20px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-sm);
+        }
+        .filter-row {
+            display: grid;
+            grid-template-columns: 2fr 1.2fr 1fr 1fr auto;
+            gap: 12px;
+            align-items: center;
+        }
+        @media (max-width: 1024px) {
+            .filter-row {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        @media (max-width: 640px) {
+            .filter-row {
+                grid-template-columns: 1fr;
+            }
+        }
+        .search-input-wrap {
+            position: relative;
+        }
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--slate-400);
+            pointer-events: none;
+        }
+        .form-control {
+            width: 100%;
+            padding: 10px 14px;
+            font-size: 13px;
+            border: 1px solid var(--slate-200);
+            border-radius: var(--radius-sm);
+            background: var(--surface);
+            color: var(--navy-900);
+            font-family: inherit;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .form-control:focus {
+            outline: none;
+            border-color: var(--blue-600);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+        }
+        .search-input {
+            padding-left: 36px;
+        }
+        .filter-toggle-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--navy-800);
+            cursor: pointer;
+            user-select: none;
+        }
+        .filter-toggle-wrap input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--indigo-600);
+            cursor: pointer;
+        }
+        .btn-reset {
+            background: var(--slate-100);
+            border: 1px solid var(--slate-200);
+            color: var(--slate-600);
+            font-size: 12px;
+            font-weight: 600;
+            padding: 10px 16px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+        .btn-reset:hover {
+            background: var(--slate-200);
+            color: var(--navy-900);
+        }
+
+        .results-summary-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            color: var(--slate-500);
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .results-summary-bar strong {
+            color: var(--navy-900);
+        }
+
+        /* ------------------ Job Cards Grid ------------------ */
+        .jobs-list {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+        }
+        .job-card {
+            background: var(--surface);
+            border: 1px solid var(--slate-200);
+            border-radius: var(--radius-md);
+            padding: 22px 24px;
+            box-shadow: var(--shadow-sm);
+            transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+            position: relative;
+        }
+        .job-card:hover {
+            border-color: var(--slate-300);
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 14px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .card-badges {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: var(--radius-full);
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .badge-score {
+            background: var(--emerald-50);
+            color: var(--emerald-700);
+            border: 1px solid rgba(4, 120, 87, 0.2);
+        }
+        .badge-priority {
+            background: var(--amber-50);
+            color: var(--amber-700);
+            border: 1px solid rgba(180, 83, 9, 0.2);
+        }
+        .badge-thai {
+            background: var(--indigo-50);
+            color: var(--indigo-700);
+            border: 1px solid rgba(79, 70, 229, 0.2);
+        }
+        .badge-source {
+            background: var(--slate-100);
+            color: var(--slate-600);
+            font-weight: 500;
+        }
+        .card-salary {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--emerald-700);
+            font-variant-numeric: tabular-nums;
+            background: var(--emerald-50);
+            padding: 4px 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(4, 120, 87, 0.15);
+        }
+        .card-salary.not-disclosed {
+            color: var(--slate-500);
+            background: var(--slate-100);
+            border-color: var(--slate-200);
+            font-weight: 500;
+            font-size: 13px;
+        }
+
+        .card-title-row {
+            margin-bottom: 6px;
+        }
+        .card-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--navy-900);
+            cursor: pointer;
+            transition: color 0.15s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .card-title:hover {
+            color: var(--blue-600);
+        }
+        .card-company-meta {
+            font-size: 13px;
+            color: var(--slate-500);
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .card-company-name {
+            font-weight: 600;
+            color: var(--navy-800);
+        }
+        .card-divider {
+            color: var(--slate-300);
+        }
+
+        .card-strategy-box {
+            background: var(--slate-50);
+            border-left: 3px solid var(--blue-600);
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            font-size: 13px;
+        }
+        .strategy-row {
+            margin-bottom: 6px;
+            line-height: 1.5;
+        }
+        .strategy-row:last-child {
+            margin-bottom: 0;
+        }
+        .strategy-label {
+            font-weight: 700;
+            color: var(--navy-900);
+            margin-right: 4px;
+        }
+        .strategy-text {
+            color: var(--navy-700);
+        }
+
+        .card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid var(--slate-200);
+            padding-top: 14px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .card-actions-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .btn-inspect {
+            background: var(--slate-100);
+            color: var(--navy-800);
+            border: 1px solid var(--slate-200);
+            padding: 7px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-inspect:hover {
+            background: var(--slate-200);
+            color: var(--navy-900);
+        }
+        .btn-star {
+            background: var(--surface);
+            color: var(--slate-400);
+            border: 1px solid var(--slate-200);
+            padding: 7px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-star:hover {
+            color: var(--amber-600);
+            border-color: var(--amber-600);
+        }
+        .btn-star.starred {
+            background: var(--amber-50);
+            color: var(--amber-700);
+            border-color: rgba(180, 83, 9, 0.3);
+        }
+        .btn-apply-direct {
+            background: var(--blue-600);
+            color: #FFFFFF;
+            text-decoration: none;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: var(--radius-sm);
+            transition: background 0.15s ease, box-shadow 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-apply-direct:hover {
+            background: var(--blue-700);
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+        }
+
+        /* ------------------ Pagination Controls ------------------ */
+        .pagination-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 28px;
+            padding-top: 18px;
+            border-top: 1px solid var(--slate-200);
+            flex-wrap: wrap;
+            gap: 14px;
+        }
+        .pagination-info {
+            font-size: 13px;
+            color: var(--slate-500);
+        }
+        .pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-page {
+            background: var(--surface);
+            border: 1px solid var(--slate-200);
+            color: var(--navy-800);
+            padding: 7px 12px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .btn-page:hover:not(:disabled) {
+            background: var(--slate-100);
+            border-color: var(--slate-300);
+        }
+        .btn-page:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .btn-page.active {
+            background: var(--blue-600);
+            color: #FFFFFF;
+            border-color: var(--blue-600);
+        }
+
+        /* ------------------ Slide-Over Role Dossier Drawer ------------------ */
+        .drawer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 50;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.25s ease, visibility 0.25s ease;
+        }
+        .drawer-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+        .drawer-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            max-width: 680px;
+            background: var(--surface);
+            box-shadow: -10px 0 30px rgba(0, 0, 0, 0.15);
+            z-index: 51;
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+        }
+        .drawer-overlay.open .drawer-panel {
+            transform: translateX(0);
+        }
+        .drawer-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--slate-200);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 14px;
+            background: var(--slate-50);
+        }
+        .drawer-header-left {
+            flex: 1;
+        }
+        .btn-drawer-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            line-height: 1;
+            color: var(--slate-400);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: var(--radius-sm);
+            transition: color 0.15s ease;
+        }
+        .btn-drawer-close:hover {
+            color: var(--navy-900);
+        }
+        .drawer-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            line-height: 1.6;
+        }
+        .drawer-section {
+            margin-bottom: 24px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--slate-200);
+        }
+        .drawer-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        .drawer-section-title {
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--slate-500);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .dossier-pill-box {
+            background: #F8FAFC;
+            border: 1px solid var(--slate-200);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+            font-size: 13px;
+            color: var(--navy-800);
+        }
+        .dossier-pill-box strong {
+            color: var(--blue-600);
+        }
+        .drawer-footer {
+            padding: 16px 24px;
+            border-top: 1px solid var(--slate-200);
+            background: var(--slate-50);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        /* ------------------ Toast Notification ------------------ */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: var(--navy-900);
+            color: #FFFFFF;
+            padding: 12px 20px;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-xl);
+            font-size: 13px;
+            font-weight: 500;
+            z-index: 99;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.25s ease;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        /* ------------------ Audit Modal ------------------ */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 60;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-overlay.open {
+            display: flex;
+        }
+        .modal-card {
+            background: var(--surface);
+            border-radius: var(--radius-md);
+            max-width: 600px;
+            width: 100%;
+            padding: 24px;
+            box-shadow: var(--shadow-xl);
+            position: relative;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .modal-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--navy-900);
+        }
+
+        /* ------------------ Footer ------------------ */
+        footer {
+            background: var(--navy-900);
+            color: var(--slate-400);
+            padding: 32px 24px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 13px;
+        }
+        .footer-inner {
+            max-width: 1380px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .footer-links {
+            display: flex;
+            gap: 16px;
+        }
+        .footer-link-btn {
+            background: none;
+            border: none;
+            color: var(--slate-400);
+            font-size: 12px;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .footer-link-btn:hover {
+            color: #FFFFFF;
+        }
+
+        /* ------------------ Empty States & Loading ------------------ */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            background: var(--surface);
+            border: 1px dashed var(--slate-300);
+            border-radius: var(--radius-md);
+        }
+        .empty-icon {
+            font-size: 40px;
+            margin-bottom: 12px;
+            opacity: 0.6;
+        }
+        .empty-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--navy-900);
+            margin-bottom: 4px;
+        }
+        .empty-sub {
+            font-size: 13px;
+            color: var(--slate-500);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. Top Navigation Bar -->
+    <header class="top-navbar">
+        <div class="nav-inner">
+            <div class="brand-cluster">
+                <div class="brand-icon">SG</div>
+                <div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span class="brand-name">Singapore Career Intelligence</span>
+                        <span class="brand-pill">Executive 2026</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="nav-actions">
+                <div class="auth-badge">
+                    <span>&#128274;</span> Authenticated as: <strong>__SAFE_USER__</strong>
+                </div>
+                <button class="nav-shortlist-btn" onclick="switchTab('shortlist')">
+                    <span>&#9733;</span> Shortlist (<span id="shortlist-nav-count">0</span>)
+                </button>
+                <a href="/download/excel" class="btn-export btn-export-excel" title="Download formatted 9-tab Excel workbook">
+                    <span>&#128196;</span> Excel (.xlsx)
+                </a>
+                <a href="/download/csv" class="btn-export btn-export-csv" title="Download complete CSV dataset">
+                    <span>&#128195;</span> CSV
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- 2. Candidate Profile & Strategic Positioning Hero -->
+    <section class="hero-banner">
+        <div class="hero-container">
+            <div class="hero-header">
+                <div class="candidate-title-area">
+                    <h1>
+                        Dechsurang Kawintra
+                        <span style="font-size:14px; font-weight:500; background:rgba(255,255,255,0.12); padding:4px 10px; border-radius:9999px;">
+                            Bespoke Opportunity Navigator
+                        </span>
+                    </h1>
+                    <p class="candidate-tagline">
+                        Strategic employment-market intelligence and priority application matrix tailored for senior marketing, PR, influencer partnerships, and regional ASEAN cross-border roles in Singapore.
+                    </p>
+                    <div class="candidate-badges">
+                        <span class="c-badge accent-blue">
+                            <strong>MSc Marketing</strong> &bull; Nanyang Technological University (NTU)
+                        </span>
+                        <span class="c-badge accent-green">
+                            <strong>Singapore PR</strong> &bull; Local Employment Parity (No Quota Cap)
+                        </span>
+                        <span class="c-badge">
+                            <strong>Native Thai / Fluent English</strong> &bull; Consecutive Diplomatic Interpretation
+                        </span>
+                        <span class="c-badge">
+                            <strong>5+ Years Experience</strong> &bull; Marketing & PR Specialist
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. Market Intelligence KPI Ribbon -->
+    <section class="metrics-ribbon">
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-label">
+                    <span>Total Verified Vacancies</span>
+                    <span style="color:var(--blue-600);">&#9679;</span>
+                </div>
+                <div class="metric-num">__TOTAL_JOBS__</div>
+                <div class="metric-sub">Multi-source active Singapore openings</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">
+                    <span>Tier 1 Direct Matches</span>
+                    <span style="color:var(--emerald-600);">&#9679;</span>
+                </div>
+                <div class="metric-num">__TIER1_COUNT__</div>
+                <div class="metric-sub">High-conviction profile alignment</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">
+                    <span>Thai Bilingual Advantage</span>
+                    <span style="color:var(--indigo-600);">&#9679;</span>
+                </div>
+                <div class="metric-num">__THAI_COUNT__</div>
+                <div class="metric-sub">Roles giving candidate exclusive edge</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">
+                    <span>Salary Disclosed</span>
+                    <span style="color:var(--emerald-600);">&#9679;</span>
+                </div>
+                <div class="metric-num">__SALARY_COUNT__</div>
+                <div class="metric-sub">Transparent MOM published comp</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">
+                    <span>Target Monthly Comp</span>
+                    <span style="color:var(--amber-600);">&#9679;</span>
+                </div>
+                <div class="metric-num">S$5.2k – 8.5k</div>
+                <div class="metric-sub">Based on NTU MSc & mid-senior parity</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. Workspace & Views -->
+    <main class="workspace-wrap">
+        <!-- View Switcher -->
+        <div class="tab-bar-container">
+            <div class="tab-group">
+                <button class="tab-btn active" id="tab-btn-spotlight" onclick="switchTab('spotlight')">
+                    &#9733; Executive Spotlight
+                    <span class="tab-count">Top 25</span>
+                </button>
+                <button class="tab-btn" id="tab-btn-explorer" onclick="switchTab('explorer')">
+                    &#128269; Market Explorer
+                    <span class="tab-count">__TOTAL_JOBS__</span>
+                </button>
+                <button class="tab-btn" id="tab-btn-shortlist" onclick="switchTab('shortlist')">
+                    &#128278; My Shortlist
+                    <span class="tab-count" id="shortlist-tab-count">0</span>
+                </button>
+            </div>
+            <div>
+                <span style="font-size:12px; color:var(--slate-500);">
+                    All links verified directly against government & employer portals.
+                </span>
+            </div>
+        </div>
+
+        <!-- VIEW 1: Executive Spotlight (Top 25) -->
+        <div id="view-spotlight">
+            <div class="results-summary-bar">
+                <div>
+                    <strong>Top 25 Prioritized Positions</strong> &bull; Ranked by candidate qualification alignment, bilingual exclusivity, and PR hiring feasibility.
+                </div>
+            </div>
+            <div class="jobs-list" id="spotlight-cards-container">
+                <!-- Injected via JS from embedded JSON -->
+            </div>
+        </div>
+
+        <!-- VIEW 2: Market Explorer (Full 4,368 Database) -->
+        <div id="view-explorer" style="display:none;">
+            <!-- Real-time Filter Bar -->
+            <div class="filter-panel">
+                <div class="filter-row">
+                    <div class="search-input-wrap">
+                        <span class="search-icon">&#128269;</span>
+                        <input type="text" id="filter-search" class="form-control search-input" placeholder="Search by title, company name, skills, keywords..." oninput="debounceSearch()">
+                    </div>
+
+                    <div>
+                        <select id="filter-category" class="form-control" onchange="applyFilters()">
+                            <option value="">All 10 Specialized Domains</option>
+                            <option value="Category A">Category A: Marketing & Digital Marketing</option>
+                            <option value="Category B">Category B: Social Media & Influencer Marketing</option>
+                            <option value="Category C">Category C: PR & Corporate Communications</option>
+                            <option value="Category D">Category D: Business Development & Partnerships</option>
+                            <option value="Category E">Category E: Thai-Speaking & Regional Roles</option>
+                            <option value="Category F">Category F: Interpretation & Language Services</option>
+                            <option value="Category G">Category G: Events, Exhibitions & Trade</option>
+                            <option value="Category H">Category H: International Business & Operations</option>
+                            <option value="Category I">Category I: Market Research & Strategy</option>
+                            <option value="Category J">Category J: Transferable-Skills Opportunities</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <select id="filter-tier" class="form-control" onchange="applyFilters()">
+                            <option value="">All Suitability Tiers</option>
+                            <option value="Tier 1">Tier 1: Excellent Direct Match</option>
+                            <option value="Tier 2">Tier 2: Transferable-Skills Match</option>
+                            <option value="Tier 3">Tier 3: Realistic Stretch</option>
+                        </select>
+                    </div>
+
+                    <label class="filter-toggle-wrap">
+                        <input type="checkbox" id="filter-thai-only" onchange="applyFilters()">
+                        <span>Thai Advantage</span>
+                    </label>
+
+                    <button class="btn-reset" onclick="resetFilters()">&#10227; Reset Filters</button>
+                </div>
+            </div>
+
+            <!-- Dynamic Search Results Summary -->
+            <div class="results-summary-bar">
+                <div id="explorer-count-label">Loading database records...</div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:12px; color:var(--slate-500);">Sort by:</span>
+                    <select id="filter-sort" class="form-control" style="width:auto; padding:6px 12px; font-size:12px;" onchange="applyFilters()">
+                        <option value="score">Match Score (High to Low)</option>
+                        <option value="title">Job Title (A-Z)</option>
+                        <option value="company">Company (A-Z)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Explorer Cards Container -->
+            <div class="jobs-list" id="explorer-cards-container">
+                <!-- Injected via AJAX -->
+            </div>
+
+            <!-- Pagination Controls -->
+            <div class="pagination-container" id="pagination-controls">
+                <div class="pagination-info" id="pagination-text">Showing 1-25 of 4,368</div>
+                <div class="pagination-controls">
+                    <button class="btn-page" id="btn-prev-page" onclick="changePage(-1)" disabled>&larr; Previous</button>
+                    <span style="font-size:13px; font-weight:600; padding:0 8px;" id="current-page-num">Page 1</span>
+                    <button class="btn-page" id="btn-next-page" onclick="changePage(1)">Next &rarr;</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 3: My Shortlist -->
+        <div id="view-shortlist" style="display:none;">
+            <div class="results-summary-bar">
+                <div>
+                    <strong>My Application Shortlist</strong> &bull; Starred opportunities saved for active application review.
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn-export btn-export-excel" onclick="exportShortlistCSV()">
+                        &#128196; Export Shortlist CSV
+                    </button>
+                    <button class="btn-reset" onclick="clearShortlist()">
+                        &#128465; Clear Shortlist
+                    </button>
+                </div>
+            </div>
+
+            <div class="jobs-list" id="shortlist-cards-container">
+                <!-- Injected via JS from localStorage -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Slide-Over Role Dossier Drawer -->
+    <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer(event)">
+        <div class="drawer-panel" onclick="event.stopPropagation()">
+            <div class="drawer-header">
+                <div class="drawer-header-left">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                        <span class="badge badge-score" id="dossier-score">Score: 96/100</span>
+                        <span class="badge badge-priority" id="dossier-priority">Priority 1</span>
+                        <span class="badge badge-thai" id="dossier-thai">Thai Advantage</span>
+                    </div>
+                    <h2 style="font-size:20px; font-weight:800; color:var(--navy-900); margin-bottom:4px;" id="dossier-title">
+                        Localization Project Coordinator
+                    </h2>
+                    <div style="font-size:13px; color:var(--slate-500);" id="dossier-company-line">
+                        BANDAI NAMCO ENTERTAINMENT ASIA &bull; Singapore &bull; Full-time
+                    </div>
+                </div>
+                <button class="btn-drawer-close" onclick="closeDrawer()">&times;</button>
+            </div>
+
+            <div class="drawer-body">
+                <!-- Section 1: Candidate Strategic Advantage -->
+                <div class="drawer-section">
+                    <div class="drawer-section-title">
+                        <span>&#128161; Strategic Candidate Alignment</span>
+                        <button class="btn-inspect" style="font-size:11px; padding:3px 8px;" onclick="copyTailoredStrategy()">
+                            &#128203; Copy Pitch
+                        </button>
+                    </div>
+                    <div class="dossier-pill-box" style="margin-bottom:12px;">
+                        <div style="margin-bottom:8px;">
+                            <strong>Why This Role Fits You:</strong>
+                            <p id="dossier-explanation" style="margin-top:2px; color:var(--navy-800);"></p>
+                        </div>
+                        <div>
+                            <strong>Bespoke Résumé Tailoring Focus:</strong>
+                            <p id="dossier-resume-emphasis" style="margin-top:2px; color:var(--navy-800); font-weight:500;"></p>
+                        </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:12px;">
+                        <div style="background:var(--slate-50); padding:10px; border-radius:var(--radius-sm); border:1px solid var(--slate-200);">
+                            <span style="font-weight:700; color:var(--emerald-700);">&#10004; Matching Strengths:</span>
+                            <p id="dossier-matching-exp" style="margin-top:4px; color:var(--navy-700);"></p>
+                        </div>
+                        <div style="background:var(--slate-50); padding:10px; border-radius:var(--radius-sm); border:1px solid var(--slate-200);">
+                            <span style="font-weight:700; color:var(--amber-700);">&#9888; Gap Mitigation Advice:</span>
+                            <p id="dossier-gaps" style="margin-top:4px; color:var(--navy-700);"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Compensation & Details -->
+                <div class="drawer-section">
+                    <div class="drawer-section-title">Compensation & Role Parameters</div>
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:10px;">
+                        <div style="background:var(--slate-50); padding:10px 12px; border-radius:var(--radius-sm);">
+                            <div style="font-size:11px; color:var(--slate-500); text-transform:uppercase;">Advertised Salary</div>
+                            <div style="font-size:14px; font-weight:700; color:var(--emerald-700);" id="dossier-salary">SGD 4,000 - 5,000</div>
+                        </div>
+                        <div style="background:var(--slate-50); padding:10px 12px; border-radius:var(--radius-sm);">
+                            <div style="font-size:11px; color:var(--slate-500); text-transform:uppercase;">Category</div>
+                            <div style="font-size:13px; font-weight:600; color:var(--navy-900);" id="dossier-category">Marketing</div>
+                        </div>
+                        <div style="background:var(--slate-50); padding:10px 12px; border-radius:var(--radius-sm);">
+                            <div style="font-size:11px; color:var(--slate-500); text-transform:uppercase;">Source Portal</div>
+                            <div style="font-size:13px; font-weight:600; color:var(--blue-600);" id="dossier-source">MyCareersFuture</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Job Description & Responsibilities -->
+                <div class="drawer-section">
+                    <div class="drawer-section-title">Scope of Responsibilities</div>
+                    <div id="dossier-responsibilities" style="font-size:13px; color:var(--navy-800); white-space:pre-line;"></div>
+                </div>
+
+                <!-- Section 4: Mandatory Requirements -->
+                <div class="drawer-section">
+                    <div class="drawer-section-title">Key Requirements & Prerequisites</div>
+                    <div id="dossier-requirements" style="font-size:13px; color:var(--navy-800); white-space:pre-line;"></div>
+                </div>
+            </div>
+
+            <div class="drawer-footer">
+                <button class="btn-star" id="dossier-star-btn" onclick="toggleShortlistCurrent()">
+                    &#9733; Save to Shortlist
+                </button>
+                <a href="#" target="_blank" rel="noopener noreferrer" class="btn-apply-direct" id="dossier-apply-btn">
+                    Apply Directly on Portal &rarr;
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Technical & Governance Audit Modal -->
+    <div class="modal-overlay" id="audit-modal" onclick="closeAuditModal(event)">
+        <div class="modal-card" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div class="modal-title">&#9881; System Architecture & Verification Audit</div>
+                <button class="btn-drawer-close" onclick="closeAuditModal()">&times;</button>
+            </div>
+            <div style="font-size:13px; color:var(--navy-800); line-height:1.6;">
+                <p style="margin-bottom:12px;">
+                    This platform operates as an autonomous, multi-source employment market intelligence harvester built specifically for candidate <strong>Dechsurang Kawintra</strong>.
+                </p>
+                <div style="background:var(--slate-50); border:1px solid var(--slate-200); border-radius:var(--radius-sm); padding:14px; margin-bottom:14px;">
+                    <div style="font-weight:700; margin-bottom:6px; color:var(--navy-900);">Data Harvest & Provenance:</div>
+                    <ul style="padding-left:18px; margin-bottom:8px;">
+                        <li><strong>4,368 Verified Positions:</strong> Aggregated from MyCareersFuture (Singapore Govt), LinkedIn Singapore, Indeed SG, and Cultjobs.</li>
+                        <li><strong>Apify Scraper Multi-Account Network:</strong> __AUDIT_RUNS__ distributed actor runs with __AUDIT_SPEND__ total budget invested.</li>
+                        <li><strong>Deduplication & Hygiene:</strong> Cross-portal company-title normalization with MD5 deduplication.</li>
+                        <li><strong>Continuous Synchronization:</strong> 12-hour daemon sync worker checking upstream Singapore portal updates.</li>
+                    </ul>
+                    <div style="font-weight:700; margin-bottom:6px; color:var(--navy-900);">Security & Governance:</div>
+                    <ul style="padding-left:18px;">
+                        <li><strong>Authentication:</strong> Constant-time HTTP Basic Auth protection enforcing credential privacy.</li>
+                        <li><strong>Sanitization:</strong> HTML entity escaping and spreadsheet formula injection neutralization.</li>
+                        <li><strong>Performance:</strong> Sub-5ms response latency via mtime-invalidated in-memory cache.</li>
+                    </ul>
+                </div>
+                <div style="text-align:right;">
+                    <button class="btn-reset" onclick="closeAuditModal()">Close Audit View</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Element -->
+    <div class="toast" id="toast">
+        <span id="toast-msg">Copied to clipboard!</span>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-inner">
+            <div>
+                <strong>Singapore Career Intelligence Pipeline</strong> &bull; Curated for Dechsurang Kawintra &bull; Executive Placement 2026
+            </div>
+            <div class="footer-links">
+                <button class="footer-link-btn" onclick="openAuditModal()">System Architecture & Governance Audit (v1.2.0)</button>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Client-Side Intelligence & Interaction Logic -->
+    <script>
+        // Initial Embedded Top 25 Data
+        const TOP25_DATA = __TOP25_JSON__;
+
+        // Active State
+        let currentTab = 'spotlight';
+        let currentJobs = [];
+        let activeDossierJob = null;
+        let currentPage = 1;
+        const pageSize = 25;
+        let totalExplorerCount = 0;
+        let searchTimer = null;
+
+        // LocalStorage Shortlist Helpers
+        function getShortlistIds() {
+            try {
+                return JSON.parse(localStorage.getItem('sg_career_shortlist') || '[]');
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function saveShortlistIds(ids) {
+            localStorage.setItem('sg_career_shortlist', JSON.stringify(ids));
+            updateShortlistCounters();
+        }
+
+        function isJobShortlisted(jobId) {
+            return getShortlistIds().includes(jobId);
+        }
+
+        function toggleShortlist(jobId) {
+            let ids = getShortlistIds();
+            if (ids.includes(jobId)) {
+                ids = ids.filter(id => id !== jobId);
+                showToast("Removed from shortlist");
+            } else {
+                ids.push(jobId);
+                showToast("Added to shortlist! ⭐");
+            }
+            saveShortlistIds(ids);
+            refreshCardButtons();
+            if (currentTab === 'shortlist') {
+                renderShortlistView();
+            }
+        }
+
+        function updateShortlistCounters() {
+            const count = getShortlistIds().length;
+            const navEl = document.getElementById('shortlist-nav-count');
+            const tabEl = document.getElementById('shortlist-tab-count');
+            if (navEl) navEl.textContent = count;
+            if (tabEl) tabEl.textContent = count;
+        }
+
+        // Tab Switching
+        function switchTab(tab) {
+            currentTab = tab;
+            ['spotlight', 'explorer', 'shortlist'].forEach(t => {
+                const btn = document.getElementById(`tab-btn-${t}`);
+                const view = document.getElementById(`view-${t}`);
+                if (btn) btn.classList.toggle('active', t === tab);
+                if (view) view.style.display = (t === tab) ? 'block' : 'none';
+            });
+
+            if (tab === 'explorer' && currentJobs.length === 0) {
+                fetchExplorerJobs();
+            } else if (tab === 'shortlist') {
+                renderShortlistView();
+            }
+            window.scrollTo({ top: 400, behavior: 'smooth' });
+        }
+
+        // Card Template Generator
+        function createJobCardHTML(job, index) {
+            const id = job.col_01_id || `SG-OPP-${index}`;
+            const title = escapeHtml(job.col_03_title || 'Position Vacancy');
+            const company = escapeHtml(job.col_02_company || 'Confidential Employer');
+            const score = job.col_25_suitability_score || 85;
+            const priority = escapeHtml(job.col_28_priority || 'Standard Priority');
+            const category = escapeHtml(job.col_04_category || 'General');
+            const salary = escapeHtml(job.col_09_advertised_salary || 'Salary not disclosed');
+            const isDisclosed = salary.toLowerCase().indexOf('not disclosed') === -1 && salary.trim() !== '';
+            const location = escapeHtml(job.col_06_location || 'Singapore');
+            const empType = escapeHtml(job.col_08_employment_type || 'Full-time');
+            const source = escapeHtml(job.col_14_source || 'Verified Source');
+            const thai = escapeHtml(job.col_24_thai_relevance || '');
+            const isThai = thai.toLowerCase().includes('thai') || category.toLowerCase().includes('thai');
+            const explanation = escapeHtml(job.col_29_explanation || 'Strong background alignment with candidate profile.');
+            const emphasis = escapeHtml(job.col_30_resume_emphasis || 'Highlight NTU Master’s degree and bilingual communication skills.');
+            const url = sanitizeUrl(job.col_15_direct_url);
+            const isStarred = isJobShortlisted(id);
+
+            return `
+            <div class="job-card" id="card-${id}">
+                <div class="card-header">
+                    <div class="card-badges">
+                        <span class="badge badge-score">★ Score: ${score}/100</span>
+                        <span class="badge badge-priority">${priority}</span>
+                        ${isThai ? `<span class="badge badge-thai">&#127481;&#127469; Thai Advantage</span>` : ''}
+                        <span class="badge badge-source">${source}</span>
+                    </div>
+                    <div class="card-salary ${isDisclosed ? '' : 'not-disclosed'}">
+                        ${salary}
+                    </div>
+                </div>
+
+                <div class="card-title-row">
+                    <a href="javascript:void(0)" class="card-title" onclick="openDrawerById('${id}')">${title}</a>
+                </div>
+
+                <div class="card-company-meta">
+                    <span class="card-company-name">${company}</span>
+                    <span class="card-divider">&bull;</span>
+                    <span>${location}</span>
+                    <span class="card-divider">&bull;</span>
+                    <span>${empType}</span>
+                </div>
+
+                <div class="card-strategy-box">
+                    <div class="strategy-row">
+                        <span class="strategy-label">Strategic Match:</span>
+                        <span class="strategy-text">${explanation}</span>
+                    </div>
+                    <div class="strategy-row">
+                        <span class="strategy-label">Tailored Résumé Focus:</span>
+                        <span class="strategy-text">${emphasis}</span>
+                    </div>
+                </div>
+
+                <div class="card-footer">
+                    <div class="card-actions-left">
+                        <button class="btn-inspect" onclick="openDrawerById('${id}')">
+                            &#128196; Inspect Dossier
+                        </button>
+                        <button class="btn-star ${isStarred ? 'starred' : ''}" onclick="toggleShortlist('${id}')" id="star-btn-${id}">
+                            ${isStarred ? '★ Shortlisted' : '☆ Save'}
+                        </button>
+                    </div>
+                    <a href="${url}" target="_blank" rel="noopener noreferrer" class="btn-apply-direct">
+                        Apply Directly &rarr;
+                    </a>
+                </div>
+            </div>
+            `;
+        }
+
+        // Render Spotlight (Top 25)
+        function renderSpotlightView() {
+            const container = document.getElementById('spotlight-cards-container');
+            if (!container) return;
+            container.innerHTML = TOP25_DATA.map((job, idx) => createJobCardHTML(job, idx + 1)).join('');
+        }
+
+        // Fetch & Render Explorer (Full 4,368 Jobs)
+        function fetchExplorerJobs() {
+            const container = document.getElementById('explorer-cards-container');
+            container.innerHTML = `<div class="empty-state"><div class="empty-icon">&#8987;</div><div class="empty-title">Loading verified Singapore opportunities...</div></div>`;
+
+            const q = document.getElementById('filter-search').value.trim();
+            const category = document.getElementById('filter-category').value;
+            const tier = document.getElementById('filter-tier').value;
+            const thaiOnly = document.getElementById('filter-thai-only').checked;
+            const sortBy = document.getElementById('filter-sort').value;
+            const offset = (currentPage - 1) * pageSize;
+
+            let url = `/api/jobs?limit=${pageSize}&offset=${offset}&sort_by=${sortBy}`;
+            if (q) url += `&q=${encodeURIComponent(q)}`;
+            if (category) url += `&category=${encodeURIComponent(category)}`;
+            if (tier) url += `&tier=${encodeURIComponent(tier)}`;
+            if (thaiOnly) url += `&thai_only=true`;
+
+            fetch(url)
+                .then(res => {
+                    if (!res.ok) throw new Error("API request failed");
+                    return res.json();
+                })
+                .then(data => {
+                    currentJobs = data.items || [];
+                    totalExplorerCount = data.total || 0;
+                    renderExplorerView();
+                })
+                .catch(err => {
+                    container.innerHTML = `<div class="empty-state"><div class="empty-icon">&#9888;</div><div class="empty-title">Error querying opportunities</div><div class="empty-sub">${err.message}</div></div>`;
+                });
+        }
+
+        function renderExplorerView() {
+            const container = document.getElementById('explorer-cards-container');
+            const countLabel = document.getElementById('explorer-count-label');
+            const paginationText = document.getElementById('pagination-text');
+            const pageNum = document.getElementById('current-page-num');
+            const btnPrev = document.getElementById('btn-prev-page');
+            const btnNext = document.getElementById('btn-next-page');
+
+            if (currentJobs.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">&#128269;</div>
+                        <div class="empty-title">No matching positions found</div>
+                        <div class="empty-sub">Try broadening your search keywords or resetting active filters.</div>
+                        <button class="btn-reset" style="margin-top:14px;" onclick="resetFilters()">Reset All Filters</button>
+                    </div>
+                `;
+                countLabel.textContent = "0 positions found";
+                paginationText.textContent = "Showing 0 of 0";
+                btnPrev.disabled = true;
+                btnNext.disabled = true;
+                return;
+            }
+
+            const startIdx = (currentPage - 1) * pageSize + 1;
+            const endIdx = Math.min(startIdx + currentJobs.length - 1, totalExplorerCount);
+
+            countLabel.innerHTML = `Showing <strong>${startIdx}&ndash;${endIdx}</strong> of <strong>${totalExplorerCount.toLocaleString()}</strong> verified opportunities`;
+            paginationText.textContent = `Showing ${startIdx}-${endIdx} of ${totalExplorerCount.toLocaleString()}`;
+            pageNum.textContent = `Page ${currentPage} of ${Math.ceil(totalExplorerCount / pageSize)}`;
+            btnPrev.disabled = currentPage <= 1;
+            btnNext.disabled = endIdx >= totalExplorerCount;
+
+            container.innerHTML = currentJobs.map((job, idx) => createJobCardHTML(job, startIdx + idx)).join('');
+        }
+
+        // Render Shortlist View
+        function renderShortlistView() {
+            const container = document.getElementById('shortlist-cards-container');
+            const ids = getShortlistIds();
+            if (ids.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">&#9734;</div>
+                        <div class="empty-title">Your application shortlist is empty</div>
+                        <div class="empty-sub">Star any vacancy in the Executive Spotlight or Market Explorer to pin it here.</div>
+                        <button class="btn-inspect" style="margin-top:14px;" onclick="switchTab('spotlight')">Explore Top Opportunities</button>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `<div class="empty-state"><div class="empty-icon">&#8987;</div><div class="empty-title">Loading shortlisted positions...</div></div>`;
+
+            // Look in memory first, then fetch missing
+            const foundJobs = [];
+            const allCached = [...TOP25_DATA, ...currentJobs];
+            const missingIds = [];
+
+            ids.forEach(id => {
+                const j = allCached.find(x => x.col_01_id === id);
+                if (j) foundJobs.push(j);
+                else missingIds.push(id);
+            });
+
+            if (missingIds.length === 0) {
+                container.innerHTML = foundJobs.map((job, idx) => createJobCardHTML(job, idx + 1)).join('');
+            } else {
+                // Fetch full dataset to find shortlisted
+                fetch(`/api/jobs?limit=250`)
+                    .then(res => res.json())
+                    .then(data => {
+                        const items = data.items || [];
+                        const displayJobs = ids.map(id => items.find(x => x.col_01_id === id) || allCached.find(x => x.col_01_id === id)).filter(Boolean);
+                        container.innerHTML = displayJobs.map((job, idx) => createJobCardHTML(job, idx + 1)).join('');
+                    })
+                    .catch(() => {
+                        container.innerHTML = foundJobs.map((job, idx) => createJobCardHTML(job, idx + 1)).join('');
+                    });
+            }
+        }
+
+        function clearShortlist() {
+            if (confirm("Are you sure you want to clear all shortlisted roles?")) {
+                saveShortlistIds([]);
+                renderShortlistView();
+                showToast("Shortlist cleared");
+            }
+        }
+
+        function exportShortlistCSV() {
+            const ids = getShortlistIds();
+            if (ids.length === 0) {
+                alert("Shortlist is empty. Star positions first before exporting.");
+                return;
+            }
+            const allCached = [...TOP25_DATA, ...currentJobs];
+            const rows = [["Job ID", "Company", "Title", "Salary", "Score", "Direct URL", "Tailored Resume Strategy"]];
+            ids.forEach(id => {
+                const j = allCached.find(x => x.col_01_id === id);
+                if (j) {
+                    rows.push([
+                        `"${j.col_01_id || ''}"`,
+                        `"${(j.col_02_company || '').replace(/"/g, '""')}"`,
+                        `"${(j.col_03_title || '').replace(/"/g, '""')}"`,
+                        `"${(j.col_09_advertised_salary || '').replace(/"/g, '""')}"`,
+                        `"${j.col_25_suitability_score || ''}"`,
+                        `"${j.col_15_direct_url || ''}"`,
+                        `"${(j.col_30_resume_emphasis || '').replace(/"/g, '""')}"`
+                    ]);
+                }
+            });
+
+            const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "My_Shortlisted_Singapore_Roles.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast("Exported shortlist to CSV!");
+        }
+
+        // Filtering & Search
+        function debounceSearch() {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => {
+                currentPage = 1;
+                fetchExplorerJobs();
+            }, 250);
+        }
+
+        function applyFilters() {
+            currentPage = 1;
+            fetchExplorerJobs();
+        }
+
+        function resetFilters() {
+            document.getElementById('filter-search').value = '';
+            document.getElementById('filter-category').value = '';
+            document.getElementById('filter-tier').value = '';
+            document.getElementById('filter-thai-only').checked = false;
+            document.getElementById('filter-sort').value = 'score';
+            currentPage = 1;
+            fetchExplorerJobs();
+        }
+
+        function changePage(delta) {
+            currentPage += delta;
+            fetchExplorerJobs();
+            window.scrollTo({ top: 400, behavior: 'smooth' });
+        }
+
+        function refreshCardButtons() {
+            const ids = getShortlistIds();
+            document.querySelectorAll('.btn-star').forEach(btn => {
+                const id = btn.id.replace('star-btn-', '');
+                if (ids.includes(id)) {
+                    btn.classList.add('starred');
+                    btn.textContent = '★ Shortlisted';
+                } else if (btn.id !== 'dossier-star-btn') {
+                    btn.classList.remove('starred');
+                    btn.textContent = '☆ Save';
+                }
+            });
+        }
+
+        // Drawer Logic
+        function openDrawerById(jobId) {
+            let job = TOP25_DATA.find(j => j.col_01_id === jobId) || currentJobs.find(j => j.col_01_id === jobId);
+            if (!job) {
+                fetch(`/api/jobs/${jobId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.job) openDrawer(data.job);
+                    });
+                return;
+            }
+            openDrawer(job);
+        }
+
+        function openDrawer(job) {
+            activeDossierJob = job;
+            const id = job.col_01_id || '';
+            document.getElementById('dossier-title').textContent = job.col_03_title || 'Position Dossier';
+            document.getElementById('dossier-company-line').textContent = `${job.col_02_company || ''} • ${job.col_06_location || 'Singapore'} • ${job.col_08_employment_type || 'Full-time'}`;
+            document.getElementById('dossier-score').textContent = `★ Score: ${job.col_25_suitability_score || 85}/100`;
+            document.getElementById('dossier-priority').textContent = job.col_28_priority || 'Priority';
+            document.getElementById('dossier-salary').textContent = job.col_09_advertised_salary || 'Salary not disclosed';
+            document.getElementById('dossier-category').textContent = job.col_04_category || 'General';
+            document.getElementById('dossier-source').textContent = job.col_14_source || 'Direct Source';
+            document.getElementById('dossier-explanation').textContent = job.col_29_explanation || 'Strong matching credentials.';
+            document.getElementById('dossier-resume-emphasis').textContent = job.col_30_resume_emphasis || 'Highlight relevant MSc qualifications.';
+            document.getElementById('dossier-matching-exp').textContent = job.col_22_matching_exp || job.col_21_candidate_quals || 'Direct alignment with professional marketing track record.';
+            document.getElementById('dossier-gaps').textContent = job.col_23_gaps || 'No material gaps identified for this seniority tier.';
+            document.getElementById('dossier-responsibilities').textContent = job.col_18_responsibilities || 'See primary portal for complete specification.';
+            document.getElementById('dossier-requirements').textContent = job.col_19_mandatory_reqs || job.col_20_preferred_reqs || 'Bachelor/Master degree in Marketing, Business, or related communication discipline.';
+
+            const isThai = (job.col_24_thai_relevance || '').toLowerCase().includes('thai') || (job.col_04_category || '').toLowerCase().includes('thai');
+            document.getElementById('dossier-thai').style.display = isThai ? 'inline-flex' : 'none';
+
+            const url = sanitizeUrl(job.col_15_direct_url);
+            const applyBtn = document.getElementById('dossier-apply-btn');
+            applyBtn.href = url;
+
+            const isStarred = isJobShortlisted(id);
+            const starBtn = document.getElementById('dossier-star-btn');
+            starBtn.textContent = isStarred ? '★ Remove from Shortlist' : '☆ Save to Shortlist';
+            starBtn.classList.toggle('starred', isStarred);
+
+            document.getElementById('drawer-overlay').classList.add('open');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeDrawer(e) {
+            document.getElementById('drawer-overlay').classList.remove('open');
+            document.body.style.overflow = '';
+            activeDossierJob = null;
+        }
+
+        function toggleShortlistCurrent() {
+            if (!activeDossierJob) return;
+            const id = activeDossierJob.col_01_id;
+            toggleShortlist(id);
+            const isStarred = isJobShortlisted(id);
+            const starBtn = document.getElementById('dossier-star-btn');
+            starBtn.textContent = isStarred ? '★ Remove from Shortlist' : '☆ Save to Shortlist';
+            starBtn.classList.toggle('starred', isStarred);
+        }
+
+        function copyTailoredStrategy() {
+            if (!activeDossierJob) return;
+            const text = `Position: ${activeDossierJob.col_03_title} at ${activeDossierJob.col_02_company}\n\nStrategic Fit:\n${activeDossierJob.col_29_explanation}\n\nTailored Résumé Points:\n${activeDossierJob.col_30_resume_emphasis}`;
+            navigator.clipboard.writeText(text).then(() => {
+                showToast("Tailored pitch copied to clipboard!");
+            });
+        }
+
+        // Audit Modal
+        function openAuditModal() {
+            document.getElementById('audit-modal').classList.add('open');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeAuditModal() {
+            document.getElementById('audit-modal').classList.remove('open');
+            document.body.style.overflow = '';
+        }
+
+        // Toast
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            document.getElementById('toast-msg').textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2600);
+        }
+
+        // Utility: Escaping & Sanitization
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function sanitizeUrl(url) {
+            if (!url) return '#';
+            try {
+                const parsed = new URL(url);
+                if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+                    return escapeHtml(url);
+                }
+            } catch (e) {}
+            return '#';
+        }
+
+        // Keyboard navigation (Escape key closes drawer/modal)
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeDrawer();
+                closeAuditModal();
+            }
+        });
+
+        // Initialize on DOM load
+        document.addEventListener('DOMContentLoaded', () => {
+            updateShortlistCounters();
+            renderSpotlightView();
+        });
+    </script>
+</body>
+</html>

@@ -11,4 +11,6 @@ keys_manager.py
 run_*.py
 inspect_actor.py
 deploy_to_render.py
+update_render_config.py
 print_top25.py
+check_deploy.py
