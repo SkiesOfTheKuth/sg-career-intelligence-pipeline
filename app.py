@@ -14,6 +14,8 @@ from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
+from sync_engine import synchronize_upstream_jobs, get_sync_telemetry, atomic_save_jobs
+
 # Configure structured logging
 logging.basicConfig(
     level=logging.INFO,
@@ -24,7 +26,7 @@ logger = logging.getLogger("sg_career_pipeline")
 app = FastAPI(
     title="Singapore Career Intelligence Pipeline",
     description="Executive recruitment intelligence and automated job-matching engine for candidate Dechsurang Kawintra",
-    version="1.3.0"
+    version="1.4.0"
 )
 
 # Restrict CORS appropriately
@@ -67,7 +69,7 @@ _cache_lock = threading.Lock()
 _start_time = time.time()
 
 def load_jobs():
-    """Loads jobs dataset with mtime-based memory caching."""
+    """Loads jobs dataset with thread-safe mtime-based memory caching."""
     global _jobs_cache, _jobs_mtime
     if not os.path.exists(DATA_FILE):
         return []
@@ -192,27 +194,16 @@ def filter_jobs(jobs, category=None, tier=None, thai_only=False, min_salary=None
     return filtered
 
 # Autonomous Background Sync Worker
-_sync_lock = threading.Lock()
-
 def background_refresh_loop():
     """Runs periodic sync every 12 hours with thread-safety and error isolation."""
     while True:
         time.sleep(43200) # 12 hours
-        if not _sync_lock.acquire(blocking=False):
-            continue
         try:
             logger.info("[Continuous Pipeline] Running automated periodic sync...")
-            try:
-                from collector_mycareersfuture import fetch_mycareersfuture
-                new_mcf = fetch_mycareersfuture(["Thai", "Marketing Executive", "Social Media Executive"], limit_per_query=10)
-                if new_mcf:
-                    logger.info(f"[Continuous Pipeline] Harvested {len(new_mcf)} new positions.")
-            except Exception as sync_err:
-                logger.warning(f"[Continuous Pipeline] Upstream poll warning: {sync_err}")
+            res = synchronize_upstream_jobs(DATA_FILE)
+            logger.info(f"[Continuous Pipeline] Sync completed: {res}")
         except Exception as e:
             logger.error(f"[Continuous Pipeline] Sync loop exception: {e}")
-        finally:
-            _sync_lock.release()
 
 sync_thread = threading.Thread(target=background_refresh_loop, daemon=True, name="SyncWorker")
 sync_thread.start()
@@ -223,10 +214,11 @@ def healthz():
     jobs = load_jobs()
     return {
         "status": "healthy",
-        "version": "1.3.0",
+        "version": "1.4.0",
         "uptime_seconds": int(time.time() - _start_time),
         "total_jobs_indexed": len(jobs),
-        "sync_worker_alive": sync_thread.is_alive()
+        "sync_worker_alive": sync_thread.is_alive(),
+        "sync_telemetry": get_sync_telemetry()
     }
 
 # --- Authenticated Endpoints (Protected by User Kawa / Pass Kawa123) ---
@@ -284,6 +276,17 @@ def get_job_by_id(job_id: str, user: str = Depends(verify_credentials)):
         if j.get("col_01_id") == job_id:
             return {"authenticated_user": user, "job": j}
     raise HTTPException(status_code=404, detail="Job position not found")
+
+@app.post("/api/sync")
+def trigger_sync(user: str = Depends(verify_credentials)):
+    """Allows authorized operator to trigger an on-demand upstream synchronization."""
+    logger.info(f"Manual synchronization triggered by operator: '{user}'")
+    result = synchronize_upstream_jobs(DATA_FILE)
+    return {
+        "authenticated_user": user,
+        "sync_result": result,
+        "telemetry": get_sync_telemetry()
+    }
 
 @app.get("/api/export/filtered")
 def export_filtered_csv(

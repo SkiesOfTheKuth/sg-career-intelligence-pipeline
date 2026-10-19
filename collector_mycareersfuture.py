@@ -1,8 +1,12 @@
 import requests
 import json
 import time
+import logging
 
-def fetch_mycareersfuture(queries, limit_per_query=50):
+logger = logging.getLogger("sg_collector_mcf")
+
+def fetch_mycareersfuture(queries, limit_per_query=50, timeout=10):
+    """Harvests active job positions from MyCareersFuture API with error handling and deduplication."""
     all_jobs = {}
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -10,7 +14,7 @@ def fetch_mycareersfuture(queries, limit_per_query=50):
     }
     
     for q in queries:
-        print(f"Searching MyCareersFuture for: '{q}'...")
+        logger.info(f"Querying MyCareersFuture API for: '{q}' (limit={limit_per_query})...")
         page = 0
         total_found = 0
         while True:
@@ -21,9 +25,9 @@ def fetch_mycareersfuture(queries, limit_per_query=50):
                 'page': page
             }
             try:
-                res = requests.get(url, headers=headers, params=params, timeout=12)
+                res = requests.get(url, headers=headers, params=params, timeout=timeout)
                 if res.status_code != 200:
-                    print(f"  Error {res.status_code} for query '{q}' page {page}")
+                    logger.warning(f"Upstream MCF returned HTTP {res.status_code} for query '{q}' page {page}")
                     break
                 data = res.json()
                 results = data.get('results', [])
@@ -112,17 +116,21 @@ def fetch_mycareersfuture(queries, limit_per_query=50):
                 page += 1
                 if total_found >= limit_per_query or page >= 5:
                     break
-                time.sleep(0.3)
+                time.sleep(0.2)
+            except requests.RequestException as req_err:
+                logger.warning(f"Network error querying MCF for '{q}': {req_err}")
+                break
             except Exception as e:
-                print(f"Exception fetching {q}: {e}")
+                logger.error(f"Unexpected exception processing MCF response for '{q}': {e}")
                 break
                 
-        print(f"  Total collected for '{q}': {total_found}")
+        logger.info(f"Collected {total_found} postings for query '{q}'.")
         
-    print(f"\nUnique MyCareersFuture jobs collected: {len(all_jobs)}")
+    logger.info(f"Total unique MyCareersFuture positions harvested: {len(all_jobs)}")
     return list(all_jobs.values())
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
     target_queries = [
         "Thai",
         "Thailand",

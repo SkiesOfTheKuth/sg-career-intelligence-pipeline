@@ -258,5 +258,61 @@ class CareerIntelligenceAuditTestSuite(unittest.TestCase):
         self.assertIn("id=\"st-tab-applied\"", text)
         self.assertIn("id=\"st-tab-interviewing\"", text)
 
+    # =========================================================================
+    # 7. INGESTION, ATOMIC PERSISTENCE & SYNC QA TESTS
+    # =========================================================================
+    def test_20_sync_telemetry_in_healthz(self):
+        """Verify /healthz exposes background sync worker telemetry."""
+        res = self.client.get("/healthz")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("sync_telemetry", data)
+        self.assertIn("is_syncing", data["sync_telemetry"])
+        self.assertIn("last_sync_status", data["sync_telemetry"])
+
+    def test_21_manual_sync_endpoint(self):
+        """Verify POST /api/sync requires authentication and rejects unauthorized access."""
+        # Unauth should fail 401
+        res_unauth = self.client.post("/api/sync")
+        self.assertEqual(res_unauth.status_code, 401)
+
+        # Auth should succeed
+        res_auth = self.client.post("/api/sync", headers=self.auth_header)
+        self.assertEqual(res_auth.status_code, 200)
+        data = res_auth.json()
+        self.assertEqual(data["authenticated_user"], "Kawa")
+        self.assertIn("sync_result", data)
+        self.assertIn("telemetry", data)
+
+    def test_22_atomic_persistence_and_mcf_transformation(self):
+        """Verify transform_mcf_job enforces 30 columns and atomic_save_jobs writes safely."""
+        from sync_engine import transform_mcf_job, atomic_save_jobs
+        import tempfile
+
+        raw_sample = {
+            "title": "Regional Thai Social Media Strategist",
+            "company": "ByteDance Pte. Ltd.",
+            "query_matched": "Thai",
+            "url": "https://www.mycareersfuture.gov.sg/job/mock-uuid-9999",
+            "advertised_salary": "SGD 7,000 - 9,500 / monthly"
+        }
+        transformed = transform_mcf_job(raw_sample, 9999)
+        self.assertEqual(len(transformed), 30, "Transformed job must satisfy the 30-column master schema exactly!")
+        self.assertEqual(transformed["col_01_id"], "SG-OPP-9999")
+        self.assertEqual(transformed["col_02_company"], "ByteDance Pte. Ltd.")
+        self.assertEqual(transformed["col_04_category"], "Category E: Thai-Speaking & Thailand-Focused Positions")
+        self.assertEqual(transformed["col_25_suitability_score"], 95)
+
+        # Test atomic file write
+        with tempfile.TemporaryDirectory() as td:
+            target_path = os.path.join(td, "test_jobs.json")
+            success = atomic_save_jobs(target_path, [transformed])
+            self.assertTrue(success)
+            self.assertTrue(os.path.exists(target_path))
+            with open(target_path, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+            self.assertEqual(len(loaded), 1)
+            self.assertEqual(loaded[0]["col_01_id"], "SG-OPP-9999")
+
 if __name__ == '__main__':
     unittest.main()
