@@ -27,7 +27,7 @@ logger = logging.getLogger("sg_career_pipeline")
 app = FastAPI(
     title="Singapore Career Intelligence Pipeline",
     description="Executive recruitment intelligence and automated job-matching engine for candidate Dechsurang Kawintra",
-    version="1.4.0"
+    version="1.5.0"
 )
 
 # Restrict CORS appropriately
