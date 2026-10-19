@@ -314,5 +314,76 @@ class CareerIntelligenceAuditTestSuite(unittest.TestCase):
             self.assertEqual(len(loaded), 1)
             self.assertEqual(loaded[0]["col_01_id"], "SG-OPP-9999")
 
+    # =========================================================================
+    # 6. ADVANCED SEARCH & RELEVANCE ENGINE TESTS
+    # =========================================================================
+    def test_23_multi_token_search_recall(self):
+        """Verify multi-token query matches across non-contiguous words (e.g. 'Thai Marketing')."""
+        res = self.client.get("/api/jobs?q=Thai+Marketing&limit=100", headers=self.auth_header)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertGreater(data["total"], 0, "Multi-token search 'Thai Marketing' must return matching positions!")
+        for job in data["items"]:
+            corpus = f"{job['col_03_title']} {job['col_02_company']} {job['col_04_category']} {job['col_18_responsibilities']} {job['col_24_thai_relevance']} {job.get('col_21_candidate_quals', '')} {job.get('col_19_mandatory_reqs', '')}".lower()
+            self.assertTrue("thai" in corpus and "marketing" in corpus, f"Job {job['col_01_id']} must contain both tokens!")
+
+    def test_24_quoted_exact_phrase_search(self):
+        """Verify quoted query searches for exact phrase match."""
+        res = self.client.get('/api/jobs?q="Localization+Project+Coordinator"&limit=10', headers=self.auth_header)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertGreater(data["total"], 0)
+        first_title = data["items"][0]["col_03_title"]
+        self.assertIn("Localization Project Coordinator", first_title)
+
+    def test_25_search_relevance_ranking(self):
+        """Verify relevance boosting places exact title matches before deep-description matches."""
+        res = self.client.get("/api/jobs?q=Localization&limit=10", headers=self.auth_header)
+        self.assertEqual(res.status_code, 200)
+        items = res.json()["items"]
+        self.assertGreater(len(items), 0)
+        # Top result should feature Localization directly in title
+        self.assertIn("localization", items[0]["col_03_title"].lower())
+
+    def test_26_automated_export_sync_workbook_and_csv(self):
+        """Verify build_full_workbook creates both styled 9-sheet Excel workbook and UTF-8 BOM CSV atomically."""
+        from generate_workbook import build_full_workbook
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            mock_data_path = os.path.join(td, "mock_jobs.json")
+            xlsx_out = os.path.join(td, "test_db.xlsx")
+            csv_out = os.path.join(td, "test_db.csv")
+            
+            sample_jobs = load_jobs()[:10]
+            with open(mock_data_path, "w", encoding="utf-8") as f:
+                json.dump(sample_jobs, f)
+                
+            res = build_full_workbook(data_path=mock_data_path, output_filename=xlsx_out, csv_filename=csv_out)
+            self.assertEqual(res["total_jobs"], 10)
+            self.assertTrue(os.path.exists(xlsx_out))
+            self.assertTrue(os.path.exists(csv_out))
+            
+            wb = openpyxl.load_workbook(xlsx_out)
+            self.assertEqual(len(wb.sheetnames), 9)
+            
+            with open(csv_out, "rb") as cf:
+                content = cf.read()
+                self.assertTrue(content.startswith(b"\xef\xbb\xbf"), "Master CSV export must contain UTF-8 BOM!")
+                self.assertIn(b"Job ID,Company Name,Exact Job Title", content)
+
+    def test_27_indexed_batch_lookup_integrity(self):
+        """Verify O(1) batch lookup returns exact matching jobs in request order without data leakage."""
+        target_ids = "SG-OPP-0001,SG-OPP-0004"
+        res = self.client.get(f"/api/jobs/batch?ids={target_ids}", headers=self.auth_header)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["count"], 2)
+        self.assertEqual(data["items"][0]["col_01_id"], "SG-OPP-0001")
+        self.assertEqual(data["items"][1]["col_01_id"], "SG-OPP-0004")
+        for item in data["items"]:
+            self.assertNotIn("_search_corpus", item)
+            self.assertNotIn("_search_title", item)
+            self.assertNotIn("_max_salary", item)
+
 if __name__ == '__main__':
     unittest.main()

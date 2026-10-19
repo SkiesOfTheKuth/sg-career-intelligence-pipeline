@@ -42,83 +42,85 @@ def atomic_save_jobs(filepath: str, jobs: list) -> bool:
                 pass
         raise
 
+def _trigger_export_refresh(data_file: str):
+    """Refreshes downloadable Excel workbook and master CSV database in background."""
+    def _worker():
+        try:
+            from generate_workbook import build_full_workbook
+            base_dir = os.path.dirname(os.path.abspath(data_file))
+            xlsx_path = os.path.join(base_dir, "Singapore_Career_Intelligence_Database_2026.xlsx")
+            csv_path = os.path.join(base_dir, "Singapore_Career_Intelligence_Database_2026.csv")
+            logger.info(f"[Export Sync] Updating Excel and CSV exports from {data_file}...")
+            build_full_workbook(data_path=data_file, output_filename=xlsx_path, csv_filename=csv_path)
+            logger.info("[Export Sync] Excel and CSV exports successfully synchronized.")
+        except Exception as e:
+            logger.error(f"[Export Sync] Failed to synchronize exports: {e}")
+
+    threading.Thread(target=_worker, daemon=True, name="ExportSyncWorker").start()
+
 def transform_mcf_job(mcf_item: dict, next_id_num: int) -> dict:
-    """Transforms a raw MyCareersFuture job item into the authoritative 30-column schema."""
+    """Transforms a raw MyCareersFuture job item into the authoritative 30-column schema using canonical pipeline rules."""
+    from pipeline_processor import categorize_job, calculate_suitability, estimate_market_salary
+    
     title = mcf_item.get("title", "Untitled Opportunity").strip()
     company = mcf_item.get("company", "Confidential Employer").strip()
     query_matched = mcf_item.get("query_matched", "")
     categories = mcf_item.get("categories", [])
+    desc = mcf_item.get("description", "See primary portal for detailed job specifications.")
+    reqs = mcf_item.get("requirements", "") or ", ".join(mcf_item.get("skills", []))
     
-    # Determine domain category
+    # Authoritative domain categorization and suitability calculation
     cat_lower = (query_matched + " " + title + " " + " ".join(categories)).lower()
-    if "thai" in cat_lower:
+    if "thai" in cat_lower or "thailand" in cat_lower:
         category = "Category E: Thai-Speaking & Thailand-Focused Positions"
         thai_rel = "Critical Advantage"
         score = 95
         tier = "Tier 1: Excellent Direct Match"
         priority = "Priority 1: Immediate Application"
-    elif any(k in cat_lower for k in ["social", "content", "influencer", "tiktok"]):
-        category = "Category B: Social Media, Content, and Influencer Marketing"
-        thai_rel = "General Regional Advantage"
-        score = 90
-        tier = "Tier 1: Excellent Direct Match"
-        priority = "Priority 2: Strong Contender"
-    elif any(k in cat_lower for k in ["public relations", "pr", "corporate communications"]):
-        category = "Category C: Public Relations and Corporate Communications"
-        thai_rel = "General Regional Advantage"
-        score = 88
-        tier = "Tier 1: Excellent Direct Match"
-        priority = "Priority 2: Strong Contender"
-    elif any(k in cat_lower for k in ["business development", "partnership", "account"]):
-        category = "Category D: Business Development and Partnerships"
-        thai_rel = "B2B Commercial Advantage"
-        score = 86
-        tier = "Tier 2: Strong Transferable-Skills Match"
-        priority = "Priority 2: Strong Contender"
-    elif any(k in cat_lower for k in ["event", "trade", "exhibition", "conference"]):
-        category = "Category G: Events, Exhibitions, and Trade"
-        thai_rel = "B2B Matchmaking Advantage"
-        score = 88
-        tier = "Tier 1: Excellent Direct Match"
-        priority = "Priority 2: Strong Contender"
     else:
-        category = "Category A: Marketing and Digital Marketing"
-        thai_rel = "General Regional Advantage"
-        score = 85
-        tier = "Tier 2: Strong Transferable-Skills Match"
-        priority = "Priority 3: Secondary Target"
-
+        category = categorize_job(title, desc, reqs, query_matched)
+        score, tier, priority, thai_rel = calculate_suitability(
+            {"title": title, "description": desc, "requirements": reqs},
+            category
+        )
+    
+    # Authoritative salary estimation
+    adv_salary = mcf_item.get("advertised_salary", "Not disclosed")
+    est_salary = estimate_market_salary(category, title)
+    
+    industry = ", ".join(categories) if categories else "Marketing & Commercial Services"
     today_str = time.strftime("%Y-%m-%d")
+    
     return {
         "col_01_id": f"SG-OPP-{next_id_num:04d}",
         "col_02_company": company,
         "col_03_title": title,
         "col_04_category": category,
-        "col_05_industry": ", ".join(categories) or "Marketing & Communications",
+        "col_05_industry": industry,
         "col_06_location": mcf_item.get("location", "Singapore"),
         "col_07_work_arrangement": mcf_item.get("work_arrangement", "On-site / Hybrid (Singapore)"),
         "col_08_employment_type": mcf_item.get("employment_type", "Permanent Full-time"),
-        "col_09_advertised_salary": mcf_item.get("advertised_salary", "Not disclosed"),
-        "col_10_estimated_salary": "Market Benchmark SGD 4,500 - 6,500 / monthly",
+        "col_09_advertised_salary": adv_salary,
+        "col_10_estimated_salary": est_salary,
         "col_11_posting_date": mcf_item.get("posted_date") or today_str,
-        "col_12_deadline": mcf_item.get("expiry_date", ""),
+        "col_12_deadline": mcf_item.get("expiry_date", "Not stated / Open until filled"),
         "col_13_checked_date": today_str,
         "col_14_source": "MyCareersFuture (Singapore Govt)",
         "col_15_direct_url": mcf_item.get("url", ""),
         "col_16_alt_url": "https://www.mycareersfuture.gov.sg",
         "col_17_verification_status": "Verified active",
-        "col_18_responsibilities": mcf_item.get("description", "See primary portal for detailed job specifications."),
-        "col_19_mandatory_reqs": mcf_item.get("requirements", "") or ", ".join(mcf_item.get("skills", [])),
-        "col_20_preferred_reqs": "Bachelor/Master degree in Marketing, Business, or Communications; bilingual fluency.",
-        "col_21_candidate_quals": "MSc Marketing (NTU Singapore), BBA International Marketing, Singapore Permanent Resident.",
-        "col_22_matching_exp": "Demonstrated marketing campaign execution, digital media, and stakeholder coordination.",
+        "col_18_responsibilities": desc,
+        "col_19_mandatory_reqs": reqs or "Bachelor's / Master's degree in Marketing, Business, or Communications; Professional English proficiency; Relevant digital or liaison experience.",
+        "col_20_preferred_reqs": "Thai language proficiency, agency background, regional ASEAN market exposure, stakeholder management skills.",
+        "col_21_candidate_quals": "MSc Marketing (NTU Singapore), BBA International Marketing (Kasetsart), Bilingual English & Thai, Singapore Permanent Resident.",
+        "col_22_matching_exp": "Marketing & PR Specialist at Social Collective Studio; Content Creator at uWave; Interpreter at Royal Thai Embassy and APAC F&B Expo 2026.",
         "col_23_gaps": "Standard company and industry onboarding orientation.",
         "col_24_thai_relevance": thai_rel,
         "col_25_suitability_score": score,
         "col_26_suitability_tier": tier,
         "col_27_confidence": "High",
         "col_28_priority": priority,
-        "col_29_explanation": f"Direct profile alignment for {title} leveraging candidate's NTU Master's degree and commercial track record.",
+        "col_29_explanation": f"Strategic profile alignment for {title} leveraging candidate's NTU Master's degree and commercial track record.",
         "col_30_resume_emphasis": f"Highlight NTU MSc Marketing qualification, Singapore PR local status, and relevant project achievements for {title}."
     }
 
@@ -139,6 +141,7 @@ def synchronize_upstream_jobs(data_file: str, queries=None, limit_per_query=10) 
     
     try:
         from collector_mycareersfuture import fetch_mycareersfuture
+        from pipeline_processor import is_excluded_title
         target_queries = queries or ["Thai", "Marketing Executive", "Social Media Executive", "Public Relations"]
         logger.info(f"Starting upstream sync for queries: {target_queries}...")
         
@@ -170,9 +173,14 @@ def synchronize_upstream_jobs(data_file: str, queries=None, limit_per_query=10) 
             
         newly_added = []
         for item in raw_items:
+            raw_title = item.get("title", "").strip()
+            if is_excluded_title(raw_title):
+                logger.info(f"Skipping excluded title: '{raw_title}'")
+                continue
+
             url = item.get("url", "").strip()
             comp = item.get("company", "").lower().strip()
-            title = item.get("title", "").lower().strip()
+            title = raw_title.lower()
             
             if url and url in existing_urls:
                 continue
@@ -191,6 +199,7 @@ def synchronize_upstream_jobs(data_file: str, queries=None, limit_per_query=10) 
             updated_jobs = existing_jobs + newly_added
             atomic_save_jobs(data_file, updated_jobs)
             logger.info(f"Successfully integrated {len(newly_added)} new unique jobs. Total now: {len(updated_jobs)}")
+            _trigger_export_refresh(data_file)
         else:
             logger.info("All harvested items were duplicates. Master dataset unchanged.")
             

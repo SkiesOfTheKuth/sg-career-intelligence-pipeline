@@ -1,4 +1,6 @@
 import json
+import csv
+import os
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -164,11 +166,24 @@ def style_sheet(ws, title, rows_data):
     ws.auto_filter.ref = f"A1:{get_column_letter(len(HEADERS))}{len(rows_data) + 1}"
     ws.freeze_panes = "B2"
 
-def build_full_workbook():
-    with open('processed_master_jobs.json', 'r', encoding='utf-8') as f:
+def export_master_csv(master_jobs, output_filename="Singapore_Career_Intelligence_Database_2026.csv"):
+    """Atomically exports all master job records to a UTF-8 BOM CSV file."""
+    dir_name = os.path.dirname(os.path.abspath(output_filename))
+    tmp_out = os.path.join(dir_name, f"tmp_{os.path.basename(output_filename)}")
+    with open(tmp_out, "w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(HEADERS)
+        for job in master_jobs:
+            writer.writerow([job.get(k, "") for k in RECORD_KEYS])
+    os.replace(tmp_out, output_filename)
+    print(f"Successfully saved master CSV database to '{output_filename}' ({len(master_jobs)} records).")
+    return output_filename
+
+def build_full_workbook(data_path='processed_master_jobs.json', output_filename="Singapore_Career_Intelligence_Database_2026.xlsx", csv_filename="Singapore_Career_Intelligence_Database_2026.csv"):
+    with open(data_path, 'r', encoding='utf-8') as f:
         master_jobs = json.load(f)
         
-    print(f"Building Excel workbook for {len(master_jobs)} master jobs...")
+    print(f"Building Excel workbook for {len(master_jobs)} master jobs from '{data_path}'...")
     
     wb = openpyxl.Workbook()
     # Remove default sheet
@@ -217,11 +232,16 @@ def build_full_workbook():
     ws9 = wb.create_sheet(title="Research Coverage & Audit")
     ws9.views.sheetView[0].showGridLines = True
     
-    # Load Apify spend audit
-    try:
-        with open('apify_spend_audit.json', 'r', encoding='utf-8') as f:
-            audit = json.load(f)
-    except:
+    # Load Apify spend audit safely
+    base_dir = os.path.dirname(os.path.abspath(data_path))
+    audit_file = os.path.join(base_dir, 'apify_spend_audit.json')
+    if os.path.exists(audit_file):
+        try:
+            with open(audit_file, 'r', encoding='utf-8') as f:
+                audit = json.load(f)
+        except Exception:
+            audit = {'total_spend_usd': 0, 'audit_log': []}
+    else:
         audit = {'total_spend_usd': 0, 'audit_log': []}
         
     title_font = Font(name="Calibri", size=14, bold=True, color="1B365D")
@@ -280,12 +300,20 @@ def build_full_workbook():
     ws9.column_dimensions["F"].width = 16
     ws9.column_dimensions["G"].width = 14
     
-    output_filename = "Singapore_Career_Intelligence_Database_2026.xlsx"
-    tmp_out = output_filename + ".tmp"
+    dir_name = os.path.dirname(os.path.abspath(output_filename))
+    tmp_out = os.path.join(dir_name, f"tmp_{os.path.basename(output_filename)}")
     wb.save(tmp_out)
-    import os
     os.replace(tmp_out, output_filename)
     print(f"Successfully saved complete 9-sheet workbook to '{output_filename}'!")
+
+    if csv_filename:
+        export_master_csv(master_jobs, csv_filename)
+
+    return {
+        "total_jobs": len(master_jobs),
+        "xlsx_path": output_filename,
+        "csv_path": csv_filename
+    }
 
 if __name__ == '__main__':
     build_full_workbook()
