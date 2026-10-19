@@ -412,7 +412,7 @@ def healthz():
     jobs = load_jobs()
     return {
         "status": "healthy",
-        "version": "1.4.0",
+        "version": app.version,
         "uptime_seconds": int(time.time() - _start_time),
         "total_jobs_indexed": len(jobs),
         "sync_worker_alive": sync_thread.is_alive(),
