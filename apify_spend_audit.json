@@ -1,0 +1,303 @@
+{
+  "total_spend_usd": 33.55630000000001,
+  "runs_count": 33,
+  "audit_log": [
+    {
+      "account_index": 0,
+      "actor": "curious_coder~linkedin-jobs-scraper",
+      "task_name": "LinkedIn - Thai / Thailand / Interpreter",
+      "run_id": "0oPp6n0JulAhIYkRs",
+      "status": "SUCCEEDED",
+      "items_collected": 60,
+      "usd_spent": 0.12004999999999999
+    },
+    {
+      "account_index": 1,
+      "actor": "curious_coder~linkedin-jobs-scraper",
+      "task_name": "LinkedIn - Marketing & Digital Marketing Executive",
+      "run_id": "ZLs4Mf1oH2CQvEEUh",
+      "status": "SUCCEEDED",
+      "items_collected": 60,
+      "usd_spent": 0.11405
+    },
+    {
+      "account_index": 2,
+      "actor": "misceres~indeed-scraper",
+      "task_name": "Indeed - Thai language Singapore",
+      "run_id": "JUdDhXijq0P97c7fQ",
+      "status": "SUCCEEDED",
+      "items_collected": 40,
+      "usd_spent": 0.24
+    },
+    {
+      "account_index": 3,
+      "actor": "curious_coder~linkedin-jobs-scraper",
+      "task_name": "LinkedIn - Social Media & Influencer Marketing",
+      "run_id": "baJY5xdN9dQDKtce1",
+      "status": "SUCCEEDED",
+      "items_collected": 60,
+      "usd_spent": 0.12004999999999999
+    },
+    {
+      "account_index": 4,
+      "actor": "misceres~indeed-scraper",
+      "task_name": "Indeed - Marketing Executive Singapore",
+      "run_id": "Xy8XevYGSxgPmvORz",
+      "status": "SUCCEEDED",
+      "items_collected": 40,
+      "usd_spent": 0.24
+    },
+    {
+      "account_index": 5,
+      "actor": "curious_coder~linkedin-jobs-scraper",
+      "task_name": "LinkedIn - Public Relations & Communications",
+      "run_id": "OoAjXOuJChgD1nqd0",
+      "status": "SUCCEEDED",
+      "items_collected": 60,
+      "usd_spent": 0.10205
+    },
+    {
+      "account_index": 6,
+      "actor": "misceres~indeed-scraper",
+      "task_name": "Indeed - Social Media Executive Singapore",
+      "run_id": "mKlRdobJg77VZSDcS",
+      "status": "SUCCEEDED",
+      "items_collected": 40,
+      "usd_spent": 0.24
+    },
+    {
+      "account_index": 7,
+      "actor": "curious_coder~linkedin-jobs-scraper",
+      "task_name": "LinkedIn - Partnerships & Business Development",
+      "run_id": "EwBKwhlKC7eUbOFVZ",
+      "status": "SUCCEEDED",
+      "items_collected": 60,
+      "usd_spent": 0.11205
+    },
+    {
+      "account_index": 8,
+      "actor": "misceres~indeed-scraper",
+      "task_name": "Indeed - PR Executive Singapore",
+      "run_id": "vObu9es3mbTXKnQKl",
+      "status": "SUCCEEDED",
+      "items_collected": 40,
+      "usd_spent": 0.24
+    },
+    {
+      "account_index": 9,
+      "actor": "curious_coder~linkedin-jobs-scraper",
+      "task_name": "LinkedIn - Events & Trade Shows",
+      "run_id": "3SfRUaE06JUxCADwG",
+      "status": "SUCCEEDED",
+      "items_collected": 60,
+      "usd_spent": 0.11805
+    },
+    {
+      "account_index": 10,
+      "actor": "misceres~indeed-scraper",
+      "task_name": "Indeed - Partnerships Executive Singapore",
+      "run_id": "Sk64taU0zpzPO341T",
+      "status": "SUCCEEDED",
+      "items_collected": 40,
+      "usd_spent": 0.24
+    },
+    {
+      "account_index": 11,
+      "actor": "curious_coder~linkedin-jobs-scraper",
+      "task_name": "LinkedIn - Regional Marketing & Research",
+      "run_id": "bce8XgXcw4LV7oH9E",
+      "status": "SUCCEEDED",
+      "items_collected": 60,
+      "usd_spent": 0.11805
+    },
+    {
+      "account_index": 12,
+      "actor": "apify~google-search-scraper",
+      "task_name": "Google Search - Thai Roles & Agency Openings",
+      "run_id": "sgh6c7raihX2gweMe",
+      "status": "SUCCEEDED",
+      "items_collected": 6,
+      "usd_spent": 0.02255
+    },
+    {
+      "account_index": 13,
+      "actor": "apify~google-search-scraper",
+      "task_name": "Google Search - PR/Influencer Agencies Singapore",
+      "run_id": "eh8rukkLt3VFJit2h",
+      "status": "SUCCEEDED",
+      "items_collected": 6,
+      "usd_spent": 0.027049999999999998
+    },
+    {
+      "account_index": 14,
+      "actor": "misceres~indeed-scraper",
+      "task_name": "Indeed - Regional Marketing 150 items",
+      "run_id": "MRZuaDsf1tFNiCzYL",
+      "status": "SUCCEEDED",
+      "items_collected": 150,
+      "usd_spent": 0.714
+    },
+    {
+      "account_index": 15,
+      "actor": "misceres~indeed-scraper",
+      "task_name": "Indeed - Corporate Communications 150 items",
+      "run_id": "KNngQLKlqr2jN3HIL",
+      "status": "SUCCEEDED",
+      "items_collected": 150,
+      "usd_spent": 0.5760000000000001
+    },
+    {
+      "account_index": 16,
+      "actor": "misceres~indeed-scraper",
+      "task_name": "Indeed - Influencer Marketing 150 items",
+      "run_id": "WqPM6Pm8ufcVz6mJU",
+      "status": "SUCCEEDED",
+      "items_collected": 150,
+      "usd_spent": 0.6
+    },
+    {
+      "account_index": 17,
+      "actor": "misceres~indeed-scraper",
+      "task_name": "Indeed - Event Marketing 150 items",
+      "run_id": "uJ0fiGpSxJrHyzask",
+      "status": "SUCCEEDED",
+      "items_collected": 150,
+      "usd_spent": 0.876
+    },
+    {
+      "account_index": 18,
+      "actor": "curious_coder~linkedin-jobs-scraper",
+      "task_name": "LinkedIn - Consumer Marketing 150 items",
+      "run_id": "1OfC4g8Djdj2d61Od",
+      "status": "SUCCEEDED",
+      "items_collected": 150,
+      "usd_spent": 0.29405
+    },
+    {
+      "account_index": 19,
+      "actor": "curious_coder~linkedin-jobs-scraper",
+      "task_name": "LinkedIn - ASEAN Marketing 150 items",
+      "run_id": "bYa0N5m7qEvFisfQS",
+      "status": "SUCCEEDED",
+      "items_collected": 150,
+      "usd_spent": 0.30005
+    },
+    {
+      "account_index": 20,
+      "actor": "curious_coder~linkedin-jobs-scraper",
+      "task_name": "LinkedIn - Brand Marketing 150 items",
+      "run_id": "hd9MBju4RIgLOjgpc",
+      "status": "SUCCEEDED",
+      "items_collected": 150,
+      "usd_spent": 0.29805
+    },
+    {
+      "account_index": 21,
+      "actor": "curious_coder~linkedin-jobs-scraper",
+      "task_name": "LinkedIn - Strategic Partnerships 150 items",
+      "run_id": "xCm3BaNPwG7IXB1of",
+      "status": "SUCCEEDED",
+      "items_collected": 150,
+      "usd_spent": 0.28005
+    },
+    {
+      "account_index": 22,
+      "actor": "apify~google-search-scraper",
+      "task_name": "Google Search - Thai MNCs & Job Portals Deep Index",
+      "run_id": "GfNG78VjZhjyMDDZP",
+      "status": "RUNNING",
+      "items_collected": 0,
+      "usd_spent": 0.07654999999999999
+    },
+    {
+      "account_index": 23,
+      "actor": "apify~google-search-scraper",
+      "task_name": "Google Search - SG Agencies Deep Crawl",
+      "run_id": "facUaf6Z3PBzFY054",
+      "status": "SUCCEEDED",
+      "items_collected": 12,
+      "usd_spent": 0.04955
+    },
+    {
+      "account_index": 24,
+      "actor": "apify~google-search-scraper",
+      "task_name": "Google Search - Interpretation & Language Services SG",
+      "run_id": "XiZzSUFEADbDXVwlD",
+      "status": "SUCCEEDED",
+      "items_collected": 12,
+      "usd_spent": 0.054049999999999994
+    },
+    {
+      "account_index": 25,
+      "actor": "misceres~indeed-scraper",
+      "task_name": "Indeed - Market Research 150 items",
+      "run_id": "csyygtuhKy8OGt3YK",
+      "status": "SUCCEEDED",
+      "items_collected": 150,
+      "usd_spent": 0.264
+    },
+    {
+      "account_index": 26,
+      "actor": "misceres~indeed-scraper",
+      "task_name": "Indeed - Content Specialist 150 items",
+      "run_id": "S7NHP2acHd8cCPX3q",
+      "status": "SUCCEEDED",
+      "items_collected": 150,
+      "usd_spent": 0.9
+    },
+    {
+      "account_index": 27,
+      "actor": "misceres~indeed-scraper",
+      "task_name": "Indeed - Marketing Full Sector (750 items)",
+      "run_id": "Pgj7KMuuK2obeoWOy",
+      "status": "SUCCEEDED",
+      "items_collected": 750,
+      "usd_spent": 4.164
+    },
+    {
+      "account_index": 28,
+      "actor": "misceres~indeed-scraper",
+      "task_name": "Indeed - Communications Full Sector (750 items)",
+      "run_id": "cVhbZhc0fBj38T2pH",
+      "status": "SUCCEEDED",
+      "items_collected": 750,
+      "usd_spent": 4.5
+    },
+    {
+      "account_index": 29,
+      "actor": "misceres~indeed-scraper",
+      "task_name": "Indeed - Social Media Full Sector (750 items)",
+      "run_id": "5hLh4ZB9WUp6ryo81",
+      "status": "SUCCEEDED",
+      "items_collected": 750,
+      "usd_spent": 4.5
+    },
+    {
+      "account_index": 30,
+      "actor": "misceres~indeed-scraper",
+      "task_name": "Indeed - Partnerships Full Sector (750 items)",
+      "run_id": "2Jh1eRmKIvKEirL2b",
+      "status": "SUCCEEDED",
+      "items_collected": 750,
+      "usd_spent": 4.5
+    },
+    {
+      "account_index": 31,
+      "actor": "misceres~indeed-scraper",
+      "task_name": "Indeed - BD Full Sector (750 items)",
+      "run_id": "Yx0UT7uuZLLJgoQX5",
+      "status": "SUCCEEDED",
+      "items_collected": 750,
+      "usd_spent": 4.152
+    },
+    {
+      "account_index": 32,
+      "actor": "misceres~indeed-scraper",
+      "task_name": "Indeed - Events Full Sector (750 items)",
+      "run_id": "HRgEVYuwyk409CrqC",
+      "status": "SUCCEEDED",
+      "items_collected": 750,
+      "usd_spent": 4.404
+    }
+  ]
+}

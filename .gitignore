@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.env
+.DS_Store
+apify_keys.json
+apify api keys*
+*test*.py
+keys_manager.py
+run_*.py
+inspect_actor.py
