@@ -1,0 +1,159 @@
+import unittest
+import base64
+import json
+import os
+import openpyxl
+from fastapi.testclient import TestClient
+
+from app import app, sanitize_url, load_jobs
+from generate_workbook import sanitize_cell, HEADERS
+
+class CareerIntelligenceAuditTestSuite(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.client = TestClient(app)
+        cls.valid_user = "Kawa"
+        cls.valid_pass = "Kawa123"
+        cls.auth_header = {
+            "Authorization": "Basic " + base64.b64encode(f"{cls.valid_user}:{cls.valid_pass}".encode()).decode()
+        }
+        cls.bad_auth_header = {
+            "Authorization": "Basic " + base64.b64encode(b"Kawa:WrongPassword").decode()
+        }
+
+    # =========================================================================
+    # 1. AUTHENTICATION & ACCESS CONTROL TESTS
+    # =========================================================================
+    def test_01_unauthenticated_request_rejected(self):
+        """Verify that all public access without credentials is unconditionally rejected with 401."""
+        endpoints = ["/", "/api/jobs", "/api/stats", "/api/top25", "/download/excel", "/download/csv"]
+        for ep in endpoints:
+            res = self.client.get(ep)
+            self.assertEqual(res.status_code, 401, f"Endpoint {ep} should require authentication!")
+            self.assertIn("WWW-Authenticate", res.headers)
+            self.assertIn("Basic", res.headers["WWW-Authenticate"])
+
+    def test_02_invalid_credentials_rejected(self):
+        """Verify that incorrect credentials fail with 401."""
+        res = self.client.get("/", headers=self.bad_auth_header)
+        self.assertEqual(res.status_code, 401)
+        self.assertIn("Invalid username or password", res.text)
+
+    def test_03_authenticated_access_succeeds(self):
+        """Verify that valid credentials (Kawa / Kawa123) successfully access all routes."""
+        res_home = self.client.get("/", headers=self.auth_header)
+        self.assertEqual(res_home.status_code, 200)
+        self.assertIn("Authenticated as: <strong>Kawa</strong>", res_home.text)
+
+        res_stats = self.client.get("/api/stats", headers=self.auth_header)
+        self.assertEqual(res_stats.status_code, 200)
+        data = res_stats.json()
+        self.assertEqual(data.get("authenticated_user"), "Kawa")
+        self.assertGreater(data.get("total_jobs"), 1000)
+
+        res_top25 = self.client.get("/api/top25", headers=self.auth_header)
+        self.assertEqual(res_top25.status_code, 200)
+        self.assertEqual(len(res_top25.json().get("items")), 25)
+
+    def test_04_healthz_endpoint_accessible_unauthenticated(self):
+        """Verify that /healthz is unauthenticated so Cloud/Render uptime monitors remain healthy."""
+        res = self.client.get("/healthz")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data.get("status"), "healthy")
+        self.assertTrue(data.get("sync_worker_alive"))
+
+    # =========================================================================
+    # 2. SECURITY & INPUT SANITIZATION TESTS (XSS & FORMULA INJECTION)
+    # =========================================================================
+    def test_05_url_sanitization(self):
+        """Verify that dangerous pseudo-protocols (javascript:, data:) are neutralized."""
+        self.assertEqual(sanitize_url("javascript:alert(1)"), "#")
+        self.assertEqual(sanitize_url("data:text/html,<script>alert(1)</script>"), "#")
+        self.assertEqual(sanitize_url(""), "#")
+        self.assertEqual(sanitize_url(None), "#")
+        valid_url = "https://www.linkedin.com/jobs/view/12345"
+        self.assertEqual(sanitize_url(valid_url), valid_url)
+
+    def test_06_formula_injection_defense(self):
+        """Verify that spreadsheet formula injection payloads are safely quoted."""
+        self.assertEqual(sanitize_cell("=cmd|' /C calc'!A0"), "'=cmd|' /C calc'!A0")
+        self.assertEqual(sanitize_cell("@SUM(A1:A10)"), "'@SUM(A1:A10)")
+        self.assertEqual(sanitize_cell("+cmd|..."), "'+cmd|...")
+        # Purely numeric negative/positive values should NOT be quoted
+        self.assertEqual(sanitize_cell("-500"), "-500")
+        self.assertEqual(sanitize_cell("+100"), "+100")
+        self.assertEqual(sanitize_cell("Standard Marketing Title"), "Standard Marketing Title")
+
+    # =========================================================================
+    # 3. PERFORMANCE & IN-MEMORY CACHE TESTS
+    # =========================================================================
+    def test_07_in_memory_cache_behavior(self):
+        """Verify that repeated calls to load_jobs return identical in-memory instances without disk thrashing."""
+        jobs1 = load_jobs()
+        jobs2 = load_jobs()
+        self.assertIs(jobs1, jobs2, "load_jobs() must return cached in-memory reference!")
+        self.assertGreater(len(jobs1), 4000)
+
+    # =========================================================================
+    # 4. API CONTRACT & BOUNDARY TESTS
+    # =========================================================================
+    def test_08_api_pagination_bounds(self):
+        """Verify pagination clamp bounds (limit <= 250, offset >= 0)."""
+        # Test large limit clamped to <= 250
+        res = self.client.get("/api/jobs?limit=5000", headers=self.auth_header)
+        self.assertEqual(res.status_code, 422, "FastAPI validation should reject limit > 250!")
+
+        res_ok = self.client.get("/api/jobs?limit=250&offset=0", headers=self.auth_header)
+        self.assertEqual(res_ok.status_code, 200)
+        self.assertEqual(len(res_ok.json().get("items")), 250)
+
+    def test_09_adversarial_search_queries(self):
+        """Verify that special characters and non-matching filters execute safely without 500 error."""
+        res = self.client.get("/api/jobs?q=%27%22%3C%3E%26%24%25%5E*()_+", headers=self.auth_header)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json().get("total"), 0)
+
+        res_cat = self.client.get("/api/jobs?category=NON_EXISTENT_CATEGORY_123", headers=self.auth_header)
+        self.assertEqual(res_cat.status_code, 200)
+        self.assertEqual(res_cat.json().get("total"), 0)
+
+    # =========================================================================
+    # 5. DATASET & WORKBOOK INTEGRITY TESTS
+    # =========================================================================
+    def test_10_excel_workbook_structure(self):
+        """Verify the generated Excel workbook exists, contains all 9 sheets and 30 columns."""
+        wb_path = "Singapore_Career_Intelligence_Database_2026.xlsx"
+        self.assertTrue(os.path.exists(wb_path), "Master Excel workbook must exist on disk!")
+        wb = openpyxl.load_workbook(wb_path, read_only=True)
+        expected_sheets = [
+            "Master Job Database",
+            "Top Priority Opportunities",
+            "Marketing & Communications",
+            "Thai-Speaking & Regional",
+            "Business Dev & Partnerships",
+            "Interpretation & Freelance",
+            "Transferable Skills",
+            "Verification Required",
+            "Research Coverage & Audit"
+        ]
+        for s in expected_sheets:
+            self.assertIn(s, wb.sheetnames, f"Sheet '{s}' missing from workbook!")
+
+        # Verify headers count
+        self.assertEqual(len(HEADERS), 30, "Workbook must define exactly 30 required columns!")
+
+    def test_11_file_download_endpoints(self):
+        """Verify that authenticated download endpoints deliver the expected binary files."""
+        res_xl = self.client.get("/download/excel", headers=self.auth_header)
+        self.assertEqual(res_xl.status_code, 200)
+        self.assertIn("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", res_xl.headers["Content-Type"])
+        self.assertGreater(len(res_xl.content), 1_000_000)
+
+        res_csv = self.client.get("/download/csv", headers=self.auth_header)
+        self.assertEqual(res_csv.status_code, 200)
+        self.assertIn("text/csv", res_csv.headers["Content-Type"])
+        self.assertGreater(len(res_csv.content), 1_000_000)
+
+if __name__ == '__main__':
+    unittest.main()

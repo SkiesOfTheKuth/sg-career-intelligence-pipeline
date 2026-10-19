@@ -4,7 +4,9 @@ __pycache__/
 .DS_Store
 apify_keys.json
 apify api keys*
-*test*.py
+test_apify_run.py
+test_google_scraper.py
+test_indeed_scraper.py
 keys_manager.py
 run_*.py
 inspect_actor.py
