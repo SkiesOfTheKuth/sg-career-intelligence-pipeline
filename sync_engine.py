@@ -9,6 +9,10 @@ import threading
 logger = logging.getLogger("sg_sync_engine")
 
 _sync_lock = threading.Lock()
+_export_lock = threading.Lock()
+_export_in_progress = False
+_export_pending = False
+
 _telemetry = {
     "is_syncing": False,
     "last_sync_timestamp": None,
@@ -42,21 +46,47 @@ def atomic_save_jobs(filepath: str, jobs: list) -> bool:
                 pass
         raise
 
-def _trigger_export_refresh(data_file: str):
-    """Refreshes downloadable Excel workbook and master CSV database in background."""
+def trigger_export_refresh_async(data_file: str):
+    """Refreshes downloadable Excel workbook and master CSV database in background with serialization and coalescing."""
+    global _export_in_progress, _export_pending
+    
+    with _export_lock:
+        if _export_in_progress:
+            _export_pending = True
+            logger.info("[Export Sync] Export worker is already active; queued pending refresh.")
+            return
+        _export_in_progress = True
+
     def _worker():
+        global _export_in_progress, _export_pending
         try:
             from generate_workbook import build_full_workbook
             base_dir = os.path.dirname(os.path.abspath(data_file))
             xlsx_path = os.path.join(base_dir, "Singapore_Career_Intelligence_Database_2026.xlsx")
             csv_path = os.path.join(base_dir, "Singapore_Career_Intelligence_Database_2026.csv")
-            logger.info(f"[Export Sync] Updating Excel and CSV exports from {data_file}...")
-            build_full_workbook(data_path=data_file, output_filename=xlsx_path, csv_filename=csv_path)
-            logger.info("[Export Sync] Excel and CSV exports successfully synchronized.")
+            
+            while True:
+                logger.info(f"[Export Sync] Updating Excel and CSV exports from {data_file}...")
+                build_full_workbook(data_path=data_file, output_filename=xlsx_path, csv_filename=csv_path)
+                logger.info("[Export Sync] Excel and CSV exports successfully synchronized.")
+                
+                with _export_lock:
+                    if _export_pending:
+                        _export_pending = False
+                        logger.info("[Export Sync] Processing queued export request...")
+                        continue
+                    else:
+                        _export_in_progress = False
+                        break
         except Exception as e:
             logger.error(f"[Export Sync] Failed to synchronize exports: {e}")
+            with _export_lock:
+                _export_in_progress = False
+                _export_pending = False
 
     threading.Thread(target=_worker, daemon=True, name="ExportSyncWorker").start()
+
+_trigger_export_refresh = trigger_export_refresh_async
 
 def transform_mcf_job(mcf_item: dict, next_id_num: int) -> dict:
     """Transforms a raw MyCareersFuture job item into the authoritative 30-column schema using canonical pipeline rules."""

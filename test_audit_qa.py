@@ -322,9 +322,9 @@ class CareerIntelligenceAuditTestSuite(unittest.TestCase):
         res = self.client.get("/api/jobs?q=Thai+Marketing&limit=100", headers=self.auth_header)
         self.assertEqual(res.status_code, 200)
         data = res.json()
-        self.assertGreater(data["total"], 0, "Multi-token search 'Thai Marketing' must return matching positions!")
+        self.assertEqual(data["total"], 45, "Multi-token search 'Thai Marketing' must return exactly 45 genuine job postings!")
         for job in data["items"]:
-            corpus = f"{job['col_03_title']} {job['col_02_company']} {job['col_04_category']} {job['col_18_responsibilities']} {job['col_24_thai_relevance']} {job.get('col_21_candidate_quals', '')} {job.get('col_19_mandatory_reqs', '')}".lower()
+            corpus = f"{job['col_03_title']} {job['col_02_company']} {job['col_04_category']} {job['col_05_industry']} {job['col_06_location']} {job['col_18_responsibilities']} {job['col_24_thai_relevance']}".lower()
             self.assertTrue("thai" in corpus and "marketing" in corpus, f"Job {job['col_01_id']} must contain both tokens!")
 
     def test_24_quoted_exact_phrase_search(self):
@@ -384,6 +384,73 @@ class CareerIntelligenceAuditTestSuite(unittest.TestCase):
             self.assertNotIn("_search_corpus", item)
             self.assertNotIn("_search_title", item)
             self.assertNotIn("_max_salary", item)
+
+    def test_28_candidate_profile_not_polluting_search_corpus(self):
+        """Verify candidate resume boilerplate (e.g. 'Kasetsart', 'MSc Marketing NTU') does not match unrelated jobs."""
+        res = self.client.get("/api/jobs?q=Kasetsart", headers=self.auth_header)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["total"], 0, "Candidate CV terms like 'Kasetsart' must never match job postings!")
+
+    def test_29_salary_normalization_annual_and_hourly(self):
+        """Verify annual and hourly salaries are normalized to monthly equivalent for sorting/filtering."""
+        from app import extract_salary_range
+        # Annual: $60,000 - $72,000 a year -> $5,000 - $6,000 /mo
+        s_min, s_max = extract_salary_range("$60,000 - $72,000 a year")
+        self.assertEqual(s_min, 5000)
+        self.assertEqual(s_max, 6000)
+        
+        # Annually single figure
+        s_min2, s_max2 = extract_salary_range("$120,000 annually")
+        self.assertEqual(s_min2, 10000)
+        self.assertEqual(s_max2, 10000)
+        
+        # Hourly: $20 - $30 an hour -> $3,460 - $5,190 /mo (x173)
+        s_min3, s_max3 = extract_salary_range("$20 - $30 an hour")
+        self.assertEqual(s_min3, 20 * 173)
+        self.assertEqual(s_max3, 30 * 173)
+
+        # Standard monthly remains unaltered
+        s_min4, s_max4 = extract_salary_range("$5,000 - $7,000 monthly")
+        self.assertEqual(s_min4, 5000)
+        self.assertEqual(s_max4, 7000)
+
+    def test_30_title_exclusion_whitelist_and_preservation(self):
+        """Verify legitimate graduate and management trainee schemes are preserved while blue-collar roles are excluded."""
+        from pipeline_processor import is_excluded_title
+        # Whitelisted entry schemes
+        self.assertFalse(is_excluded_title("Management Trainee - Regional Marketing"))
+        self.assertFalse(is_excluded_title("Graduate Trainee (Commercial & Sales)"))
+        self.assertFalse(is_excluded_title("Growth Driver / Management Associate"))
+        self.assertFalse(is_excluded_title("Leadership Development Program Associate"))
+        
+        # Excluded blue collar / unrelated roles
+        self.assertTrue(is_excluded_title("Thai Chef"))
+        self.assertTrue(is_excluded_title("Dishwasher"))
+        self.assertTrue(is_excluded_title("Security Officer"))
+        self.assertTrue(is_excluded_title("Driver / Delivery Man"))
+
+    def test_31_export_sync_coalescing_and_concurrency(self):
+        """Verify export synchronization coalesces rapid triggers without temp file conflicts."""
+        import sync_engine
+        import tempfile
+        import time
+        with tempfile.TemporaryDirectory() as td:
+            data_file = os.path.join(td, "jobs.json")
+            with open(data_file, "w", encoding="utf-8") as f:
+                json.dump(load_jobs()[:5], f)
+            
+            # Rapidly trigger export refresh multiple times
+            sync_engine.trigger_export_refresh_async(data_file)
+            sync_engine.trigger_export_refresh_async(data_file)
+            sync_engine.trigger_export_refresh_async(data_file)
+            
+            # Wait for export lock / progress to clear
+            max_wait = 15
+            start = time.time()
+            while (sync_engine._export_in_progress or sync_engine._export_pending) and (time.time() - start < max_wait):
+                time.sleep(0.2)
+                
+            self.assertFalse(sync_engine._export_in_progress)
 
 if __name__ == '__main__':
     unittest.main()

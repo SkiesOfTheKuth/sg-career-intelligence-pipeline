@@ -1,6 +1,7 @@
 import json
 import csv
 import os
+import tempfile
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -167,17 +168,26 @@ def style_sheet(ws, title, rows_data):
     ws.freeze_panes = "B2"
 
 def export_master_csv(master_jobs, output_filename="Singapore_Career_Intelligence_Database_2026.csv"):
-    """Atomically exports all master job records to a UTF-8 BOM CSV file."""
+    """Atomically exports all master job records to a UTF-8 BOM CSV file using collision-free temp files."""
     dir_name = os.path.dirname(os.path.abspath(output_filename))
-    tmp_out = os.path.join(dir_name, f"tmp_{os.path.basename(output_filename)}")
-    with open(tmp_out, "w", encoding="utf-8-sig", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(HEADERS)
-        for job in master_jobs:
-            writer.writerow([job.get(k, "") for k in RECORD_KEYS])
-    os.replace(tmp_out, output_filename)
-    print(f"Successfully saved master CSV database to '{output_filename}' ({len(master_jobs)} records).")
-    return output_filename
+    tmp_name = None
+    try:
+        with tempfile.NamedTemporaryFile("w", dir=dir_name, delete=False, suffix=".csv", encoding="utf-8-sig", newline="") as tf:
+            writer = csv.writer(tf)
+            writer.writerow(HEADERS)
+            for job in master_jobs:
+                writer.writerow([job.get(k, "") for k in RECORD_KEYS])
+            tmp_name = tf.name
+        os.replace(tmp_name, output_filename)
+        print(f"Successfully saved master CSV database to '{output_filename}' ({len(master_jobs)} records).")
+        return output_filename
+    except Exception as e:
+        if tmp_name and os.path.exists(tmp_name):
+            try:
+                os.remove(tmp_name)
+            except OSError:
+                pass
+        raise
 
 def build_full_workbook(data_path='processed_master_jobs.json', output_filename="Singapore_Career_Intelligence_Database_2026.xlsx", csv_filename="Singapore_Career_Intelligence_Database_2026.csv"):
     with open(data_path, 'r', encoding='utf-8') as f:
@@ -301,10 +311,20 @@ def build_full_workbook(data_path='processed_master_jobs.json', output_filename=
     ws9.column_dimensions["G"].width = 14
     
     dir_name = os.path.dirname(os.path.abspath(output_filename))
-    tmp_out = os.path.join(dir_name, f"tmp_{os.path.basename(output_filename)}")
-    wb.save(tmp_out)
-    os.replace(tmp_out, output_filename)
-    print(f"Successfully saved complete 9-sheet workbook to '{output_filename}'!")
+    tmp_name = None
+    try:
+        with tempfile.NamedTemporaryFile("wb", dir=dir_name, delete=False, suffix=".xlsx") as tf:
+            tmp_name = tf.name
+        wb.save(tmp_name)
+        os.replace(tmp_name, output_filename)
+        print(f"Successfully saved complete 9-sheet workbook to '{output_filename}'!")
+    except Exception as e:
+        if tmp_name and os.path.exists(tmp_name):
+            try:
+                os.remove(tmp_name)
+            except OSError:
+                pass
+        raise
 
     if csv_filename:
         export_master_csv(master_jobs, csv_filename)

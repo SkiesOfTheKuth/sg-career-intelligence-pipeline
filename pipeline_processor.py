@@ -8,16 +8,37 @@ EXCLUSION_TITLE_KEYWORDS = [
     'masseur', 'therapist', 'waiter', 'waitress', 'service crew', 'bartender',
     'nursing', 'nurse', 'doctor', 'physiotherapist', 'pharmacist',
     'technician', 'electrician', 'plumber', 'mechanic', 'carpenter',
-    'construction worker', 'security guard', 'warehouse assistant',
+    'construction worker', 'security guard', 'security officer', 'warehouse assistant',
     'intern', 'internship', 'trainee'
 ]
 
 def is_excluded_title(title):
+    """Identifies unsuitable non-executive titles while strictly preserving graduate/management schemes."""
+    if not title:
+        return False
     t_lower = title.lower()
+
+    # Whitelist legitimate corporate development, graduate, and commercial leadership titles
+    whitelist_patterns = [
+        'management trainee', 'graduate trainee', 'executive trainee',
+        'marketing trainee', 'commercial trainee', 'growth driver', 'business driver'
+    ]
+    if any(wp in t_lower for wp in whitelist_patterns):
+        return False
+
     for kw in EXCLUSION_TITLE_KEYWORDS:
         if re.search(r'\b' + re.escape(kw) + r'\b', t_lower):
-            # Check for rare false positives like "Chief Executive"
+            # Guard false positive: "Chief Executive" is not culinary
             if kw == 'chef' and 'chief' in t_lower:
+                continue
+            # Guard false positive: Trainee programs with corporate context
+            if kw == 'trainee' and any(ok in t_lower for ok in ['management', 'graduate', 'executive', 'marketing', 'commercial', 'associate']):
+                continue
+            # Guard false positive: Commercial / growth drivers
+            if kw == 'driver' and any(ok in t_lower for ok in ['growth', 'business', 'commercial', 'strategy', 'revenue']):
+                continue
+            # Guard false positive: Information/Cyber security officers
+            if kw in ['security guard', 'security officer'] and any(ok in t_lower for ok in ['cyber', 'information', 'it security', 'infosec', 'network security']):
                 continue
             return True
     return False

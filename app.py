@@ -8,6 +8,7 @@ import threading
 import time
 import logging
 import secrets
+from dataclasses import dataclass
 from urllib.parse import urlparse
 from fastapi import FastAPI, Query, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, Response
@@ -62,104 +63,157 @@ def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
         )
     return credentials.username
 
+@dataclass(frozen=True)
+class DatasetSnapshot:
+    mtime: float
+    jobs: list
+    by_id: dict
+    search_index: list
+    stats: dict
+
 # In-Memory Cache and Search Index to maximize throughput and search recall
-_jobs_cache = None
-_jobs_by_id = {}
-_jobs_mtime = 0
-_search_index = None
-_stats_cache = None
+_current_snapshot: DatasetSnapshot = None
 _cache_lock = threading.Lock()
 _start_time = time.time()
 
-def load_jobs():
-    """Loads jobs dataset with thread-safe mtime-based memory caching, ID indexing, and precalculated search indices."""
-    global _jobs_cache, _jobs_by_id, _jobs_mtime, _search_index, _stats_cache
+def extract_salary_range(sal_str: str):
+    """Extracts min and max numeric monthly figures from salary string, normalizing annual and hourly rates."""
+    if not sal_str:
+        return (0, 0)
+    
+    sal_low = sal_str.lower()
+    is_hourly = any(k in sal_low for k in ['hour', 'hourly', '/hr', 'an hour', 'ph'])
+    
+    if is_hourly:
+        raw_nums = re.findall(r'\b\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?\b', sal_str)
+        nums = [int(round(float(n.replace(',', '')))) for n in raw_nums if n.replace(',', '').replace('.', '').isdigit()]
+    else:
+        nums = [int(n.replace(',', '')) for n in re.findall(r'\b\d{1,3}(?:,\d{3})+\b|\b\d{4,6}\b', sal_str)]
+        
+    if not nums:
+        return (0, 0)
+    
+    min_val, max_val = min(nums), max(nums)
+    
+    # Normalize annual base compensation to monthly equivalent
+    if any(k in sal_low for k in ['year', 'annually', 'per annum', 'p.a']):
+        min_val = int(round(min_val / 12))
+        max_val = int(round(max_val / 12))
+    # Normalize hourly wage to monthly equivalent (~173 standard working hours/month)
+    elif is_hourly:
+        min_val = int(round(min_val * 173))
+        max_val = int(round(max_val * 173))
+        
+    return (min_val, max_val)
+
+def get_snapshot() -> DatasetSnapshot:
+    """Returns the current immutable dataset snapshot using thread-safe double-checked caching."""
+    global _current_snapshot
     if not os.path.exists(DATA_FILE):
-        return []
+        return DatasetSnapshot(0, [], {}, [], {})
     try:
         current_mtime = os.path.getmtime(DATA_FILE)
+        snap = _current_snapshot
+        if snap is not None and snap.mtime >= current_mtime:
+            return snap
         with _cache_lock:
-            if _jobs_cache is None or current_mtime > _jobs_mtime:
-                logger.info(f"Loading jobs from {DATA_FILE} (mtime: {current_mtime})...")
-                with open(DATA_FILE, "r", encoding="utf-8") as f:
-                    raw_jobs = json.load(f)
+            snap = _current_snapshot
+            if snap is not None and snap.mtime >= current_mtime:
+                return snap
+            logger.info(f"Building immutable dataset snapshot from {DATA_FILE} (mtime: {current_mtime})...")
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
+                raw_jobs = json.load(f)
 
-                by_id = {}
-                index_data = []
-                tiers = {}
-                cats = {}
-                thai_count = 0
-                salary_count = 0
+            by_id = {}
+            index_data = []
+            tiers = {}
+            cats = {}
+            thai_count = 0
+            salary_count = 0
 
-                for j in raw_jobs:
-                    jid = j.get("col_01_id", "")
-                    if jid:
-                        by_id[jid] = j
+            for j in raw_jobs:
+                jid = j.get("col_01_id", "")
+                if jid:
+                    by_id[jid] = j
 
-                    title_str = j.get("col_03_title", "")
-                    comp_str = j.get("col_02_company", "")
-                    cat_str = j.get("col_04_category", "")
-                    tier_str = j.get("col_26_suitability_tier", "")
-                    sal_str = j.get("col_09_advertised_salary", "")
-                    resp_str = j.get("col_18_responsibilities", "")
-                    thai_rel_str = j.get("col_24_thai_relevance", "")
-                    quals_str = j.get("col_21_candidate_quals", "")
-                    reqs_str = j.get("col_19_mandatory_reqs", "")
+                t_str = j.get("col_03_title", "")
+                c_str = j.get("col_02_company", "")
+                cat_str = j.get("col_04_category", "")
+                ind_str = j.get("col_05_industry", "")
+                loc_str = j.get("col_06_location", "")
+                tier_str = j.get("col_26_suitability_tier", "")
+                sal_str = j.get("col_09_advertised_salary", "")
+                resp_str = j.get("col_18_responsibilities", "")
+                thai_rel_str = j.get("col_24_thai_relevance", "")
 
-                    t_low = title_str.lower()
-                    c_low = comp_str.lower()
-                    cat_low = cat_str.lower()
-                    tier_low = tier_str.lower()
-                    thai_rel_low = thai_rel_str.lower()
+                t_low = t_str.lower()
+                c_low = c_str.lower()
+                cat_low = cat_str.lower()
+                tier_low = tier_str.lower()
+                thai_rel_low = thai_rel_str.lower()
+                ind_low = ind_str.lower()
+                loc_low = loc_str.lower()
+                resp_low = resp_str.lower()
 
-                    is_thai = ("thai" in thai_rel_low) or ("thai" in cat_low) or ("thai" in t_low)
-                    if is_thai:
-                        thai_count += 1
+                is_thai = ("thai" in thai_rel_low) or ("thai" in cat_low) or ("thai" in t_low)
+                if is_thai:
+                    thai_count += 1
 
-                    has_salary = bool(sal_str and "not disclosed" not in sal_str.lower() and sal_str.strip())
-                    if has_salary:
-                        salary_count += 1
+                has_salary = bool(sal_str and "not disclosed" not in sal_str.lower() and sal_str.strip())
+                if has_salary:
+                    salary_count += 1
 
-                    tiers[tier_str] = tiers.get(tier_str, 0) + 1
-                    cats[cat_str] = cats.get(cat_str, 0) + 1
+                tiers[tier_str] = tiers.get(tier_str, 0) + 1
+                cats[cat_str] = cats.get(cat_str, 0) + 1
 
-                    sal_max = extract_salary_range(sal_str)[1]
+                sal_min, sal_max = extract_salary_range(sal_str)
 
-                    try:
-                        num_score = int(j.get("col_25_suitability_score", 0))
-                    except (ValueError, TypeError):
-                        num_score = 0
+                try:
+                    num_score = int(j.get("col_25_suitability_score", 0))
+                except (ValueError, TypeError):
+                    num_score = 0
 
-                    corpus = f"{t_low} {c_low} {cat_low} {thai_rel_low} {resp_str.lower()} {quals_str.lower()} {reqs_str.lower()}"
+                # High-precision search corpus: ONLY genuine job posting attributes!
+                # Strictly excludes static candidate resume strings (col_21 / col_19)
+                corpus = f"{t_low} {c_low} {cat_low} {ind_low} {loc_low} {thai_rel_low} {resp_low}"
 
-                    index_data.append({
-                        "title": t_low,
-                        "company": c_low,
-                        "category": cat_low,
-                        "tier": tier_low,
-                        "is_thai": is_thai,
-                        "has_salary": has_salary,
-                        "max_salary": sal_max,
-                        "score": num_score,
-                        "corpus": corpus
-                    })
+                index_data.append({
+                    "title": t_low,
+                    "company": c_low,
+                    "category": cat_low,
+                    "tier": tier_low,
+                    "is_thai": is_thai,
+                    "has_salary": has_salary,
+                    "max_salary": sal_max,
+                    "score": num_score,
+                    "corpus": corpus
+                })
 
-                _jobs_cache = raw_jobs
-                _jobs_by_id = by_id
-                _search_index = index_data
-                _stats_cache = {
-                    "total_jobs": len(raw_jobs),
-                    "tiers": tiers,
-                    "categories": cats,
-                    "thai_relevance_jobs": thai_count,
-                    "salary_disclosed_jobs": salary_count
-                }
-                _jobs_mtime = current_mtime
-                logger.info(f"Loaded {len(_jobs_cache)} jobs into memory cache (indexed {len(_jobs_by_id)} IDs, {len(_search_index)} search records).")
-            return _jobs_cache
+            stats_dict = {
+                "total_jobs": len(raw_jobs),
+                "tiers": tiers,
+                "categories": cats,
+                "thai_relevance_jobs": thai_count,
+                "salary_disclosed_jobs": salary_count
+            }
+
+            new_snapshot = DatasetSnapshot(
+                mtime=current_mtime,
+                jobs=raw_jobs,
+                by_id=by_id,
+                search_index=index_data,
+                stats=stats_dict
+            )
+            _current_snapshot = new_snapshot
+            logger.info(f"Published dataset snapshot: {len(raw_jobs)} jobs, {len(by_id)} indexed IDs.")
+            return new_snapshot
     except Exception as e:
-        logger.error(f"Error loading jobs dataset: {e}")
-        return _jobs_cache or []
+        logger.error(f"Error loading dataset snapshot: {e}")
+        return _current_snapshot or DatasetSnapshot(0, [], {}, [], {})
+
+def load_jobs():
+    """Loads jobs dataset from the current consistent snapshot."""
+    return get_snapshot().jobs
 
 def load_audit():
     if os.path.exists(AUDIT_FILE):
@@ -201,57 +255,47 @@ def sanitize_url(url: str) -> str:
         pass
     return "#"
 
-def extract_salary_range(sal_str: str):
-    """Extracts min and max numeric monthly figures from salary string."""
-    if not sal_str:
-        return (0, 0)
-    nums = [int(n.replace(',', '')) for n in re.findall(r'\b\d{1,3}(?:,\d{3})+\b|\b\d{4,6}\b', sal_str)]
-    if not nums:
-        return (0, 0)
-    return (min(nums), max(nums))
-
 def filter_jobs(jobs, category=None, tier=None, thai_only=False, min_salary=None, salary_only=False, q=None, sort_by="score"):
-    """Unified, high-performance in-memory filtering and sorting engine with multi-token recall."""
-    global _jobs_cache, _search_index
+    """Unified, high-precision in-memory filtering and sorting engine with multi-token recall and relevance ranking."""
+    snap = _current_snapshot
 
-    # Check if we can use the precomputed index
-    if jobs is _jobs_cache and _search_index is not None and len(_search_index) == len(_jobs_cache):
-        matching = list(range(len(_jobs_cache)))
+    # Fast-path: use precomputed search index if querying against the active master snapshot
+    if snap is not None and jobs is snap.jobs and len(snap.search_index) == len(jobs):
+        matching = list(range(len(jobs)))
 
         if category:
             cat_low = category.lower()
-            matching = [i for i in matching if cat_low in _search_index[i]["category"]]
+            matching = [i for i in matching if cat_low in snap.search_index[i]["category"]]
         if tier:
             tier_low = tier.lower()
-            matching = [i for i in matching if tier_low in _search_index[i]["tier"]]
+            matching = [i for i in matching if tier_low in snap.search_index[i]["tier"]]
         if thai_only:
-            matching = [i for i in matching if _search_index[i]["is_thai"]]
+            matching = [i for i in matching if snap.search_index[i]["is_thai"]]
         if salary_only:
-            matching = [i for i in matching if _search_index[i]["has_salary"]]
+            matching = [i for i in matching if snap.search_index[i]["has_salary"]]
         if min_salary and min_salary > 0:
-            matching = [i for i in matching if _search_index[i]["max_salary"] >= min_salary]
+            matching = [i for i in matching if snap.search_index[i]["max_salary"] >= min_salary]
         if q:
             q_raw = q.strip()
             q_low = q_raw.lower()
             if (q_raw.startswith('"') and q_raw.endswith('"')) or (q_raw.startswith("'") and q_raw.endswith("'")):
                 phrase = q_low[1:-1].strip()
-                matching = [i for i in matching if phrase in _search_index[i]["corpus"]]
+                matching = [i for i in matching if phrase in snap.search_index[i]["corpus"]]
             else:
                 tokens = [t for t in q_low.split() if t]
                 if tokens:
-                    matching = [i for i in matching if all(t in _search_index[i]["corpus"] for t in tokens)]
+                    matching = [i for i in matching if all(t in snap.search_index[i]["corpus"] for t in tokens)]
 
         # Sorting
         if sort_by == "title":
-            matching.sort(key=lambda i: _search_index[i]["title"])
+            matching.sort(key=lambda i: snap.search_index[i]["title"])
         elif sort_by == "company":
-            matching.sort(key=lambda i: _search_index[i]["company"])
+            matching.sort(key=lambda i: snap.search_index[i]["company"])
         elif sort_by == "salary":
-            matching.sort(key=lambda i: _search_index[i]["max_salary"], reverse=True)
+            matching.sort(key=lambda i: snap.search_index[i]["max_salary"], reverse=True)
         elif sort_by == "relevance" or (q and sort_by == "score"):
-            # Multi-tiered relevance scoring
             def get_relevance(i):
-                item = _search_index[i]
+                item = snap.search_index[i]
                 rel = item["score"]
                 if q:
                     q_clean = q.strip().lower()
@@ -266,9 +310,9 @@ def filter_jobs(jobs, category=None, tier=None, thai_only=False, min_salary=None
                 return rel
             matching.sort(key=get_relevance, reverse=True)
         else:
-            matching.sort(key=lambda i: _search_index[i]["score"], reverse=True)
+            matching.sort(key=lambda i: snap.search_index[i]["score"], reverse=True)
 
-        return [_jobs_cache[i] for i in matching]
+        return [snap.jobs[i] for i in matching]
 
     # Fallback path for arbitrary or mock job lists (unit tests)
     filtered = jobs
@@ -300,19 +344,16 @@ def filter_jobs(jobs, category=None, tier=None, thai_only=False, min_salary=None
     if q:
         q_raw = q.strip()
         q_low = q_raw.lower()
+        def get_item_corpus(j):
+            return f"{j.get('col_03_title', '')} {j.get('col_02_company', '')} {j.get('col_04_category', '')} {j.get('col_05_industry', '')} {j.get('col_06_location', '')} {j.get('col_18_responsibilities', '')} {j.get('col_24_thai_relevance', '')}".lower()
+
         if (q_raw.startswith('"') and q_raw.endswith('"')) or (q_raw.startswith("'") and q_raw.endswith("'")):
             phrase = q_low[1:-1].strip()
-            filtered = [
-                j for j in filtered
-                if phrase in f"{j.get('col_03_title', '')} {j.get('col_02_company', '')} {j.get('col_18_responsibilities', '')} {j.get('col_24_thai_relevance', '')} {j.get('col_21_candidate_quals', '')}".lower()
-            ]
+            filtered = [j for j in filtered if phrase in get_item_corpus(j)]
         else:
             tokens = [t for t in q_low.split() if t]
             if tokens:
-                def matches_tokens(j):
-                    text = f"{j.get('col_03_title', '')} {j.get('col_02_company', '')} {j.get('col_18_responsibilities', '')} {j.get('col_24_thai_relevance', '')} {j.get('col_21_candidate_quals', '')}".lower()
-                    return all(t in text for t in tokens)
-                filtered = [j for j in filtered if matches_tokens(j)]
+                filtered = [j for j in filtered if all(t in get_item_corpus(j) for t in tokens)]
 
     if sort_by == "title":
         filtered.sort(key=lambda j: j.get("col_03_title", "").lower())
@@ -418,8 +459,8 @@ def get_jobs(
 def get_jobs_batch(ids: str = Query(...), user: str = Depends(verify_credentials)):
     """Fetches any arbitrary list of jobs by comma-separated IDs in a single query."""
     id_list = [i.strip() for i in ids.split(",") if i.strip()]
-    load_jobs()
-    results = [_jobs_by_id[jid] for jid in id_list if jid in _jobs_by_id]
+    snap = get_snapshot()
+    results = [snap.by_id[jid] for jid in id_list if jid in snap.by_id]
     return {
         "authenticated_user": user,
         "count": len(results),
@@ -428,8 +469,8 @@ def get_jobs_batch(ids: str = Query(...), user: str = Depends(verify_credentials
 
 @app.get("/api/jobs/{job_id}")
 def get_job_by_id(job_id: str, user: str = Depends(verify_credentials)):
-    load_jobs()
-    job = _jobs_by_id.get(job_id)
+    snap = get_snapshot()
+    job = snap.by_id.get(job_id)
     if job:
         return {"authenticated_user": user, "job": job}
     raise HTTPException(status_code=404, detail="Job position not found")
@@ -499,15 +540,16 @@ def export_filtered_csv(
 
 @app.get("/api/stats")
 def get_stats(user: str = Depends(verify_credentials)):
-    jobs = load_jobs()
+    snap = get_snapshot()
     audit = load_audit()
+    stats = snap.stats
     return {
         "authenticated_user": user,
-        "total_jobs": _stats_cache.get("total_jobs", len(jobs)) if _stats_cache else len(jobs),
-        "tiers": _stats_cache.get("tiers", {}) if _stats_cache else {},
-        "categories": _stats_cache.get("categories", {}) if _stats_cache else {},
-        "thai_relevance_jobs": _stats_cache.get("thai_relevance_jobs", 0) if _stats_cache else 0,
-        "salary_disclosed_jobs": _stats_cache.get("salary_disclosed_jobs", 0) if _stats_cache else 0,
+        "total_jobs": stats.get("total_jobs", len(snap.jobs)),
+        "tiers": stats.get("tiers", {}),
+        "categories": stats.get("categories", {}),
+        "thai_relevance_jobs": stats.get("thai_relevance_jobs", 0),
+        "salary_disclosed_jobs": stats.get("salary_disclosed_jobs", 0),
         "apify_spend_usd": audit.get("total_spend_usd", 33.5563),
         "apify_runs_completed": audit.get("runs_count", 33)
     }
@@ -543,15 +585,17 @@ def download_csv(user: str = Depends(verify_credentials)):
 
 @app.get("/", response_class=HTMLResponse)
 def index(user: str = Depends(verify_credentials)):
-    jobs = load_jobs()
+    snap = get_snapshot()
+    jobs = snap.jobs
     top25 = jobs[:25]
     audit = load_audit()
     
-    if _stats_cache:
-        tiers_dict = _stats_cache.get("tiers", {})
+    stats = snap.stats
+    if stats:
+        tiers_dict = stats.get("tiers", {})
         tier1_count = sum(v for k, v in tiers_dict.items() if "Tier 1" in k)
-        thai_count = _stats_cache.get("thai_relevance_jobs", 0)
-        salary_count = _stats_cache.get("salary_disclosed_jobs", 0)
+        thai_count = stats.get("thai_relevance_jobs", 0)
+        salary_count = stats.get("salary_disclosed_jobs", 0)
     else:
         tier1_count = len([j for j in jobs if "Tier 1" in j.get("col_26_suitability_tier", "")])
         thai_count = len([j for j in jobs if "thai" in j.get("col_24_thai_relevance", "").lower() or "thai" in j.get("col_04_category", "").lower() or "thai" in j.get("col_03_title", "").lower()])
