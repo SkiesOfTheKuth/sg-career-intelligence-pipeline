@@ -1,4 +1,7 @@
 import os
+import re
+import io
+import csv
 import json
 import html
 import threading
@@ -7,7 +10,7 @@ import logging
 import secrets
 from urllib.parse import urlparse
 from fastapi import FastAPI, Query, Depends, HTTPException, status
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
@@ -21,7 +24,7 @@ logger = logging.getLogger("sg_career_pipeline")
 app = FastAPI(
     title="Singapore Career Intelligence Pipeline",
     description="Executive recruitment intelligence and automated job-matching engine for candidate Dechsurang Kawintra",
-    version="1.2.0"
+    version="1.3.0"
 )
 
 # Restrict CORS appropriately
@@ -122,6 +125,72 @@ def sanitize_url(url: str) -> str:
         pass
     return "#"
 
+def extract_salary_range(sal_str: str):
+    """Extracts min and max numeric monthly figures from salary string."""
+    if not sal_str:
+        return (0, 0)
+    nums = [int(n.replace(',', '')) for n in re.findall(r'\b\d{1,3}(?:,\d{3})+\b|\b\d{4,6}\b', sal_str)]
+    if not nums:
+        return (0, 0)
+    return (min(nums), max(nums))
+
+def filter_jobs(jobs, category=None, tier=None, thai_only=False, min_salary=None, salary_only=False, q=None, sort_by="score"):
+    """Unified, high-performance in-memory filtering and sorting engine."""
+    filtered = jobs
+    if category:
+        cat_low = category.lower()
+        filtered = [j for j in filtered if cat_low in j.get("col_04_category", "").lower()]
+    if tier:
+        tier_low = tier.lower()
+        filtered = [j for j in filtered if tier_low in j.get("col_26_suitability_tier", "").lower()]
+    if thai_only:
+        filtered = [
+            j for j in filtered
+            if "thai" in j.get("col_24_thai_relevance", "").lower()
+            or "thai" in j.get("col_04_category", "").lower()
+            or "thai" in j.get("col_03_title", "").lower()
+        ]
+    if salary_only:
+        filtered = [
+            j for j in filtered
+            if j.get("col_09_advertised_salary")
+            and "not disclosed" not in j.get("col_09_advertised_salary", "").lower()
+            and j.get("col_09_advertised_salary", "").strip()
+        ]
+    if min_salary and min_salary > 0:
+        filtered = [
+            j for j in filtered
+            if extract_salary_range(j.get("col_09_advertised_salary", ""))[1] >= min_salary
+        ]
+    if q:
+        q_low = q.lower()
+        filtered = [
+            j for j in filtered
+            if q_low in j.get("col_02_company", "").lower()
+            or q_low in j.get("col_03_title", "").lower()
+            or q_low in j.get("col_18_responsibilities", "").lower()
+            or q_low in j.get("col_24_thai_relevance", "").lower()
+            or q_low in j.get("col_21_candidate_quals", "").lower()
+        ]
+
+    # Safe sorting
+    if sort_by == "title":
+        filtered.sort(key=lambda j: j.get("col_03_title", "").lower())
+    elif sort_by == "company":
+        filtered.sort(key=lambda j: j.get("col_02_company", "").lower())
+    elif sort_by == "salary":
+        filtered.sort(key=lambda j: extract_salary_range(j.get("col_09_advertised_salary", ""))[1], reverse=True)
+    else:
+        # Default sort by suitability score descending
+        def get_score(job):
+            try:
+                return int(job.get("col_25_suitability_score", 0))
+            except (ValueError, TypeError):
+                return 0
+        filtered.sort(key=get_score, reverse=True)
+
+    return filtered
+
 # Autonomous Background Sync Worker
 _sync_lock = threading.Lock()
 
@@ -154,7 +223,7 @@ def healthz():
     jobs = load_jobs()
     return {
         "status": "healthy",
-        "version": "1.2.0",
+        "version": "1.3.0",
         "uptime_seconds": int(time.time() - _start_time),
         "total_jobs_indexed": len(jobs),
         "sync_worker_alive": sync_thread.is_alive()
@@ -167,6 +236,8 @@ def get_jobs(
     category: str = Query(None),
     tier: str = Query(None),
     thai_only: bool = Query(False),
+    min_salary: int = Query(None, ge=0),
+    salary_only: bool = Query(False),
     q: str = Query(None),
     sort_by: str = Query("score"),
     limit: int = Query(100, ge=1, le=250),
@@ -174,45 +245,16 @@ def get_jobs(
     user: str = Depends(verify_credentials)
 ):
     jobs = load_jobs()
-    filtered = jobs
-    if category:
-        cat_low = category.lower()
-        filtered = [j for j in filtered if cat_low in j.get("col_04_category", "").lower()]
-    if tier:
-        tier_low = tier.lower()
-        filtered = [j for j in filtered if tier_low in j.get("col_26_suitability_tier", "").lower()]
-    if thai_only:
-        filtered = [
-            j for j in filtered
-            if "thai" in j.get("col_24_thai_relevance", "").lower()
-            or "thai" in j.get("col_04_category", "").lower()
-            or "thai" in j.get("col_03_title", "").lower()
-        ]
-    if q:
-        q_low = q.lower()
-        filtered = [
-            j for j in filtered
-            if q_low in j.get("col_02_company", "").lower()
-            or q_low in j.get("col_03_title", "").lower()
-            or q_low in j.get("col_18_responsibilities", "").lower()
-            or q_low in j.get("col_24_thai_relevance", "").lower()
-            or q_low in j.get("col_21_candidate_quals", "").lower()
-        ]
-
-    # Safe sorting
-    if sort_by == "title":
-        filtered.sort(key=lambda j: j.get("col_03_title", "").lower())
-    elif sort_by == "company":
-        filtered.sort(key=lambda j: j.get("col_02_company", "").lower())
-    else:
-        # Default sort by suitability score descending
-        def get_score(job):
-            try:
-                return int(job.get("col_25_suitability_score", 0))
-            except (ValueError, TypeError):
-                return 0
-        filtered.sort(key=get_score, reverse=True)
-
+    filtered = filter_jobs(
+        jobs,
+        category=category,
+        tier=tier,
+        thai_only=thai_only,
+        min_salary=min_salary,
+        salary_only=salary_only,
+        q=q,
+        sort_by=sort_by
+    )
     total = len(filtered)
     results = filtered[offset : offset + limit]
     return {
@@ -223,6 +265,18 @@ def get_jobs(
         "items": results
     }
 
+@app.get("/api/jobs/batch")
+def get_jobs_batch(ids: str = Query(...), user: str = Depends(verify_credentials)):
+    """Fetches any arbitrary list of jobs by comma-separated IDs in a single query."""
+    id_set = set(i.strip() for i in ids.split(",") if i.strip())
+    jobs = load_jobs()
+    results = [j for j in jobs if j.get("col_01_id") in id_set]
+    return {
+        "authenticated_user": user,
+        "count": len(results),
+        "items": results
+    }
+
 @app.get("/api/jobs/{job_id}")
 def get_job_by_id(job_id: str, user: str = Depends(verify_credentials)):
     jobs = load_jobs()
@@ -230,6 +284,58 @@ def get_job_by_id(job_id: str, user: str = Depends(verify_credentials)):
         if j.get("col_01_id") == job_id:
             return {"authenticated_user": user, "job": j}
     raise HTTPException(status_code=404, detail="Job position not found")
+
+@app.get("/api/export/filtered")
+def export_filtered_csv(
+    category: str = Query(None),
+    tier: str = Query(None),
+    thai_only: bool = Query(False),
+    min_salary: int = Query(None, ge=0),
+    salary_only: bool = Query(False),
+    q: str = Query(None),
+    sort_by: str = Query("score"),
+    user: str = Depends(verify_credentials)
+):
+    """Exports currently filtered search results directly into an Excel-friendly CSV with UTF-8 BOM."""
+    jobs = load_jobs()
+    filtered = filter_jobs(
+        jobs,
+        category=category,
+        tier=tier,
+        thai_only=thai_only,
+        min_salary=min_salary,
+        salary_only=salary_only,
+        q=q,
+        sort_by=sort_by
+    )
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "ID", "Company", "Title", "Category", "Location", "Advertised Salary",
+        "Suitability Score", "Suitability Tier", "Priority", "Direct URL",
+        "Strategic Match Rationale", "Tailored Resume Focus"
+    ])
+    for j in filtered:
+        writer.writerow([
+            j.get("col_01_id", ""),
+            j.get("col_02_company", ""),
+            j.get("col_03_title", ""),
+            j.get("col_04_category", ""),
+            j.get("col_06_location", ""),
+            j.get("col_09_advertised_salary", ""),
+            j.get("col_25_suitability_score", ""),
+            j.get("col_26_suitability_tier", ""),
+            j.get("col_28_priority", ""),
+            j.get("col_15_direct_url", ""),
+            j.get("col_29_explanation", ""),
+            j.get("col_30_resume_emphasis", "")
+        ])
+    csv_bytes = output.getvalue().encode("utf-8-sig")
+    return Response(
+        content=csv_bytes,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=Filtered_Singapore_Opportunities.csv"}
+    )
 
 @app.get("/api/stats")
 def get_stats(user: str = Depends(verify_credentials)):

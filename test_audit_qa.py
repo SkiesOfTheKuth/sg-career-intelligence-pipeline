@@ -219,5 +219,44 @@ class CareerIntelligenceAuditTestSuite(unittest.TestCase):
         self.assertIn("Thai Bilingual Advantage", text)
         self.assertIn("Salary Disclosed", text)
 
+    def test_16_min_salary_filter(self):
+        """Verify min_salary filtering extracts numeric ranges and isolates high comp positions."""
+        res = self.client.get("/api/jobs?min_salary=6000&limit=50", headers=self.auth_header)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertGreater(data["total"], 500)
+        for job in data["items"]:
+            sal = job.get("col_09_advertised_salary", "")
+            self.assertTrue(bool(sal))
+
+    def test_17_jobs_batch_endpoint(self):
+        """Verify batch lookup fetches multiple arbitrary jobs by ID without page limits."""
+        res = self.client.get("/api/jobs/batch?ids=SG-OPP-0001,SG-OPP-0004", headers=self.auth_header)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["count"], 2)
+        returned_ids = [j.get("col_01_id") for j in data["items"]]
+        self.assertIn("SG-OPP-0001", returned_ids)
+        self.assertIn("SG-OPP-0004", returned_ids)
+
+    def test_18_filtered_csv_export(self):
+        """Verify dynamic filtered search export streams CSV with UTF-8 BOM."""
+        res = self.client.get("/api/export/filtered?thai_only=true", headers=self.auth_header)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("text/csv", res.headers["Content-Type"])
+        self.assertTrue(res.content.startswith(b"\xef\xbb\xbf"), "CSV must include UTF-8 BOM for Excel compatibility!")
+        self.assertGreater(len(res.content), 10_000)
+
+    def test_19_v1_3_advanced_ux_components(self):
+        """Verify advanced UX elements: table view, preset pills, cover letter box, and pipeline tracker."""
+        res = self.client.get("/", headers=self.auth_header)
+        self.assertEqual(res.status_code, 200)
+        text = res.text
+        self.assertIn("id=\"explorer-table-container\"", text)
+        self.assertIn("id=\"filter-min-salary\"", text)
+        self.assertIn("id=\"dossier-cover-letter\"", text)
+        self.assertIn("id=\"st-tab-applied\"", text)
+        self.assertIn("id=\"st-tab-interviewing\"", text)
+
 if __name__ == '__main__':
     unittest.main()
