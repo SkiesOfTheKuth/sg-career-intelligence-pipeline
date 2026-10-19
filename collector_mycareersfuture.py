@@ -45,11 +45,17 @@ def fetch_mycareersfuture(queries, limit_per_query=50):
                     sal_max = sal.get('maximum')
                     sal_type = sal.get('type', {}).get('salaryType', 'Monthly')
                     
-                    if sal_min and sal_max:
-                        advertised_sal = f"SGD {sal_min:,.0f} - {sal_max:,.0f} / {sal_type.lower()}"
-                    elif sal_min:
-                        advertised_sal = f"From SGD {sal_min:,.0f} / {sal_type.lower()}"
-                    else:
+                    try:
+                        s_min = float(sal_min) if sal_min is not None else None
+                        s_max = float(sal_max) if sal_max is not None else None
+                        st = str(sal_type or 'Monthly').lower()
+                        if s_min is not None and s_max is not None:
+                            advertised_sal = f"SGD {s_min:,.0f} - {s_max:,.0f} / {st}"
+                        elif s_min is not None:
+                            advertised_sal = f"From SGD {s_min:,.0f} / {st}"
+                        else:
+                            advertised_sal = "Not disclosed"
+                    except (ValueError, TypeError):
                         advertised_sal = "Not disclosed"
                         
                     # Employment & location

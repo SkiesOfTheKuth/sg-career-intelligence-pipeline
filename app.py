@@ -1,22 +1,35 @@
 import os
 import json
+import html
 import threading
 import time
-from fastapi import FastAPI, Query
+import logging
+import secrets
+from urllib.parse import urlparse
+from fastapi import FastAPI, Query, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+
+# Configure structured logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+logger = logging.getLogger("sg_career_pipeline")
 
 app = FastAPI(
     title="Singapore Career Intelligence Pipeline",
     description="Executive recruitment intelligence and automated job-matching engine for candidate Dechsurang Kawintra",
-    version="1.0.0"
+    version="1.1.0"
 )
 
+# Restrict CORS appropriately
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "HEAD", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -25,45 +38,128 @@ EXCEL_FILE = "Singapore_Career_Intelligence_Database_2026.xlsx"
 CSV_FILE = "Singapore_Career_Intelligence_Database_2026.csv"
 AUDIT_FILE = "apify_spend_audit.json"
 
+AUTH_USERNAME = os.environ.get("AUTH_USERNAME", "Kawa")
+AUTH_PASSWORD = os.environ.get("AUTH_PASSWORD", "Kawa123")
+
+security = HTTPBasic()
+
+def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
+    """Enforces constant-time HTTP Basic Authentication."""
+    is_user_correct = secrets.compare_digest(credentials.username.encode("utf8"), AUTH_USERNAME.encode("utf8"))
+    is_pass_correct = secrets.compare_digest(credentials.password.encode("utf8"), AUTH_PASSWORD.encode("utf8"))
+    if not (is_user_correct and is_pass_correct):
+        logger.warning(f"Failed authentication attempt for user '{credentials.username}'")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+            headers={"WWW-Authenticate": 'Basic realm="Singapore Career Intelligence Pipeline"'},
+        )
+    return credentials.username
+
+# In-Memory Cache to prevent 11.9MB JSON file read on every request
+_jobs_cache = None
+_jobs_mtime = 0
+_cache_lock = threading.Lock()
+_start_time = time.time()
+
 def load_jobs():
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return []
+    """Loads jobs dataset with mtime-based memory caching."""
+    global _jobs_cache, _jobs_mtime
+    if not os.path.exists(DATA_FILE):
+        return []
+    try:
+        current_mtime = os.path.getmtime(DATA_FILE)
+        with _cache_lock:
+            if _jobs_cache is None or current_mtime > _jobs_mtime:
+                logger.info(f"Loading jobs from {DATA_FILE} (mtime: {current_mtime})...")
+                with open(DATA_FILE, "r", encoding="utf-8") as f:
+                    _jobs_cache = json.load(f)
+                _jobs_mtime = current_mtime
+                logger.info(f"Loaded {len(_jobs_cache)} jobs into memory cache.")
+            return _jobs_cache
+    except Exception as e:
+        logger.error(f"Error loading jobs dataset: {e}")
+        return _jobs_cache or []
 
 def load_audit():
     if os.path.exists(AUDIT_FILE):
-        with open(AUDIT_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(AUDIT_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
     return {"total_spend_usd": 33.5563, "runs_count": 33, "audit_log": []}
 
-# Background continuous updater
-def background_refresh_loop():
-    while True:
-        # Sleep for 12 hours between automated sync cycles
-        time.sleep(43200)
-        try:
-            print("[Continuous Pipeline] Running automated periodic sync...")
-            # Trigger updates
-        except Exception as e:
-            print(f"[Continuous Pipeline] Sync error: {e}")
+def sanitize_url(url: str) -> str:
+    """Ensures URLs only use http/https to prevent javascript: pseudo-protocol XSS."""
+    if not url:
+        return "#"
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme in ["http", "https"]:
+            return html.escape(url, quote=True)
+    except Exception:
+        pass
+    return "#"
 
-threading.Thread(target=background_refresh_loop, daemon=True).start()
+# Autonomous Background Sync Worker
+_sync_lock = threading.Lock()
+
+def background_refresh_loop():
+    """Runs periodic sync every 12 hours with thread-safety and error isolation."""
+    while True:
+        time.sleep(43200) # 12 hours
+        if not _sync_lock.acquire(blocking=False):
+            continue
+        try:
+            logger.info("[Continuous Pipeline] Running automated periodic sync...")
+            # Safe sync execution
+            try:
+                from collector_mycareersfuture import fetch_mycareersfuture
+                new_mcf = fetch_mycareersfuture(["Thai", "Marketing Executive", "Social Media Executive"], limit_per_query=10)
+                if new_mcf:
+                    logger.info(f"[Continuous Pipeline] Harvested {len(new_mcf)} new positions.")
+            except Exception as sync_err:
+                logger.warning(f"[Continuous Pipeline] Upstream poll warning: {sync_err}")
+        except Exception as e:
+            logger.error(f"[Continuous Pipeline] Sync loop exception: {e}")
+        finally:
+            _sync_lock.release()
+
+sync_thread = threading.Thread(target=background_refresh_loop, daemon=True, name="SyncWorker")
+sync_thread.start()
+
+# --- Health Check (Unauthenticated for Cloud Orchestrator / Render monitoring) ---
+@app.get("/healthz")
+def healthz():
+    jobs = load_jobs()
+    return {
+        "status": "healthy",
+        "version": "1.1.0",
+        "uptime_seconds": int(time.time() - _start_time),
+        "total_jobs_indexed": len(jobs),
+        "sync_worker_alive": sync_thread.is_alive()
+    }
+
+# --- Authenticated Endpoints (Protected by User Kawa / Pass Kawa123) ---
 
 @app.get("/api/jobs")
 def get_jobs(
     category: str = Query(None),
     tier: str = Query(None),
     q: str = Query(None),
-    limit: int = 100,
-    offset: int = 0
+    limit: int = Query(100, ge=1, le=250),
+    offset: int = Query(0, ge=0),
+    user: str = Depends(verify_credentials)
 ):
     jobs = load_jobs()
     filtered = jobs
     if category:
-        filtered = [j for j in filtered if category.lower() in j.get("col_04_category", "").lower()]
+        cat_low = category.lower()
+        filtered = [j for j in filtered if cat_low in j.get("col_04_category", "").lower()]
     if tier:
-        filtered = [j for j in filtered if tier.lower() in j.get("col_26_suitability_tier", "").lower()]
+        tier_low = tier.lower()
+        filtered = [j for j in filtered if tier_low in j.get("col_26_suitability_tier", "").lower()]
     if q:
         q_low = q.lower()
         filtered = [
@@ -75,10 +171,16 @@ def get_jobs(
         ]
     total = len(filtered)
     results = filtered[offset : offset + limit]
-    return {"total": total, "offset": offset, "limit": limit, "items": results}
+    return {
+        "authenticated_user": user,
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "items": results
+    }
 
 @app.get("/api/stats")
-def get_stats():
+def get_stats(user: str = Depends(verify_credentials)):
     jobs = load_jobs()
     audit = load_audit()
     tiers = {}
@@ -92,6 +194,7 @@ def get_stats():
         if "Thai" in j.get("col_24_thai_relevance", "") or "Thai" in j.get("col_04_category", ""):
             thai_count += 1
     return {
+        "authenticated_user": user,
         "total_jobs": len(jobs),
         "tiers": tiers,
         "categories": categories,
@@ -101,66 +204,87 @@ def get_stats():
     }
 
 @app.get("/api/top25")
-def get_top25():
+def get_top25(user: str = Depends(verify_credentials)):
     jobs = load_jobs()
-    return jobs[:25]
+    return {
+        "authenticated_user": user,
+        "count": min(25, len(jobs)),
+        "items": jobs[:25]
+    }
 
 @app.get("/download/excel")
-def download_excel():
+def download_excel(user: str = Depends(verify_credentials)):
     if os.path.exists(EXCEL_FILE):
         return FileResponse(
             EXCEL_FILE,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             filename="Singapore_Career_Intelligence_Database_2026.xlsx"
         )
-    return JSONResponse(status_code=404, content={"error": "File not found"})
+    raise HTTPException(status_code=404, detail="Excel workbook not found")
 
 @app.get("/download/csv")
-def download_csv():
+def download_csv(user: str = Depends(verify_credentials)):
     if os.path.exists(CSV_FILE):
         return FileResponse(
             CSV_FILE,
             media_type="text/csv",
             filename="Singapore_Career_Intelligence_Database_2026.csv"
         )
-    return JSONResponse(status_code=404, content={"error": "File not found"})
+    raise HTTPException(status_code=404, detail="CSV database not found")
 
 @app.get("/", response_class=HTMLResponse)
-def index():
+def index(user: str = Depends(verify_credentials)):
     jobs = load_jobs()
     top25 = jobs[:25]
     audit = load_audit()
     
     tier1_count = len([j for j in jobs if "Tier 1" in j.get("col_26_suitability_tier", "")])
-    tier2_count = len([j for j in jobs if "Tier 2" in j.get("col_26_suitability_tier", "")])
     thai_count = len([j for j in jobs if "Thai" in j.get("col_24_thai_relevance", "") or "Category E" in j.get("col_04_category", "")])
     
-    top25_html = ""
+    # Safe HTML building with full XSS escaping
+    cards_html_parts = []
     for idx, j in enumerate(top25, 1):
-        top25_html += f"""
+        s_title = html.escape(str(j.get("col_03_title", "Untitled Position")))
+        s_company = html.escape(str(j.get("col_02_company", "Confidential Employer")))
+        s_score = html.escape(str(j.get("col_25_suitability_score", "N/A")))
+        s_priority = html.escape(str(j.get("col_28_priority", "Standard")))
+        s_source = html.escape(str(j.get("col_14_source", "Singapore Portal")))
+        s_salary = html.escape(str(j.get("col_09_advertised_salary", "Not disclosed")))
+        s_location = html.escape(str(j.get("col_06_location", "Singapore")))
+        s_emp_type = html.escape(str(j.get("col_08_employment_type", "Full-time")))
+        s_desc = html.escape(str(j.get("col_18_responsibilities", ""))[:240])
+        s_exp = html.escape(str(j.get("col_29_explanation", "Direct profile alignment.")))
+        s_emphasis = html.escape(str(j.get("col_30_resume_emphasis", "Highlight relevant experience.")))
+        s_thai = html.escape(str(j.get("col_24_thai_relevance", "General")))
+        s_url = sanitize_url(j.get("col_15_direct_url", ""))
+        
+        cards_html_parts.append(f"""
         <div class="job-card">
             <div class="job-header">
                 <div>
-                    <span class="badge tier1">Score: {j.get('col_25_suitability_score')}/100</span>
-                    <span class="badge priority">{j.get('col_28_priority')}</span>
-                    <span class="badge source">{j.get('col_14_source')}</span>
+                    <span class="badge tier1">Score: {s_score}/100</span>
+                    <span class="badge priority">{s_priority}</span>
+                    <span class="badge source">{s_source}</span>
                 </div>
-                <div class="salary-tag">{j.get('col_09_advertised_salary')}</div>
+                <div class="salary-tag">{s_salary}</div>
             </div>
-            <h3 class="job-title">{idx}. {j.get('col_03_title')}</h3>
-            <div class="company-name">{j.get('col_02_company')} &bull; {j.get('col_06_location')} &bull; {j.get('col_08_employment_type')}</div>
-            <p class="job-desc">{j.get('col_18_responsibilities')[:240]}...</p>
+            <h3 class="job-title">{idx}. {s_title}</h3>
+            <div class="company-name">{s_company} &bull; {s_location} &bull; {s_emp_type}</div>
+            <p class="job-desc">{s_desc}...</p>
             <div class="match-box">
-                <strong>Matching Rationale:</strong> {j.get('col_29_explanation')}<br>
-                <strong>Tailored Résumé Focus:</strong> {j.get('col_30_resume_emphasis')}
+                <strong>Matching Rationale:</strong> {s_exp}<br>
+                <strong>Tailored Résumé Focus:</strong> {s_emphasis}
             </div>
             <div class="job-footer">
-                <span class="thai-badge">{j.get('col_24_thai_relevance')}</span>
-                <a href="{j.get('col_15_direct_url')}" target="_blank" class="apply-btn">Apply Directly &rarr;</a>
+                <span class="thai-badge">{s_thai}</span>
+                <a href="{s_url}" target="_blank" rel="noopener noreferrer" class="apply-btn">Apply Directly &rarr;</a>
             </div>
         </div>
-        """
+        """)
         
+    top25_html = "\n".join(cards_html_parts)
+    safe_user = html.escape(user)
+    
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -191,22 +315,38 @@ def index():
         header {{
             background: var(--primary);
             color: white;
-            padding: 40px 24px;
+            padding: 36px 24px;
             border-bottom: 4px solid #0066CC;
         }}
         .header-container {{
             max-width: 1200px;
             margin: 0 auto;
         }}
+        .header-top {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }}
         .header-title {{
-            font-size: 28px;
+            font-size: 26px;
             font-weight: 700;
-            margin-bottom: 8px;
         }}
         .header-subtitle {{
-            font-size: 15px;
+            font-size: 14px;
             color: #CBD5E1;
             margin-bottom: 20px;
+        }}
+        .user-tag {{
+            background: rgba(255, 255, 255, 0.15);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }}
         .candidate-meta {{
             display: flex;
@@ -215,7 +355,7 @@ def index():
             background: rgba(255, 255, 255, 0.08);
             padding: 14px 20px;
             border-radius: 8px;
-            font-size: 14px;
+            font-size: 13px;
         }}
         .candidate-meta span {{ color: #94A3B8; }}
         .candidate-meta strong {{ color: #FFFFFF; }}
@@ -254,6 +394,8 @@ def index():
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 12px;
         }}
         .section-title {{
             font-size: 20px;
@@ -263,6 +405,7 @@ def index():
         .action-btns {{
             display: flex;
             gap: 12px;
+            flex-wrap: wrap;
         }}
         .btn {{
             display: inline-flex;
@@ -309,6 +452,8 @@ def index():
             justify-content: space-between;
             align-items: center;
             margin-bottom: 12px;
+            flex-wrap: wrap;
+            gap: 8px;
         }}
         .badge {{
             display: inline-block;
@@ -366,6 +511,8 @@ def index():
             align-items: center;
             border-top: 1px solid var(--border);
             padding-top: 14px;
+            flex-wrap: wrap;
+            gap: 10px;
         }}
         .apply-btn {{
             background: var(--primary);
@@ -406,9 +553,12 @@ def index():
 <body>
     <header>
         <div class="header-container">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-                <h1 class="header-title">Singapore Career Intelligence Pipeline</h1>
-                <span class="live-badge"><span class="pulse"></span> LIVE RECRUITMENT PIPELINE</span>
+            <div class="header-top">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <h1 class="header-title">Singapore Career Intelligence Pipeline</h1>
+                    <span class="live-badge"><span class="pulse"></span> LIVE RECRUITMENT PIPELINE</span>
+                </div>
+                <div class="user-tag">&#128274; Authenticated as: <strong>{safe_user}</strong></div>
             </div>
             <p class="header-subtitle">Executive recruitment intelligence, candidate matching matrix, and multi-source job vacancy harvester</p>
             <div class="candidate-meta">
@@ -468,4 +618,4 @@ def index():
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run("app:app", host="0.0.0.0", port=port, log_level="info")

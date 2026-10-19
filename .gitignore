@@ -8,3 +8,5 @@ apify api keys*
 keys_manager.py
 run_*.py
 inspect_actor.py
+deploy_to_render.py
+print_top25.py

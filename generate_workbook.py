@@ -69,6 +69,17 @@ RECORD_KEYS = [
     "col_30_resume_emphasis"
 ]
 
+def sanitize_cell(val):
+    """Sanitizes text cells to protect against spreadsheet formula injection (CWE-1236)."""
+    if isinstance(val, str) and val:
+        if val[0] in ['=', '+', '-', '@']:
+            try:
+                float(val)
+                return val
+            except ValueError:
+                return "'" + val
+    return val
+
 def style_sheet(ws, title, rows_data):
     ws.title = title
     ws.views.sheetView[0].showGridLines = True
@@ -104,7 +115,7 @@ def style_sheet(ws, title, rows_data):
     tier2_fill = PatternFill(start_color="E8F0FE", end_color="E8F0FE", fill_type="solid")
     
     for r_idx, r_data in enumerate(rows_data, start=2):
-        row_vals = [r_data.get(k, "") for k in RECORD_KEYS]
+        row_vals = [sanitize_cell(r_data.get(k, "")) for k in RECORD_KEYS]
         ws.append(row_vals)
         ws.row_dimensions[r_idx].height = 20
         
@@ -270,7 +281,10 @@ def build_full_workbook():
     ws9.column_dimensions["G"].width = 14
     
     output_filename = "Singapore_Career_Intelligence_Database_2026.xlsx"
-    wb.save(output_filename)
+    tmp_out = output_filename + ".tmp"
+    wb.save(tmp_out)
+    import os
+    os.replace(tmp_out, output_filename)
     print(f"Successfully saved complete 9-sheet workbook to '{output_filename}'!")
 
 if __name__ == '__main__':

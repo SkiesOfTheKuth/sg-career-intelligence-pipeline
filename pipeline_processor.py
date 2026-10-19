@@ -121,10 +121,12 @@ def calculate_suitability(job, category):
 
 def estimate_market_salary(category, title):
     t_lower = title.lower()
-    if 'senior' in t_lower or 'assistant manager' in t_lower:
-        return "SGD 4,500 - 6,500 / month (Market Benchmark)"
+    if 'senior manager' in t_lower:
+        return "SGD 7,000 - 9,500 / month (Market Benchmark)"
     elif 'manager' in t_lower:
         return "SGD 5,500 - 7,500 / month (Market Benchmark)"
+    elif 'assistant manager' in t_lower or 'senior executive' in t_lower:
+        return "SGD 4,500 - 6,500 / month (Market Benchmark)"
     elif 'specialist' in t_lower or 'account executive' in t_lower:
         return "SGD 3,800 - 5,200 / month (Market Benchmark)"
     elif 'executive' in t_lower:
@@ -308,8 +310,11 @@ def process_all_jobs():
     master_records.sort(key=lambda x: x['col_25_suitability_score'], reverse=True)
     
     print(f"\nFinal Master Records processed: {len(master_records)}")
-    with open('processed_master_jobs.json', 'w', encoding='utf-8') as f:
+    tmp_path = 'processed_master_jobs.json.tmp'
+    with open(tmp_path, 'w', encoding='utf-8') as f:
         json.dump(master_records, f, indent=2, ensure_ascii=False)
+    import os
+    os.replace(tmp_path, 'processed_master_jobs.json')
         
     # Statistics breakdown
     tiers = {}
