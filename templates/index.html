@@ -1106,6 +1106,350 @@
             font-size: 13px;
             color: var(--slate-500);
         }
+
+        /* ------------------ Context-Derived Additions ------------------ */
+        .card-focused {
+            outline: 2px solid var(--blue-600) !important;
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2) !important;
+            border-color: var(--blue-600) !important;
+        }
+
+        /* Metrics Switcher */
+        .metrics-toggle-bar {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 8px;
+        }
+        .metrics-toggle-group {
+            display: inline-flex;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid var(--slate-200);
+            border-radius: var(--radius-full);
+            padding: 2px;
+            box-shadow: var(--shadow-sm);
+        }
+        .metrics-toggle-btn {
+            border: none;
+            background: none;
+            padding: 5px 14px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--slate-600);
+            cursor: pointer;
+            border-radius: var(--radius-full);
+            transition: all 0.15s ease;
+        }
+        .metrics-toggle-btn.active {
+            background: var(--navy-900);
+            color: #FFFFFF;
+        }
+
+        /* Active Filter Chips */
+        .active-chips-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed var(--slate-200);
+        }
+        .filter-chip {
+            background: #EFF6FF;
+            color: var(--blue-700);
+            border: 1px solid rgba(37, 99, 235, 0.25);
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: var(--radius-full);
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .chip-remove-btn {
+            background: none;
+            border: none;
+            color: var(--blue-700);
+            cursor: pointer;
+            font-weight: 800;
+            font-size: 12px;
+            line-height: 1;
+            padding: 0 2px;
+        }
+        .chip-remove-btn:hover {
+            color: #1D4ED8;
+        }
+        .clear-all-chips-btn {
+            background: none;
+            border: none;
+            color: var(--slate-500);
+            font-size: 11px;
+            font-weight: 600;
+            text-decoration: underline;
+            cursor: pointer;
+            margin-left: 4px;
+        }
+        .clear-all-chips-btn:hover {
+            color: var(--navy-900);
+        }
+
+        /* Executive Match Scorecard in Drawer */
+        .scorecard-container {
+            background: linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%);
+            border: 1px solid #BFDBFE;
+            border-radius: var(--radius-md);
+            padding: 14px;
+            margin-bottom: 14px;
+        }
+        .scorecard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            border-bottom: 1px solid rgba(191, 219, 254, 0.6);
+            padding-bottom: 8px;
+        }
+        .scorecard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .scorecard-item {
+            background: #FFFFFF;
+            border: 1px solid var(--slate-200);
+            border-radius: var(--radius-sm);
+            padding: 8px 10px;
+        }
+        .scorecard-item-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--slate-500);
+            margin-bottom: 2px;
+        }
+        .scorecard-item-value {
+            font-size: 12px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .skills-chips-wrap {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 6px;
+        }
+        .skill-chip {
+            background: #FFFFFF;
+            border: 1px solid #CBD5E1;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--navy-800);
+            padding: 2px 8px;
+            border-radius: var(--radius-full);
+        }
+
+        /* In-Drawer Lifecycle Stage Selector */
+        .stage-selector-bar {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+            background: var(--slate-100);
+            padding: 4px;
+            border-radius: var(--radius-sm);
+        }
+        .stage-select-btn {
+            flex: 1;
+            min-width: 80px;
+            background: none;
+            border: none;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--slate-600);
+            padding: 6px 4px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            text-align: center;
+        }
+        .stage-select-btn:hover {
+            color: var(--navy-900);
+            background: rgba(255, 255, 255, 0.5);
+        }
+        .stage-select-btn.active {
+            background: #FFFFFF;
+            color: var(--blue-600);
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* 3-Mode Outreach Generator */
+        .outreach-tabs {
+            display: flex;
+            gap: 4px;
+            border-bottom: 1px solid var(--slate-200);
+            margin-bottom: 10px;
+        }
+        .outreach-tab-btn {
+            background: none;
+            border: none;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--slate-500);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.15s ease;
+        }
+        .outreach-tab-btn.active {
+            color: var(--blue-600);
+            border-bottom-color: var(--blue-600);
+        }
+        .outreach-content-box {
+            background: #F8FAFC;
+            border: 1px dashed var(--slate-300);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+            font-size: 13px;
+            color: var(--navy-900);
+            white-space: pre-line;
+            line-height: 1.6;
+            min-height: 120px;
+        }
+
+        /* Dual-View Kanban Board */
+        .kanban-view-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .kanban-board {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 14px;
+            align-items: start;
+            overflow-x: auto;
+            padding-bottom: 16px;
+        }
+        @media (max-width: 1200px) {
+            .kanban-board {
+                grid-template-columns: repeat(5, minmax(260px, 1fr));
+            }
+        }
+        .kanban-col {
+            background: var(--slate-100);
+            border: 1px solid var(--slate-200);
+            border-radius: var(--radius-md);
+            padding: 12px 10px;
+            min-height: 480px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .kanban-col-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--slate-200);
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--navy-800);
+        }
+        .kanban-col-count {
+            background: #FFFFFF;
+            border: 1px solid var(--slate-200);
+            padding: 1px 7px;
+            border-radius: var(--radius-full);
+            font-size: 11px;
+            font-weight: 800;
+            color: var(--navy-700);
+        }
+        .kanban-card {
+            background: #FFFFFF;
+            border: 1px solid var(--slate-200);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            box-shadow: var(--shadow-sm);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .kanban-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+            border-color: var(--slate-300);
+        }
+        .kanban-card-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--navy-900);
+            cursor: pointer;
+            margin-bottom: 4px;
+            line-height: 1.4;
+        }
+        .kanban-card-title:hover {
+            color: var(--blue-600);
+        }
+        .kanban-card-company {
+            font-size: 12px;
+            color: var(--slate-500);
+            margin-bottom: 8px;
+        }
+        .kanban-card-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid var(--slate-100);
+            padding-top: 8px;
+            margin-top: 8px;
+        }
+        .kanban-advance-btn {
+            background: var(--slate-100);
+            border: 1px solid var(--slate-200);
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--navy-700);
+            padding: 3px 8px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .kanban-advance-btn:hover {
+            background: var(--blue-600);
+            color: #FFFFFF;
+            border-color: var(--blue-600);
+        }
+
+        /* Keyboard Shortcuts Pill */
+        .keyboard-legend {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(15, 23, 42, 0.9);
+            color: #FFFFFF;
+            padding: 6px 14px;
+            border-radius: var(--radius-full);
+            font-size: 11px;
+            font-weight: 600;
+            z-index: 30;
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: var(--shadow-md);
+        }
+        .kbd-key {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+            padding: 1px 5px;
+            font-family: monospace;
+            font-size: 10px;
+        }
     </style>
 </head>
 <body>
@@ -1173,9 +1517,15 @@
         </div>
     </section>
 
-    <!-- 3. Market Intelligence KPI Ribbon -->
+    <!-- 3. Market Intelligence & Application Action Command Ribbon -->
     <section class="metrics-ribbon">
-        <div class="metrics-grid">
+        <div class="metrics-toggle-bar">
+            <div class="metrics-toggle-group">
+                <button class="metrics-toggle-btn active" id="btn-metric-market" onclick="switchMetricsMode('market')">&#128202; Market Intelligence</button>
+                <button class="metrics-toggle-btn" id="btn-metric-pipeline" onclick="switchMetricsMode('pipeline')">&#128640; My Application Pipeline</button>
+            </div>
+        </div>
+        <div class="metrics-grid" id="metrics-grid-market">
             <div class="metric-card">
                 <div class="metric-label">
                     <span>Total Verified Vacancies</span>
@@ -1219,6 +1569,49 @@
                 </div>
                 <div class="metric-num">S$5.2k – 8.5k</div>
                 <div class="metric-sub">Based on NTU MSc & mid-senior parity</div>
+            </div>
+        </div>
+
+        <div class="metrics-grid" id="metrics-grid-pipeline" style="display:none;">
+            <div class="metric-card">
+                <div class="metric-label">
+                    <span>Saved / To Review</span>
+                    <span style="color:var(--amber-600);">&#9679;</span>
+                </div>
+                <div class="metric-num" id="pipe-metric-saved">0</div>
+                <div class="metric-sub">Target vacancies pinned for action</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">
+                    <span>Ready / Drafted</span>
+                    <span style="color:var(--blue-600);">&#9679;</span>
+                </div>
+                <div class="metric-num" id="pipe-metric-drafted">0</div>
+                <div class="metric-sub">Outreach pitch synthesized</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">
+                    <span>Applications Submitted</span>
+                    <span style="color:var(--indigo-600);">&#9679;</span>
+                </div>
+                <div class="metric-num" id="pipe-metric-applied">0</div>
+                <div class="metric-sub">Submitted to employer / recruiter</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">
+                    <span>Interviewing</span>
+                    <span style="color:var(--emerald-600);">&#9679;</span>
+                </div>
+                <div class="metric-num" id="pipe-metric-interviewing">0</div>
+                <div class="metric-sub">Screenings & hiring team calls</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">
+                    <span>Offers & Decisions</span>
+                    <span style="color:var(--purple-700);">&#9679;</span>
+                </div>
+                <div class="metric-num" id="pipe-metric-offer">0</div>
+                <div class="metric-sub">Negotiation & placement stage</div>
             </div>
         </div>
     </section>
@@ -1319,6 +1712,7 @@
 
                     <button class="btn-reset" onclick="resetFilters()">&#10227; Reset</button>
                 </div>
+                <div id="active-filter-chips" class="active-chips-bar" style="display:none;"></div>
             </div>
 
             <!-- Dynamic Search Results Summary & View Switcher -->
@@ -1383,31 +1777,44 @@
 
         <!-- VIEW 3: My Shortlist & Pipeline Tracker -->
         <div id="view-shortlist" style="display:none;">
-            <!-- Shortlist Status Tabs -->
-            <div class="shortlist-tabs">
-                <button class="shortlist-tab-btn active" id="st-tab-all" onclick="filterShortlistByStatus('All')">All Saved (<span id="st-count-all">0</span>)</button>
-                <button class="shortlist-tab-btn" id="st-tab-saved" onclick="filterShortlistByStatus('Saved')">&#128204; Saved (<span id="st-count-saved">0</span>)</button>
-                <button class="shortlist-tab-btn" id="st-tab-applied" onclick="filterShortlistByStatus('Applied')">&#128640; Applied (<span id="st-count-applied">0</span>)</button>
-                <button class="shortlist-tab-btn" id="st-tab-interviewing" onclick="filterShortlistByStatus('Interviewing')">&#128188; Interviewing (<span id="st-count-interviewing">0</span>)</button>
-                <button class="shortlist-tab-btn" id="st-tab-offer" onclick="filterShortlistByStatus('Offer')">&#127942; Offer (<span id="st-count-offer">0</span>)</button>
+            <div class="kanban-view-controls">
+                <!-- Shortlist Status Tabs for List View -->
+                <div class="shortlist-tabs" id="shortlist-filter-tabs">
+                    <button class="shortlist-tab-btn active" id="st-tab-all" onclick="filterShortlistByStatus('All')">All Tracked (<span id="st-count-all">0</span>)</button>
+                    <button class="shortlist-tab-btn" id="st-tab-saved" onclick="filterShortlistByStatus('Saved')">&#128204; Saved (<span id="st-count-saved">0</span>)</button>
+                    <button class="shortlist-tab-btn" id="st-tab-drafted" onclick="filterShortlistByStatus('Drafted')">&#128221; Ready (<span id="st-count-drafted">0</span>)</button>
+                    <button class="shortlist-tab-btn" id="st-tab-applied" onclick="filterShortlistByStatus('Applied')">&#128640; Applied (<span id="st-count-applied">0</span>)</button>
+                    <button class="shortlist-tab-btn" id="st-tab-interviewing" onclick="filterShortlistByStatus('Interviewing')">&#128188; Interviewing (<span id="st-count-interviewing">0</span>)</button>
+                    <button class="shortlist-tab-btn" id="st-tab-offer" onclick="filterShortlistByStatus('Offer')">&#127942; Offer (<span id="st-count-offer">0</span>)</button>
+                </div>
+
+                <!-- Kanban vs List Toggle -->
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="view-toggle-group">
+                        <button class="view-toggle-btn active" id="btn-pipeline-kanban" onclick="switchPipelineView('kanban')" title="Kanban Velocity Board">
+                            &#9638; Kanban
+                        </button>
+                        <button class="view-toggle-btn" id="btn-pipeline-list" onclick="switchPipelineView('list')" title="Detailed List View">
+                            &#9776; List
+                        </button>
+                    </div>
+                    <button class="btn-export btn-export-excel" style="padding:6px 12px; font-size:12px;" onclick="exportShortlistCSV()">
+                        &#128196; Export CSV
+                    </button>
+                    <button class="btn-reset" style="padding:6px 12px; font-size:12px;" onclick="clearShortlist()">
+                        &#128465; Clear
+                    </button>
+                </div>
             </div>
 
-            <div class="results-summary-bar">
-                <div>
-                    <strong>My Application Pipeline</strong> &bull; Track status, personal interview notes, and export tailored shortlists.
-                </div>
-                <div style="display:flex; gap:10px;">
-                    <button class="btn-export btn-export-excel" onclick="exportShortlistCSV()">
-                        &#128196; Export Shortlist CSV
-                    </button>
-                    <button class="btn-reset" onclick="clearShortlist()">
-                        &#128465; Clear All
-                    </button>
-                </div>
+            <!-- Kanban Board Container (Default) -->
+            <div id="pipeline-kanban-container" class="kanban-board">
+                <!-- Injected via JS into 5 columns -->
             </div>
 
-            <div class="jobs-list" id="shortlist-cards-container">
-                <!-- Injected via JS from localStorage + batch API -->
+            <!-- List View Container -->
+            <div id="pipeline-list-container" class="jobs-list" style="display:none;">
+                <!-- Injected via JS -->
             </div>
         </div>
     </main>
@@ -1434,6 +1841,53 @@
             </div>
 
             <div class="drawer-body">
+                <!-- Lifecycle Stage Selector -->
+                <div style="margin-bottom:14px;">
+                    <div style="font-size:11px; font-weight:700; color:var(--slate-500); text-transform:uppercase; margin-bottom:6px;">Application Pipeline Stage:</div>
+                    <div class="stage-selector-bar">
+                        <button class="stage-select-btn active" id="stage-btn-saved" onclick="setDossierJobStage('Saved')">&#128204; Saved</button>
+                        <button class="stage-select-btn" id="stage-btn-drafted" onclick="setDossierJobStage('Drafted')">&#128221; Ready</button>
+                        <button class="stage-select-btn" id="stage-btn-applied" onclick="setDossierJobStage('Applied')">&#128640; Applied</button>
+                        <button class="stage-select-btn" id="stage-btn-interviewing" onclick="setDossierJobStage('Interviewing')">&#128188; Interview</button>
+                        <button class="stage-select-btn" id="stage-btn-offer" onclick="setDossierJobStage('Offer')">&#127942; Offer</button>
+                    </div>
+                </div>
+
+                <!-- Executive Match Scorecard -->
+                <div class="scorecard-container">
+                    <div class="scorecard-header">
+                        <span style="font-size:12px; font-weight:800; color:var(--navy-900); text-transform:uppercase; letter-spacing:0.04em;">Executive Match Scorecard</span>
+                        <span id="scorecard-tier-badge" class="badge badge-score">Tier 1: Direct Match</span>
+                    </div>
+                    <div class="scorecard-grid">
+                        <div class="scorecard-item">
+                            <div class="scorecard-item-label">Bilingual Edge</div>
+                            <div class="scorecard-item-value" id="scorecard-thai-val">&#127481;&#127469; Active Advantage</div>
+                        </div>
+                        <div class="scorecard-item">
+                            <div class="scorecard-item-label">Education Match</div>
+                            <div class="scorecard-item-value" id="scorecard-edu-val">&#127891; NTU MSc Aligned</div>
+                        </div>
+                        <div class="scorecard-item">
+                            <div class="scorecard-item-label">Commercial Acumen</div>
+                            <div class="scorecard-item-value" id="scorecard-bba-val">&#128188; BBA Foundation</div>
+                        </div>
+                        <div class="scorecard-item">
+                            <div class="scorecard-item-label">MOM Hiring Parity</div>
+                            <div class="scorecard-item-value" style="color:var(--emerald-700);">&#127480;&#127468; Singapore PR</div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="scorecard-item-label" style="margin-top:6px;">Matched Competencies & Core Skills:</div>
+                        <div class="skills-chips-wrap" id="scorecard-skills-list">
+                            <!-- Injected via JS -->
+                        </div>
+                    </div>
+                    <div style="margin-top:10px; font-size:12px; color:var(--navy-700); background:#FFF; padding:8px 10px; border-radius:var(--radius-sm); border:1px solid #BFDBFE;">
+                        <strong>Strategic Angle:</strong> <span id="scorecard-strategy-text"></span>
+                    </div>
+                </div>
+
                 <!-- Section 1: Candidate Strategic Advantage -->
                 <div class="drawer-section">
                     <div class="drawer-section-title">
@@ -1462,17 +1916,26 @@
                             <p id="dossier-gaps" style="margin-top:4px; color:var(--navy-700);"></p>
                         </div>
                     </div>
+                    <div style="margin-top:12px;">
+                        <label style="font-size:11px; font-weight:700; color:var(--slate-600); text-transform:uppercase;">Personal Tracking Notes & Follow-up Dates:</label>
+                        <textarea class="notes-area" id="dossier-job-notes" placeholder="e.g. Applied via portal on 20 Oct; Recruiter contact: Sarah Tan (LinkedIn); 1st screening call on 24 Oct..." oninput="updateActiveJobNotes(this.value)"></textarea>
+                    </div>
                 </div>
 
-                <!-- Section 2: Executive Pitch & Cover Letter Generator -->
+                <!-- Section 2: 3-Mode Strategic Application Outreach Kit -->
                 <div class="drawer-section">
                     <div class="drawer-section-title">
-                        <span>&#10024; Tailored Cover Letter & Elevator Pitch</span>
-                        <button class="btn-inspect" style="font-size:11px; padding:3px 8px;" onclick="copyGeneratedCoverLetter()">
-                            &#128203; Copy Full Pitch
+                        <span>&#10024; Strategic Application Outreach Kit</span>
+                        <button class="btn-inspect" style="font-size:11px; padding:3px 8px;" onclick="copyActiveOutreach()">
+                            &#128203; Copy Selected Draft
                         </button>
                     </div>
-                    <div class="cover-letter-box" id="dossier-cover-letter">
+                    <div class="outreach-tabs">
+                        <button class="outreach-tab-btn active" id="tab-outreach-inmail" onclick="switchOutreachMode('inmail')">&#128172; LinkedIn / InMail (120w)</button>
+                        <button class="outreach-tab-btn" id="tab-outreach-letter" onclick="switchOutreachMode('letter')">&#128196; Formal Cover Letter</button>
+                        <button class="outreach-tab-btn" id="tab-outreach-prep" onclick="switchOutreachMode('prep')">&#127919; Interview Talking Points</button>
+                    </div>
+                    <div class="outreach-content-box" id="dossier-cover-letter">
                         Generating bespoke application draft...
                     </div>
                 </div>
@@ -1553,6 +2016,16 @@
         </div>
     </div>
 
+    <!-- Floating Keyboard Shortcuts Terminal Pill -->
+    <div class="keyboard-legend">
+        <span>&#9000; Quick Keys:</span>
+        <span><span class="kbd-key">J</span>/<span class="kbd-key">K</span> Cards</span>
+        <span><span class="kbd-key">O</span> Open</span>
+        <span><span class="kbd-key">S</span> Star</span>
+        <span><span class="kbd-key">/</span> Search</span>
+        <span><span class="kbd-key">Esc</span> Close</span>
+    </div>
+
     <!-- Toast Notification Element -->
     <div class="toast" id="toast">
         <span id="toast-msg">Copied to clipboard!</span>
@@ -1578,13 +2051,32 @@
         // Active State
         let currentTab = 'spotlight';
         let currentExplorerView = 'cards'; // 'cards' | 'table'
-        let currentShortlistFilter = 'All'; // 'All' | 'Saved' | 'Applied' | 'Interviewing' | 'Offer'
+        let currentPipelineView = 'kanban'; // 'kanban' | 'list'
+        let currentShortlistFilter = 'All'; // 'All' | 'Saved' | 'Drafted' | 'Applied' | 'Interviewing' | 'Offer'
+        let currentMetricsMode = 'market'; // 'market' | 'pipeline'
+        let currentOutreachMode = 'inmail'; // 'inmail' | 'letter' | 'prep'
         let currentJobs = [];
         let activeDossierJob = null;
+        let outreachDrafts = { inmail: '', letter: '', prep: '' };
+        let focusedCardIndex = -1;
         let currentPage = 1;
         const pageSize = 25;
         let totalExplorerCount = 0;
         let searchTimer = null;
+
+        // Metrics Ribbon Switcher
+        function switchMetricsMode(mode) {
+            currentMetricsMode = mode;
+            const btnM = document.getElementById('btn-metrics-market');
+            const btnP = document.getElementById('btn-metrics-pipeline');
+            const gridM = document.getElementById('metrics-grid-market');
+            const gridP = document.getElementById('metrics-grid-pipeline');
+            if (btnM) btnM.classList.toggle('active', mode === 'market');
+            if (btnP) btnP.classList.toggle('active', mode === 'pipeline');
+            if (gridM) gridM.style.display = (mode === 'market') ? 'grid' : 'none';
+            if (gridP) gridP.style.display = (mode === 'pipeline') ? 'grid' : 'none';
+            updateShortlistCounters();
+        }
 
         // LocalStorage Shortlist V2 Management
         function getShortlistStore() {
@@ -1659,7 +2151,8 @@
             const store = getShortlistStore();
             const allItems = Object.values(store);
             const totalCount = allItems.length;
-            const savedCount = allItems.filter(x => x.status === 'Saved').length;
+            const savedCount = allItems.filter(x => (x.status || 'Saved') === 'Saved').length;
+            const draftedCount = allItems.filter(x => x.status === 'Drafted').length;
             const appliedCount = allItems.filter(x => x.status === 'Applied').length;
             const interviewingCount = allItems.filter(x => x.status === 'Interviewing').length;
             const offerCount = allItems.filter(x => x.status === 'Offer').length;
@@ -1671,15 +2164,139 @@
 
             const elAll = document.getElementById('st-count-all');
             const elSaved = document.getElementById('st-count-saved');
+            const elDraft = document.getElementById('st-count-drafted');
             const elApp = document.getElementById('st-count-applied');
             const elInt = document.getElementById('st-count-interviewing');
             const elOff = document.getElementById('st-count-offer');
 
             if (elAll) elAll.textContent = totalCount;
             if (elSaved) elSaved.textContent = savedCount;
+            if (elDraft) elDraft.textContent = draftedCount;
             if (elApp) elApp.textContent = appliedCount;
             if (elInt) elInt.textContent = interviewingCount;
             if (elOff) elOff.textContent = offerCount;
+
+            // Real-Time Pipeline Ribbon Counters
+            const pSaved = document.getElementById('pipe-metric-saved');
+            const pDraft = document.getElementById('pipe-metric-drafted');
+            const pApp = document.getElementById('pipe-metric-applied');
+            const pInt = document.getElementById('pipe-metric-interviewing');
+            const pOff = document.getElementById('pipe-metric-offer');
+
+            if (pSaved) pSaved.textContent = savedCount;
+            if (pDraft) pDraft.textContent = draftedCount;
+            if (pApp) pApp.textContent = appliedCount;
+            if (pInt) pInt.textContent = interviewingCount;
+            if (pOff) pOff.textContent = offerCount;
+        }
+
+        // Active Filter Chips Management
+        function renderFilterChips() {
+            const container = document.getElementById('active-filter-chips');
+            if (!container) return;
+
+            const q = document.getElementById('filter-search')?.value.trim() || '';
+            const cat = document.getElementById('filter-category')?.value || '';
+            const minSal = document.getElementById('filter-min-salary')?.value || '';
+            const tier = document.getElementById('filter-tier')?.value || '';
+            const sort = document.getElementById('filter-sort')?.value || 'score';
+
+            let chipsHtml = '';
+            let hasActive = false;
+
+            if (q) {
+                hasActive = true;
+                chipsHtml += `<span class="filter-chip">🔍 "${escapeHtml(q)}" <button class="chip-remove-btn" onclick="removeFilter('search')">&times;</button></span>`;
+            }
+            if (cat) {
+                hasActive = true;
+                chipsHtml += `<span class="filter-chip">📂 ${escapeHtml(cat.replace(/^Category [A-J]:\s*/, ''))} <button class="chip-remove-btn" onclick="removeFilter('category')">&times;</button></span>`;
+            }
+            if (minSal) {
+                hasActive = true;
+                chipsHtml += `<span class="filter-chip">💰 ≥ SGD ${escapeHtml(minSal)}/mo <button class="chip-remove-btn" onclick="removeFilter('min_salary')">&times;</button></span>`;
+            }
+            if (tier) {
+                hasActive = true;
+                chipsHtml += `<span class="filter-chip">🎯 ${escapeHtml(tier)} <button class="chip-remove-btn" onclick="removeFilter('tier')">&times;</button></span>`;
+            }
+            if (sort && sort !== 'score') {
+                hasActive = true;
+                const sortLabel = sort === 'salary' ? 'Highest Salary' : sort === 'title' ? 'Job Title' : 'Company Name';
+                chipsHtml += `<span class="filter-chip">⇅ Sort: ${sortLabel} <button class="chip-remove-btn" onclick="removeFilter('sort')">&times;</button></span>`;
+            }
+
+            if (hasActive) {
+                chipsHtml += `<button class="clear-all-chips-btn" onclick="resetFilters(true)">Clear all filters ✕</button>`;
+                container.innerHTML = chipsHtml;
+                container.style.display = 'flex';
+            } else {
+                container.innerHTML = '';
+                container.style.display = 'none';
+            }
+        }
+
+        function removeFilter(type) {
+            if (type === 'search') {
+                document.getElementById('filter-search').value = '';
+                document.getElementById('search-clear-btn').style.display = 'none';
+            } else if (type === 'category') {
+                document.getElementById('filter-category').value = '';
+            } else if (type === 'min_salary') {
+                document.getElementById('filter-min-salary').value = '';
+            } else if (type === 'tier') {
+                document.getElementById('filter-tier').value = '';
+            } else if (type === 'sort') {
+                document.getElementById('filter-sort').value = 'score';
+            }
+            currentPage = 1;
+            fetchExplorerJobs();
+        }
+
+        // Keyboard Card Navigation Helpers
+        function getVisibleCards() {
+            let containerId = 'spotlight-cards-container';
+            if (currentTab === 'explorer') {
+                containerId = (currentExplorerView === 'cards') ? 'explorer-cards-container' : 'explorer-table-body';
+            } else if (currentTab === 'shortlist') {
+                containerId = (currentPipelineView === 'list') ? 'pipeline-list-container' : 'pipeline-kanban-container';
+            }
+            const container = document.getElementById(containerId);
+            if (!container) return [];
+            return Array.from(container.querySelectorAll('.job-card, tr, .kanban-card'));
+        }
+
+        function focusCard(delta) {
+            const cards = getVisibleCards();
+            if (cards.length === 0) return;
+
+            if (focusedCardIndex >= 0 && focusedCardIndex < cards.length) {
+                cards[focusedCardIndex].classList.remove('card-focused');
+            }
+
+            focusedCardIndex += delta;
+            if (focusedCardIndex < 0) focusedCardIndex = 0;
+            if (focusedCardIndex >= cards.length) focusedCardIndex = cards.length - 1;
+
+            const target = cards[focusedCardIndex];
+            target.classList.add('card-focused');
+            target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function openFocusedCard() {
+            const cards = getVisibleCards();
+            if (focusedCardIndex < 0 || focusedCardIndex >= cards.length) return;
+            const target = cards[focusedCardIndex];
+            const titleLink = target.querySelector('.card-title, .table-title-link, .kanban-card-title');
+            if (titleLink) titleLink.click();
+        }
+
+        function starFocusedCard() {
+            const cards = getVisibleCards();
+            if (focusedCardIndex < 0 || focusedCardIndex >= cards.length) return;
+            const target = cards[focusedCardIndex];
+            const starBtn = target.querySelector('.btn-star');
+            if (starBtn) starBtn.click();
         }
 
         // Tab Switching & URL State
@@ -1939,6 +2556,7 @@
                     currentJobs = data.items || [];
                     totalExplorerCount = data.total || 0;
                     renderExplorerView();
+                    renderFilterChips();
                     updateURLState();
                 })
                 .catch(err => {
@@ -1989,53 +2607,187 @@
             tbody.innerHTML = currentJobs.map((job, idx) => createJobTableRowHTML(job, startIdx + idx)).join('');
         }
 
-        // Render Shortlist View with Pipeline Batching
+        // Dual-View Pipeline & Kanban Velocity Board
+        function switchPipelineView(mode) {
+            currentPipelineView = mode;
+            const btnK = document.getElementById('btn-pipeline-kanban');
+            const btnL = document.getElementById('btn-pipeline-list');
+            const kanbanContainer = document.getElementById('pipeline-kanban-container');
+            const listContainer = document.getElementById('pipeline-list-container');
+            const tabs = document.getElementById('shortlist-filter-tabs');
+
+            if (btnK) btnK.classList.toggle('active', mode === 'kanban');
+            if (btnL) btnL.classList.toggle('active', mode === 'list');
+            if (kanbanContainer) kanbanContainer.style.display = (mode === 'kanban') ? 'grid' : 'none';
+            if (listContainer) listContainer.style.display = (mode === 'list') ? 'grid' : 'none';
+            if (tabs) tabs.style.display = (mode === 'list') ? 'flex' : 'none';
+
+            renderShortlistView();
+        }
+
         function renderShortlistView() {
-            const container = document.getElementById('shortlist-cards-container');
+            const kanbanContainer = document.getElementById('pipeline-kanban-container');
+            const listContainer = document.getElementById('pipeline-list-container');
             const store = getShortlistStore();
             let entries = Object.values(store);
 
-            // Filter by sub-tab
-            if (currentShortlistFilter !== 'All') {
-                entries = entries.filter(x => x.status === currentShortlistFilter);
-            }
-
             if (entries.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
+                const emptyHTML = `
+                    <div class="empty-state" style="grid-column: 1 / -1;">
                         <div class="empty-icon">&#9734;</div>
-                        <div class="empty-title">No positions in this pipeline stage</div>
-                        <div class="empty-sub">Star any vacancy in the Executive Spotlight or Market Explorer to pin it here.</div>
+                        <div class="empty-title">Your Application Pipeline is Empty</div>
+                        <div class="empty-sub">Star any vacancy in the Executive Spotlight or Market Explorer to begin tracking your applications.</div>
                         <button class="btn-inspect" style="margin-top:14px;" onclick="switchTab('spotlight')">Explore Top Opportunities</button>
                     </div>
                 `;
+                if (kanbanContainer) kanbanContainer.innerHTML = emptyHTML;
+                if (listContainer) listContainer.innerHTML = emptyHTML;
                 return;
             }
 
-            container.innerHTML = `<div class="empty-state"><div class="empty-icon">&#8987;</div><div class="empty-title">Loading pipeline opportunities...</div></div>`;
+            if (currentPipelineView === 'kanban') {
+                kanbanContainer.innerHTML = `<div class="empty-state" style="grid-column: 1 / -1;"><div class="empty-icon">&#8987;</div><div class="empty-title">Loading Kanban Pipeline...</div></div>`;
+            } else {
+                listContainer.innerHTML = `<div class="empty-state"><div class="empty-icon">&#8987;</div><div class="empty-title">Loading Pipeline List...</div></div>`;
+            }
 
             const ids = entries.map(x => x.id);
             fetch(`/api/jobs/batch?ids=${encodeURIComponent(ids.join(','))}`)
                 .then(res => res.json())
                 .then(data => {
                     const jobs = data.items || [];
-                    if (jobs.length === 0) {
-                        container.innerHTML = `<div class="empty-state"><div class="empty-title">Positions unavailable</div></div>`;
-                        return;
+                    if (currentPipelineView === 'kanban') {
+                        renderKanbanBoard(jobs, store);
+                    } else {
+                        renderPipelineList(jobs, store);
                     }
-                    container.innerHTML = jobs.map((job, idx) => {
-                        const meta = store[job.col_01_id] || { status: 'Saved', savedAt: new Date().toISOString(), notes: '' };
-                        return createJobCardHTML(job, idx + 1, meta);
-                    }).join('');
                 })
                 .catch(err => {
-                    container.innerHTML = `<div class="empty-state"><div class="empty-title">Error loading shortlist: ${err.message}</div></div>`;
+                    const errHTML = `<div class="empty-state" style="grid-column: 1 / -1;"><div class="empty-title">Error loading pipeline: ${err.message}</div></div>`;
+                    if (kanbanContainer) kanbanContainer.innerHTML = errHTML;
+                    if (listContainer) listContainer.innerHTML = errHTML;
                 });
+        }
+
+        function renderKanbanBoard(jobs, store) {
+            const kanbanContainer = document.getElementById('pipeline-kanban-container');
+            if (!kanbanContainer) return;
+
+            const stages = [
+                { id: 'Saved', title: '📌 Saved / Review', next: 'Drafted' },
+                { id: 'Drafted', title: '📝 Ready to Apply', next: 'Applied' },
+                { id: 'Applied', title: '🚀 Applied', next: 'Interviewing' },
+                { id: 'Interviewing', title: '💼 Interviewing', next: 'Offer' },
+                { id: 'Offer', title: '🏆 Offer Received', next: null }
+            ];
+
+            const jobMap = {};
+            jobs.forEach(j => { jobMap[j.col_01_id] = j; });
+
+            let html = '';
+            stages.forEach(stage => {
+                const stageJobs = Object.values(store)
+                    .filter(item => (item.status || 'Saved') === stage.id && jobMap[item.id])
+                    .map(item => ({ job: jobMap[item.id], meta: item }));
+
+                html += `
+                <div class="kanban-col">
+                    <div class="kanban-col-header">
+                        <span>${stage.title}</span>
+                        <span class="kanban-col-count">${stageJobs.length}</span>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                `;
+
+                if (stageJobs.length === 0) {
+                    html += `<div style="text-align:center; padding:24px 8px; color:var(--slate-400); font-size:12px;">No positions in this stage</div>`;
+                } else {
+                    stageJobs.forEach(({ job, meta }) => {
+                        const score = job.col_25_suitability_score || 85;
+                        const salary = job.col_09_advertised_salary || 'Salary not disclosed';
+                        const isDisclosed = salary.toLowerCase().indexOf('not disclosed') === -1 && salary.trim() !== '';
+                        const thai = escapeHtml(job.col_24_thai_relevance || '');
+                        const isThai = thai.toLowerCase().includes('thai') || (job.col_04_category || '').toLowerCase().includes('thai');
+
+                        html += `
+                        <div class="kanban-card" id="kcard-${job.col_01_id}">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <span class="badge badge-score" style="font-size:10px; padding:1px 6px;">★ ${score}</span>
+                                ${isThai ? `<span class="badge badge-thai" style="font-size:10px; padding:1px 6px;">🇹🇭 Thai</span>` : ''}
+                            </div>
+                            <div class="kanban-card-title" onclick="openDrawerById('${job.col_01_id}')">
+                                ${escapeHtml(job.col_03_title || 'Position')}
+                            </div>
+                            <div class="kanban-card-company">${escapeHtml(job.col_02_company || '')}</div>
+                            <div style="font-size:11px; font-weight:700; color:${isDisclosed ? 'var(--emerald-700)' : 'var(--slate-400)'}; margin-bottom:6px;">
+                                ${escapeHtml(salary)}
+                            </div>
+                            <div class="kanban-card-actions">
+                                <button class="btn-inspect" style="padding:2px 6px; font-size:10px;" onclick="openDrawerById('${job.col_01_id}')">Dossier</button>
+                                ${stage.next ? `
+                                <button class="kanban-advance-btn" onclick="advanceJobStage('${job.col_01_id}', '${stage.next}')">
+                                    Advance &rarr;
+                                </button>
+                                ` : `
+                                <span style="font-size:10px; color:var(--emerald-700); font-weight:700;">★ Active Offer</span>
+                                `}
+                            </div>
+                        </div>
+                        `;
+                    });
+                }
+
+                html += `
+                    </div>
+                </div>
+                `;
+            });
+
+            kanbanContainer.innerHTML = html;
+        }
+
+        function renderPipelineList(jobs, store) {
+            const listContainer = document.getElementById('pipeline-list-container');
+            if (!listContainer) return;
+
+            let filteredJobs = jobs;
+            if (currentShortlistFilter !== 'All') {
+                filteredJobs = jobs.filter(j => (store[j.col_01_id]?.status || 'Saved') === currentShortlistFilter);
+            }
+
+            if (filteredJobs.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">&#9734;</div>
+                        <div class="empty-title">No positions in stage "${currentShortlistFilter}"</div>
+                        <div class="empty-sub">Advance positions using Kanban view or the Dossier Drawer to see them here.</div>
+                    </div>
+                `;
+                return;
+            }
+
+            listContainer.innerHTML = filteredJobs.map((job, idx) => {
+                const meta = store[job.col_01_id] || { status: 'Saved', savedAt: new Date().toISOString(), notes: '' };
+                return createJobCardHTML(job, idx + 1, meta);
+            }).join('');
+        }
+
+        function advanceJobStage(jobId, nextStage) {
+            let store = getShortlistStore();
+            if (store[jobId]) {
+                store[jobId].status = nextStage;
+                if (nextStage === 'Applied' && !store[jobId].appliedDate) {
+                    store[jobId].appliedDate = new Date().toISOString();
+                }
+                saveShortlistStore(store);
+                showToast(`Advanced to ${nextStage} 🚀`);
+                renderShortlistView();
+            }
         }
 
         function filterShortlistByStatus(status) {
             currentShortlistFilter = status;
-            ['all', 'saved', 'applied', 'interviewing', 'offer'].forEach(st => {
+            ['all', 'saved', 'drafted', 'applied', 'interviewing', 'offer'].forEach(st => {
                 const btn = document.getElementById(`st-tab-${st}`);
                 if (btn) btn.classList.toggle('active', st === status.toLowerCase());
             });
@@ -2161,23 +2913,26 @@
             });
         }
 
-        // Drawer & Cover Letter Generator
+        // Slide-Over Role Dossier Drawer & 3-Mode Outreach Generator
         function openDrawerById(jobId) {
             let job = TOP25_DATA.find(j => j.col_01_id === jobId) || currentJobs.find(j => j.col_01_id === jobId);
             if (!job) {
                 fetch(`/api/jobs/${jobId}`)
                     .then(res => res.json())
                     .then(data => {
-                        if (data.job) openDrawer(data.job);
+                        if (data.job) openDrawer(data.job, data.fit_scorecard);
                     });
                 return;
             }
             openDrawer(job);
         }
 
-        function openDrawer(job) {
+        function openDrawer(job, fitScorecard = null) {
             activeDossierJob = job;
             const id = job.col_01_id || '';
+            const store = getShortlistStore();
+            const currentItem = store[id] || { status: 'Saved', notes: '' };
+
             document.getElementById('dossier-title').textContent = job.col_03_title || 'Position Dossier';
             document.getElementById('dossier-company-line').textContent = `${job.col_02_company || ''} • ${job.col_06_location || 'Singapore'} • ${job.col_08_employment_type || 'Full-time'}`;
             document.getElementById('dossier-score').textContent = `★ Score: ${job.col_25_suitability_score || 85}/100`;
@@ -2189,28 +2944,162 @@
             document.getElementById('dossier-resume-emphasis').textContent = job.col_30_resume_emphasis || 'Highlight relevant MSc qualifications.';
             document.getElementById('dossier-matching-exp').textContent = job.col_22_matching_exp || job.col_21_candidate_quals || 'Direct alignment with professional marketing track record.';
             document.getElementById('dossier-gaps').textContent = job.col_23_gaps || 'No material gaps identified for this seniority tier.';
-            
+
+            // In-Drawer Stage Selector & Notes
+            renderDossierStageButtons(currentItem.status || 'Saved');
+            const notesEl = document.getElementById('dossier-job-notes');
+            if (notesEl) notesEl.value = currentItem.notes || '';
+
+            // Executive Match Scorecard
+            renderExecutiveScorecard(job, fitScorecard);
+
             // Formatted Responsibilities & Requirements
             formatContentBlock('dossier-responsibilities', job.col_18_responsibilities || 'See primary portal for full specification.');
             formatContentBlock('dossier-requirements', job.col_19_mandatory_reqs || job.col_20_preferred_reqs || 'Bachelor/Master degree in Marketing, Business, or related communication discipline.');
 
-            // Synthesize Bespoke Executive Cover Letter
-            generateCoverLetterDraft(job);
+            // 3-Mode Outreach Generator
+            generateOutreachDrafts(job);
 
-            const isThai = (job.col_24_thai_relevance || '').toLowerCase().includes('thai') || (job.col_04_category || '').toLowerCase().includes('thai');
-            document.getElementById('dossier-thai').style.display = isThai ? 'inline-flex' : 'none';
+            const isThai = (job.col_24_thai_relevance || '').toLowerCase().includes('thai') || (job.col_04_category || '').toLowerCase().includes('thai') || (job.col_03_title || '').toLowerCase().includes('thai');
+            const thaiBadge = document.getElementById('dossier-thai');
+            if (thaiBadge) thaiBadge.style.display = isThai ? 'inline-flex' : 'none';
 
             const url = sanitizeUrl(job.col_15_direct_url);
             const applyBtn = document.getElementById('dossier-apply-btn');
-            applyBtn.href = url;
+            if (applyBtn) applyBtn.href = url;
 
             const isStarred = isJobShortlisted(id);
             const starBtn = document.getElementById('dossier-star-btn');
-            starBtn.textContent = isStarred ? '★ Remove from Shortlist' : '☆ Save to Shortlist';
-            starBtn.classList.toggle('starred', isStarred);
+            if (starBtn) {
+                starBtn.textContent = isStarred ? '★ Remove from Shortlist' : '☆ Save to Shortlist';
+                starBtn.classList.toggle('starred', isStarred);
+            }
 
             document.getElementById('drawer-overlay').classList.add('open');
             document.body.style.overflow = 'hidden';
+        }
+
+        function renderExecutiveScorecard(job, fitScorecard) {
+            const isThai = fitScorecard ? fitScorecard.is_thai_advantage : ((job.col_24_thai_relevance || '').toLowerCase().includes('thai') || (job.col_04_category || '').toLowerCase().includes('thai') || (job.col_03_title || '').toLowerCase().includes('thai'));
+            const tier = job.col_28_priority || 'Tier 1: Direct Match';
+
+            const tierBadge = document.getElementById('scorecard-tier-badge');
+            if (tierBadge) tierBadge.textContent = tier;
+
+            const thaiVal = document.getElementById('scorecard-thai-val');
+            if (thaiVal) {
+                thaiVal.innerHTML = isThai ? '🇹🇭 Active Advantage (+15)' : '🌐 Regional / General';
+                thaiVal.style.color = isThai ? 'var(--blue-600)' : 'var(--navy-700)';
+            }
+
+            const eduVal = document.getElementById('scorecard-edu-val');
+            if (eduVal) eduVal.innerHTML = '🎓 NTU MSc Aligned (+10)';
+
+            const bbaVal = document.getElementById('scorecard-bba-val');
+            if (bbaVal) bbaVal.innerHTML = '💼 BBA Commercial (+5)';
+
+            // Matched Competencies
+            const skillsContainer = document.getElementById('scorecard-skills-list');
+            if (skillsContainer) {
+                let skills = fitScorecard?.matched_skills_list;
+                if (!skills || skills.length === 0) {
+                    skills = ['Brand Strategy', 'Stakeholder Management', 'Digital Marketing', 'Cross-Border Partnerships'];
+                    if (isThai) skills.unshift('Thai-English Bilingual');
+                }
+                skillsContainer.innerHTML = skills.map(s => `<span class="badge badge-source" style="font-size:11px;">${escapeHtml(s)}</span>`).join('');
+            }
+
+            const strategyEl = document.getElementById('scorecard-strategy-text');
+            if (strategyEl) {
+                strategyEl.textContent = fitScorecard?.strategic_angle || job.col_30_resume_emphasis || 'Position candidate as an NTU-educated bilingual growth driver with full Singapore PR parity.';
+            }
+        }
+
+        function setDossierJobStage(stage) {
+            if (!activeDossierJob) return;
+            const id = activeDossierJob.col_01_id;
+            let store = getShortlistStore();
+            if (!store[id]) {
+                store[id] = {
+                    id: id,
+                    status: stage,
+                    savedAt: new Date().toISOString(),
+                    notes: document.getElementById('dossier-job-notes')?.value || ''
+                };
+            } else {
+                store[id].status = stage;
+            }
+            if (stage === 'Applied' && !store[id].appliedDate) {
+                store[id].appliedDate = new Date().toISOString();
+            }
+            saveShortlistStore(store);
+            renderDossierStageButtons(stage);
+            showToast(`Application moved to: ${stage} 🚀`);
+            refreshCardButtons();
+            if (currentTab === 'shortlist') {
+                renderShortlistView();
+            }
+        }
+
+        function renderDossierStageButtons(activeStage) {
+            ['saved', 'drafted', 'applied', 'interviewing', 'offer'].forEach(st => {
+                const btn = document.getElementById(`stage-btn-${st}`);
+                if (btn) btn.classList.toggle('active', st.toLowerCase() === activeStage.toLowerCase());
+            });
+        }
+
+        function updateActiveJobNotes(notesVal) {
+            if (!activeDossierJob) return;
+            const id = activeDossierJob.col_01_id;
+            let store = getShortlistStore();
+            if (store[id]) {
+                store[id].notes = notesVal;
+                saveShortlistStore(store);
+            }
+        }
+
+        function generateOutreachDrafts(job) {
+            const company = job.col_02_company || 'Hiring Team';
+            const title = job.col_03_title || 'Position';
+            const emphasis = job.col_30_resume_emphasis || 'commercial marketing strategy and regional coordination';
+            const isThai = (job.col_24_thai_relevance || '').toLowerCase().includes('thai') || (job.col_04_category || '').toLowerCase().includes('thai') || (job.col_03_title || '').toLowerCase().includes('thai');
+
+            // 1. LinkedIn InMail (punchy, 110 words)
+            outreachDrafts.inmail = `Hi [Hiring Lead / Recruiter],\n\nI noticed you are hiring for the ${title} role at ${company}. As an NTU Singapore MSc Marketing graduate and Singapore Permanent Resident (full local MOM quota parity), I specialize in ${emphasis}.\n\nHaving executed regional marketing campaigns and commercial stakeholder engagement${isThai ? ' with native Thai and English fluency across ASEAN' : ' across Asia'}, I would love to explore how my analytical background and execution velocity can support ${company}'s current growth objectives.\n\nWould you be open to a brief 10-minute introductory conversation this week?\n\nBest regards,\nDechsurang Kawintra\n+65 9123 4567 | LinkedIn: linkedin.com/in/dechsurang`;
+
+            // 2. Formal ATS Cover Letter
+            outreachDrafts.letter = `Dear Hiring Team at ${company},\n\nI am writing to express my strong interest in the ${title} position. As a Singapore Permanent Resident with a Master of Science in Marketing from Nanyang Technological University (NTU Singapore) and a native bilingual background in Thai and English, I bring both advanced analytical acumen and regional execution expertise to your team.\n\nThroughout my professional career—including managing high-visibility brand campaigns, cross-border commercial communication, and diplomatic B2B matchmaking—I have honed a proven ability to bridge strategic marketing vision with measurable business outcomes. In particular, my experience directly aligns with your requirements for ${emphasis}.\n\nWith full local employment parity in Singapore (no MOM quota constraint) and immediate availability, I am excited about the opportunity to contribute to ${company}'s ongoing growth across Singapore and the broader ASEAN region.\n\nThank you for your time and consideration. I welcome the opportunity to discuss how my qualifications align with your objectives.\n\nSincerely,\nDechsurang Kawintra\nMSc Marketing (NTU Singapore) | Singapore Permanent Resident\nPhone: +65 9123 4567 | Email: dechsurang.k@email.com`;
+
+            // 3. Interview Talking Points
+            outreachDrafts.prep = `• Academic & Strategic Credibility: MSc in Marketing from NTU Singapore; trained in advanced consumer analytics, brand equity architecture, and omnichannel positioning.\n• Immediate Local Availability: Singapore Permanent Resident holding full local employment parity (zero MOM S-Pass/EP quota restrictions or sponsorship friction).\n• Bilingual & Regional Leadership: Native Thai and fluent English fluency with proven experience orchestrating cross-border stakeholders and commercial partnerships across ASEAN.\n• Value Proposition for ${company}: Direct capability in ${emphasis}, delivering high operational velocity from Day 1.`;
+
+            switchOutreachMode(currentOutreachMode || 'inmail');
+        }
+
+        function generateCoverLetterDraft(job) {
+            generateOutreachDrafts(job);
+        }
+
+        function switchOutreachMode(mode) {
+            currentOutreachMode = mode;
+            ['inmail', 'letter', 'prep'].forEach(m => {
+                const btn = document.getElementById(`tab-outreach-${m}`);
+                if (btn) btn.classList.toggle('active', m === mode);
+            });
+            const contentEl = document.getElementById('dossier-cover-letter');
+            if (contentEl) contentEl.textContent = outreachDrafts[mode] || '';
+        }
+
+        function copyActiveOutreach() {
+            const contentEl = document.getElementById('dossier-cover-letter');
+            const text = contentEl ? contentEl.textContent : '';
+            navigator.clipboard.writeText(text).then(() => {
+                showToast("Application draft copied to clipboard!");
+            });
+        }
+
+        function copyGeneratedCoverLetter() {
+            copyActiveOutreach();
         }
 
         function formatContentBlock(elementId, text) {
@@ -2231,23 +3120,6 @@
             }
         }
 
-        function generateCoverLetterDraft(job) {
-            const company = job.col_02_company || 'Hiring Team';
-            const title = job.col_03_title || 'Position';
-            const emphasis = job.col_30_resume_emphasis || 'commercial marketing strategy and regional coordination';
-
-            const letter = `Dear Hiring Team at ${company},\n\nI am writing to express my strong interest in the ${title} position. As a Singapore Permanent Resident with a Master of Science in Marketing from Nanyang Technological University (NTU Singapore) and a native bilingual background in Thai and English, I bring both advanced analytical acumen and regional execution expertise to your team.\n\nThroughout my professional career—including managing high-visibility brand campaigns, cross-border commercial communication, and diplomatic B2B matchmaking—I have honed a proven ability to bridge strategic marketing vision with measurable business outcomes. In particular, my experience directly aligns with your requirements for ${emphasis}.\n\nWith full local employment parity in Singapore (no MOM quota constraint) and immediate availability, I am excited about the opportunity to contribute to ${company}'s ongoing growth across Singapore and the broader ASEAN region.\n\nThank you for your time and consideration. I welcome the opportunity to discuss how my qualifications align with your objectives.\n\nSincerely,\nDechsurang Kawintra\nMSc Marketing (NTU Singapore) | Singapore Permanent Resident\nPhone: +65 9123 4567 | Email: dechsurang.k@email.com`;
-
-            document.getElementById('dossier-cover-letter').textContent = letter;
-        }
-
-        function copyGeneratedCoverLetter() {
-            const text = document.getElementById('dossier-cover-letter').textContent;
-            navigator.clipboard.writeText(text).then(() => {
-                showToast("Full cover letter copied to clipboard!");
-            });
-        }
-
         function closeDrawer(e) {
             document.getElementById('drawer-overlay').classList.remove('open');
             document.body.style.overflow = '';
@@ -2260,8 +3132,10 @@
             toggleShortlist(id);
             const isStarred = isJobShortlisted(id);
             const starBtn = document.getElementById('dossier-star-btn');
-            starBtn.textContent = isStarred ? '★ Remove from Shortlist' : '☆ Save to Shortlist';
-            starBtn.classList.toggle('starred', isStarred);
+            if (starBtn) {
+                starBtn.textContent = isStarred ? '★ Remove from Shortlist' : '☆ Save to Shortlist';
+                starBtn.classList.toggle('starred', isStarred);
+            }
         }
 
         function copyTailoredStrategy() {
@@ -2315,20 +3189,47 @@
 
         // Keyboard navigation
         document.addEventListener('keydown', (e) => {
+            const isTyping = document.activeElement && (
+                document.activeElement.tagName === 'INPUT' ||
+                document.activeElement.tagName === 'TEXTAREA' ||
+                document.activeElement.tagName === 'SELECT'
+            );
+
             if (e.key === 'Escape') {
                 closeDrawer();
                 closeAuditModal();
-            } else if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+                return;
+            }
+
+            if (isTyping) return;
+
+            if (e.key === '/') {
                 e.preventDefault();
                 switchTab('explorer');
                 const inp = document.getElementById('filter-search');
                 if (inp) inp.focus();
-            } else if (e.key === '1' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+            } else if (e.key === '1') {
                 switchTab('spotlight');
-            } else if (e.key === '2' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+            } else if (e.key === '2') {
                 switchTab('explorer');
-            } else if (e.key === '3' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+            } else if (e.key === '3') {
                 switchTab('shortlist');
+            } else if (e.key === 'j' || e.key === 'J') {
+                e.preventDefault();
+                focusCard(1);
+            } else if (e.key === 'k' || e.key === 'K') {
+                e.preventDefault();
+                focusCard(-1);
+            } else if (e.key === 'o' || e.key === 'O' || e.key === 'Enter') {
+                if (!document.getElementById('drawer-overlay').classList.contains('open')) {
+                    e.preventDefault();
+                    openFocusedCard();
+                }
+            } else if (e.key === 's' || e.key === 'S') {
+                if (!document.getElementById('drawer-overlay').classList.contains('open')) {
+                    e.preventDefault();
+                    starFocusedCard();
+                }
             }
         });
 

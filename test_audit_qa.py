@@ -449,8 +449,75 @@ class CareerIntelligenceAuditTestSuite(unittest.TestCase):
             start = time.time()
             while (sync_engine._export_in_progress or sync_engine._export_pending) and (time.time() - start < max_wait):
                 time.sleep(0.2)
-                
+
             self.assertFalse(sync_engine._export_in_progress)
+
+    def test_32_fit_scorecard_api_contract(self):
+        """Verify /api/jobs/{id} returns computed executive fit scorecard with verified attributes."""
+        res = self.client.get("/api/jobs/SG-OPP-0001", headers=self.auth_header)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("fit_scorecard", data)
+        sc = data["fit_scorecard"]
+        self.assertIn("is_thai_advantage", sc)
+        self.assertIn("ntu_degree_relevance", sc)
+        self.assertIn("bba_commercial_background", sc)
+        self.assertIn("matched_skills_list", sc)
+        self.assertIn("salary_benchmark", sc)
+        self.assertIn("strategic_angle", sc)
+        self.assertIsInstance(sc["matched_skills_list"], list)
+        self.assertIsInstance(sc["is_thai_advantage"], bool)
+        self.assertTrue(sc["ntu_degree_relevance"])
+        self.assertTrue(sc["bba_commercial_background"])
+
+    def test_33_pipeline_metrics_consistency(self):
+        """Verify batch lookup for pipeline tracking strips internal indices and handles empty lists."""
+        res = self.client.get("/api/jobs/batch?ids=SG-OPP-0001,SG-OPP-0002,SG-OPP-0003", headers=self.auth_header)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["count"], 3)
+        for job in data["items"]:
+            self.assertNotIn("_search_corpus", job)
+            self.assertNotIn("_search_title", job)
+            self.assertNotIn("_max_salary", job)
+
+        # Empty IDs query
+        res_empty = self.client.get("/api/jobs/batch?ids=", headers=self.auth_header)
+        self.assertEqual(res_empty.status_code, 200)
+        self.assertEqual(res_empty.json()["count"], 0)
+        self.assertEqual(res_empty.json()["items"], [])
+
+    def test_34_template_rendering_integrity(self):
+        """Verify index.html replaces all template placeholders and includes context-derived workflow components."""
+        res = self.client.get("/", headers=self.auth_header)
+        self.assertEqual(res.status_code, 200)
+        text = res.text
+        # Ensure no unreplaced template placeholders remain
+        placeholders = [
+            "__TOP25_JSON__",
+            "__AUDIT_RUNS__",
+            "__AUDIT_SPEND__",
+            "__TOTAL_JOBS__",
+            "__THAI_JOBS__",
+            "__TOP_PRIORITY__",
+            "__AVG_SALARY__",
+            "__DISCLOSED_SALARY_COUNT__",
+            "__MY_PIPELINE_COUNT__",
+            "__DATASET_VERSION__"
+        ]
+        for p in placeholders:
+            self.assertNotIn(p, text, f"Template placeholder {p} was not rendered!")
+
+        # Verify context-derived UI/UX components
+        self.assertIn("id=\"metrics-grid-pipeline\"", text)
+        self.assertIn("id=\"active-filter-chips\"", text)
+        self.assertIn("id=\"pipeline-kanban-container\"", text)
+        self.assertIn("id=\"scorecard-skills-list\"", text)
+        self.assertIn("id=\"tab-outreach-inmail\"", text)
+        self.assertIn("id=\"tab-outreach-letter\"", text)
+        self.assertIn("id=\"tab-outreach-prep\"", text)
+        self.assertIn("id=\"dossier-cover-letter\"", text)
 
 if __name__ == '__main__':
     unittest.main()
+

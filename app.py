@@ -27,7 +27,7 @@ logger = logging.getLogger("sg_career_pipeline")
 app = FastAPI(
     title="Singapore Career Intelligence Pipeline",
     description="Executive recruitment intelligence and automated job-matching engine for candidate Dechsurang Kawintra",
-    version="1.5.0"
+    version="1.6.0"
 )
 
 # Restrict CORS appropriately
@@ -105,6 +105,80 @@ def extract_salary_range(sal_str: str):
         max_val = int(round(max_val * 173))
         
     return (min_val, max_val)
+
+def compute_fit_scorecard(job: dict) -> dict:
+    """Computes dynamic, structured fit scorecard and strategic talking points for the candidate."""
+    if not job:
+        return {}
+    
+    title = (job.get("col_03_title") or "").lower()
+    cat = (job.get("col_04_category") or "").lower()
+    thai_rel = (job.get("col_24_thai_relevance") or "").lower()
+    resp = (job.get("col_18_responsibilities") or "").lower()
+    reqs = (job.get("col_19_mandatory_reqs") or "").lower()
+    pref = (job.get("col_20_preferred_reqs") or "").lower()
+    expl = (job.get("col_29_explanation") or "").lower()
+    emph = (job.get("col_30_resume_emphasis") or "").lower()
+    combined_text = f"{title} {cat} {thai_rel} {resp} {reqs} {pref} {expl} {emph}"
+    
+    # 1. Thai bilingual advantage
+    is_thai = ("thai" in thai_rel) or ("thailand" in thai_rel) or ("thai" in cat) or ("thai" in title) or ("thai" in combined_text)
+    
+    # 2. NTU MSc Marketing alignment
+    ntu_degree = any(k in combined_text for k in ["marketing", "brand", "digital", "campaign", "consumer", "analytics", "communications", "localization"])
+    
+    # 3. Commercial / BBA background
+    bba_commercial = any(k in combined_text for k in ["b2b", "commercial", "business", "partnerships", "sales", "client", "revenue", "account", "stakeholder", "vendor", "coordination", "operations", "project"])
+    
+    # 4. Matched Skills List
+    skill_keywords = [
+        ("Social Media & Community", ["social media", "community", "instagram", "tiktok", "linkedin", "facebook"]),
+        ("Content & Influencer Marketing", ["content", "copywriting", "influencer", "kol", "creator"]),
+        ("Campaign Strategy & Analytics", ["campaign", "analytics", "roi", "kpi", "performance", "metrics"]),
+        ("Brand & Communications", ["brand", "pr", "public relations", "communications", "media relations"]),
+        ("Events & Activations", ["event", "exhibition", "trade show", "roadshow", "activation"]),
+        ("B2B Partnerships & Client Relations", ["partnership", "b2b", "stakeholder", "client", "commercial"]),
+        ("Cross-Border / Regional Coordination", ["regional", "apac", "asean", "southeast asia", "cross-border", "localization", "translation"])
+    ]
+    matched_skills = [name for name, kws in skill_keywords if any(k in combined_text for k in kws)]
+    if not matched_skills:
+        matched_skills = ["Commercial Marketing Strategy", "Cross-Functional Coordination"]
+        
+    # 5. Salary benchmark comparison
+    adv_sal = job.get("col_09_advertised_salary", "")
+    est_sal = job.get("col_10_estimated_salary", "")
+    sal_min, sal_max = extract_salary_range(adv_sal)
+    est_min, est_max = extract_salary_range(est_sal)
+    
+    benchmark_note = "Benchmark: In line with prevailing Singapore executive compensation standards."
+    if sal_max > 0 and est_max > 0:
+        if sal_max > est_max:
+            benchmark_note = f"Advertised (${sal_max:,}/mo) is above market median (${est_max:,}/mo)."
+        elif sal_max < est_min:
+            benchmark_note = f"Advertised (${sal_max:,}/mo) is below market median (${est_min:,}/mo)."
+        else:
+            benchmark_note = f"Advertised (${sal_max:,}/mo) aligns with market benchmark (${est_min:,} - ${est_max:,}/mo)."
+            
+    # 6. Strategic application angle
+    if is_thai:
+        strategic_angle = "Lead with native Thai & English bilingual fluency, cross-border bilateral market expansion capabilities, and NTU MSc campaign analytics."
+    elif "brand" in title or "brand" in cat:
+        strategic_angle = "Position NTU Master's training in brand equity strategy, consumer insights, and commercial growth metrics."
+    elif "social" in title or "content" in title:
+        strategic_angle = "Emphasize multi-platform content curation, creator engagement rates, and data-backed social campaign ROI."
+    elif "partner" in title or "business dev" in title:
+        strategic_angle = "Highlight BBA commercial negotiation foundation combined with NTU strategic analytical acumen."
+    else:
+        strategic_angle = "Emphasize Singapore PR status (no MOM quota/levy restriction), immediate availability, and NTU postgraduate marketing rigor."
+        
+    return {
+        "is_thai_advantage": is_thai,
+        "ntu_degree_relevance": ntu_degree,
+        "bba_commercial_background": bba_commercial,
+        "matched_skills_list": matched_skills,
+        "salary_benchmark": benchmark_note,
+        "strategic_angle": strategic_angle
+    }
 
 def get_snapshot() -> DatasetSnapshot:
     """Returns the current immutable dataset snapshot using thread-safe double-checked caching."""
@@ -472,7 +546,8 @@ def get_job_by_id(job_id: str, user: str = Depends(verify_credentials)):
     snap = get_snapshot()
     job = snap.by_id.get(job_id)
     if job:
-        return {"authenticated_user": user, "job": job}
+        scorecard = compute_fit_scorecard(job)
+        return {"authenticated_user": user, "job": job, "fit_scorecard": scorecard}
     raise HTTPException(status_code=404, detail="Job position not found")
 
 @app.post("/api/sync")
