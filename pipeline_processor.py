@@ -85,58 +85,122 @@ def categorize_job(title, desc, reqs, matched_query):
     # Category J: Transferable Skills & Adjacent Functions
     return "Category J: Transferable-Skills Opportunities"
 
-def calculate_suitability(job, category):
-    title = job.get('title', '').lower()
-    desc = (job.get('description', '') + " " + job.get('requirements', '')).lower()
+def extract_salary_max(sal_str):
+    if not sal_str or 'not disclosed' in sal_str.lower():
+        return 0
+    nums = [int(n.replace(',', '')) for n in re.findall(r'\b\d[\d,]{3,}\b', sal_str)]
+    return max(nums) if nums else 0
+
+def calculate_suitability(job, category=None):
+    title = (job.get('title') or job.get('col_03_title') or '').lower()
+    raw_reqs = job.get('requirements') or job.get('col_19_mandatory_reqs') or ''
+    if 'Thai language proficiency, agency background' in raw_reqs:
+        raw_reqs = ''
+    pref_reqs = job.get('col_20_preferred_reqs') or ''
+    if 'Thai language proficiency, agency background' in pref_reqs:
+        pref_reqs = ''
+    desc_text = job.get('description') or job.get('col_18_responsibilities') or ''
+    desc = (desc_text + " " + raw_reqs + " " + pref_reqs).lower()
+    cat_lower = (category or job.get('col_04_category') or '').lower()
+    existing_thai_rel = job.get('col_24_thai_relevance') or job.get('thai_relevance') or ''
+    sal_str = job.get('advertised_salary') or job.get('col_09_advertised_salary') or ''
+    company = (job.get('company') or job.get('col_02_company') or '').lower()
     
-    score = 60 # Base
+    # -------------------------------------------------------------
+    # 1. Employer-to-Candidate Fit: S_{E -> C} in [0.30, 1.00]
+    # How well does candidate satisfy employer's hiring criteria?
+    # -------------------------------------------------------------
+    core_competencies = [
+        'marketing', 'social media', 'content', 'influencer', 'pr', 'public relations',
+        'brand', 'campaign', 'analytics', 'event', 'partnerships', 'market research',
+        'localization', 'translation', 'interpreter', 'interpretation', 'trade', 'b2b'
+    ]
+    matched_skills = [s for s in core_competencies if s in title or s in desc or s in cat_lower]
+    skills_ratio = min(len(matched_skills) / 3.0, 1.0)
+    score_skills = 0.55 + (0.45 * skills_ratio) # 0.55 - 1.00
     
-    # 1. Skills match (up to 25 pts)
-    marketing_skills = ['social media', 'content', 'influencer', 'campaign', 'pr', 'public relations', 'branding', 'market research', 'analytics', 'event', 'negotiation']
-    matched_skills = [s for s in marketing_skills if s in title or s in desc]
-    score += min(len(matched_skills) * 3, 20)
-    
-    # 2. Seniority match (up to 15 pts)
-    ideal_seniority = ['executive', 'specialist', 'associate', 'coordinator', 'officer', 'account executive']
-    if any(s in title for s in ideal_seniority):
-        score += 10
-    elif 'senior executive' in title or 'assistant manager' in title:
-        score += 6 # Realistic stretch
-    elif any(s in title for s in ['director', 'vp', 'head of', 'general manager']):
-        score -= 25 # Unrealistic stretch
+    # Seniority Fit
+    if any(k in title for k in ['director', 'vp', 'head of', 'chief', 'general manager', 'partner']):
+        score_seniority = 0.25 # C-suite penalty
+    elif any(k in title for k in ['senior executive', 'marketing executive', 'specialist', 'coordinator', 'lead', 'assistant manager', 'account executive']):
+        score_seniority = 0.98 # Direct target seniority
+    elif any(k in title for k in ['manager']):
+        score_seniority = 0.85 # Strong growth tier
+    elif any(k in title for k in ['associate', 'officer', 'representative']):
+        score_seniority = 0.88 # Solid operational role
+    else:
+        score_seniority = 0.70
         
-    # 3. Education (up to 10 pts)
-    if 'degree' in desc or 'bachelor' in desc or 'master' in desc:
-        score += 5
-    if 'marketing' in desc:
-        score += 5
-        
-    # 4. Language & Regional advantage (up to 15 pts)
-    is_thai = any(k in title or k in desc for k in ['thai', 'thailand', 'bangkok'])
-    is_regional = any(k in title or k in desc for k in ['asean', 'southeast asia', 'apac', 'regional'])
-    if is_thai:
-        score += 15
+    # Education & Statutory Parity (Singapore PR = 0.90 baseline; degree match boosts to 0.98)
+    score_edu_pr = 0.98 if any(k in desc for k in ['master', 'degree', 'bachelor', 'marketing', 'business']) else 0.88
+    
+    s_employer = (0.40 * score_skills) + (0.35 * score_seniority) + (0.25 * score_edu_pr)
+    
+    # -------------------------------------------------------------
+    # 2. Candidate-to-Employer Fit: S_{C -> E} in [0.30, 1.00]
+    # How well does the position fulfill candidate's strategic criteria?
+    # -------------------------------------------------------------
+    is_direct_thai = (existing_thai_rel == 'Critical Advantage') or ('category e' in cat_lower) or any(k in title for k in ['thai', 'thailand'])
+    is_regional = (existing_thai_rel in ['Valuable Context', 'General Regional Advantage']) or any(k in title or k in desc for k in ['asean', 'southeast asia', 'apac', 'regional', 'cross-border'])
+    
+    # Strategic Moat
+    if is_direct_thai:
+        score_moat = 1.00 # Candidate's exclusive linguistic monopoly
     elif is_regional:
-        score += 8
+        score_moat = 0.85 # High ASEAN transferability
+    elif any(k in cat_lower for k in ['marketing', 'social', 'pr']):
+        score_moat = 0.72 # Functional alignment
+    else:
+        score_moat = 0.50 # General corporate
         
-    # Cap score at 98 max, 35 min
-    score = max(35, min(96, score))
+    # Compensation Alignment (Target: S$5,000 - S$8,500/mo)
+    nums = [int(n.replace(',', '')) for n in re.findall(r'\b\d[\d,]{3,}\b', sal_str)]
+    max_sal = max(nums) if nums else None
     
-    # Tier mapping
-    if score >= 85:
+    if max_sal is not None:
+        if max_sal >= 7000:
+            score_comp = 1.00
+        elif max_sal >= 5000:
+            score_comp = 0.92
+        elif max_sal >= 4000:
+            score_comp = 0.80
+        elif max_sal >= 3000:
+            score_comp = 0.65
+        else:
+            score_comp = 0.45
+    else:
+        score_comp = 0.75 # Default benchmark for undisclosed
+        
+    # Enterprise Reputation & Ecosystem
+    top_orgs = ['bandai', 'edrington', 'databricks', 'tdcx', 'canon', 'ikea', 'propertyguru', 'google', 'bloomberg', 'tiktok', 'bytedance', 'shopee', 'grab', 'lazada', 'meta', 'applebox']
+    if any(k in company for k in top_orgs):
+        score_org = 0.98
+    else:
+        score_org = 0.78
+        
+    s_candidate = (0.50 * score_moat) + (0.30 * score_comp) + (0.20 * score_org)
+    
+    # -------------------------------------------------------------
+    # 3. Reciprocal Harmonic Mean Aggregation
+    # -------------------------------------------------------------
+    harmonic = (2.0 * s_employer * s_candidate) / (s_employer + s_candidate)
+    score = max(40, min(98, round(harmonic * 100)))
+    
+    # Tier mapping based on calibrated distribution
+    if score >= 88:
         tier = "Tier 1: Excellent Direct Match"
         priority = "Priority 1: Immediate Application"
-    elif score >= 75:
+    elif score >= 78:
         tier = "Tier 2: Strong Transferable-Skills Match"
         priority = "Priority 2: High Priority"
-    elif score >= 65:
+    elif score >= 68:
         tier = "Tier 3: Realistic Stretch Opportunity"
         priority = "Priority 3: Secondary Priority"
     else:
         tier = "Tier 4: Conditional / Verification Needed"
         priority = "Priority 4: Exploratory"
         
-    thai_relevance = "Critical Advantage" if is_thai else ("Valuable Context" if is_regional else "Non-essential / General")
+    thai_relevance = "Critical Advantage" if is_direct_thai else ("Valuable Context" if is_regional else "Non-essential / General")
     
     return score, tier, priority, thai_relevance
 
@@ -327,8 +391,22 @@ def process_all_jobs():
         }
         master_records.append(record)
         
-    # Sort by suitability score descending
-    master_records.sort(key=lambda x: x['col_25_suitability_score'], reverse=True)
+    # Sort using multi-tier deterministic tie-breaking:
+    # 1. Harmonic Reciprocal Score
+    # 2. Thai Language Moat (boolean)
+    # 3. Disclosed Max Salary (descending)
+    # 4. Deterministic Job ID
+    def get_sort_key(r):
+        sal_max = extract_salary_max(r.get('col_09_advertised_salary', ''))
+        is_thai = 1 if ('thai' in (r.get('col_24_thai_relevance') or '').lower() and 'non-essential' not in (r.get('col_24_thai_relevance') or '').lower()) else 0
+        return (
+            r['col_25_suitability_score'],
+            is_thai,
+            sal_max,
+            r.get('col_01_id', '')
+        )
+
+    master_records.sort(key=get_sort_key, reverse=True)
     
     print(f"\nFinal Master Records processed: {len(master_records)}")
     tmp_path = 'processed_master_jobs.json.tmp'

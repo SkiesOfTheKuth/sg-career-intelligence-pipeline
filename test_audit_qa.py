@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 import base64
 import json
 import os
@@ -270,8 +271,10 @@ class CareerIntelligenceAuditTestSuite(unittest.TestCase):
         self.assertIn("is_syncing", data["sync_telemetry"])
         self.assertIn("last_sync_status", data["sync_telemetry"])
 
-    def test_21_manual_sync_endpoint(self):
+    @patch("app.synchronize_upstream_jobs")
+    def test_21_manual_sync_endpoint(self, mock_sync):
         """Verify POST /api/sync requires authentication and rejects unauthorized access."""
+        mock_sync.return_value = {"status": "success", "new_jobs": 0, "total_jobs": 4394}
         # Unauth should fail 401
         res_unauth = self.client.post("/api/sync")
         self.assertEqual(res_unauth.status_code, 401)
@@ -283,6 +286,7 @@ class CareerIntelligenceAuditTestSuite(unittest.TestCase):
         self.assertEqual(data["authenticated_user"], "Kawa")
         self.assertIn("sync_result", data)
         self.assertIn("telemetry", data)
+        mock_sync.assert_called_once()
 
     def test_22_atomic_persistence_and_mcf_transformation(self):
         """Verify transform_mcf_job enforces 30 columns and atomic_save_jobs writes safely."""
