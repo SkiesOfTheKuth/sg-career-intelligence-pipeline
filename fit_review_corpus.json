@@ -1,0 +1,11 @@
+[
+  {"id":"aligned","title":"Social Media Executive","description":"Responsibilities\nManage social media accounts.\nConduct audience research.\nRequirements\nDegree in Marketing\nExperience in social media"},
+  {"id":"graphics","title":"Social Media Designer","description":"Responsibilities\nCreate graphics and animation for social media.\nRequirements\nDegree in Marketing"},
+  {"id":"compound","title":"Social Media Executive","description":"Responsibilities\nManage social media accounts and create graphics and animation.\nRequirements\nDegree in Marketing"},
+  {"id":"adjacent","title":"Business Development Executive","description":"Responsibilities\nConduct audience research.\nAcquire new sales prospects.\nRequirements\nDegree in Marketing"},
+  {"id":"japanese","title":"Marketing Executive","description":"Responsibilities\nManage social media accounts.\nRequirements\nFluent Japanese required"},
+  {"id":"finance","title":"Accounts Receivable Specialist","description":"Responsibilities\nManage social media accounts.\nPrepare financial reports.\nRequirements\nDegree in Marketing\nACCA required"},
+  {"id":"incomplete","title":"Marketing Executive","description":"Manage social media accounts.","description_incomplete":true},
+  {"id":"propertyguru","title":"Communications Executive","company":"PropertyGuru","description":"About us\nWe operate in Singapore, Malaysia, Thailand and Vietnam.\nResponsibilities\nManage social media accounts.\nRequirements\nDegree in Marketing"},
+  {"id":"interpretation","title":"Thai English Interpreter","description":"Responsibilities\nProvide Thai–English interpretation.\nRequirements\nKnowledge of English and Thai"}
+]

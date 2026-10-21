@@ -5,7 +5,7 @@
   function summary(job) {
     const score = job.assessment?.score;
     if (!score || score.value === null) return 'Fit score unavailable: review the source duties';
-    return `Documented fit ${score.value}/100${score.provisional ? ' · provisional' : ''}${score.gates.length ? ' · required evidence missing' : ''}`;
+    return `Documented fit ${score.value}/100${score.provisional ? ' · provisional' : ''}${score.gates.some(gate => gate.evidence_state === 'documented_incompatibility') ? ' · eligibility conflict' : score.gates.length ? ' · required evidence missing' : ''}`;
   }
   function detail(job) {
     const root = el('div', undefined, 'fit-score'); const score = job.assessment?.score;
@@ -35,8 +35,14 @@
       if (!rows.length) group.append(el('p', 'Not clearly available in the retained source. Check the original listing.', 'field-help'));
       for (const row of rows) {
         const item = el('div', undefined, 'score-evidence');
-        item.append(el('p', `“${row.quote}”`, 'score-quote'), el('strong', row.status === 'check' ? 'Needs your check' : supportedLabel), el('p', row.reason, 'field-help'));
-        for (const fact of row.candidate_evidence) item.append(el('p', `CV: ${fact}`, 'field-help'));
+        item.append(el('p', `“${row.quote}”`, 'score-quote'), el('strong', row.status === 'incompatible' ? 'Documented incompatibility' : row.status === 'partial' ? 'Partially supported' : row.status === 'check' ? 'Needs your check' : supportedLabel), el('p', row.reason, 'field-help'));
+        if (!(row.clauses?.length > 1)) for (const fact of row.candidate_evidence) item.append(el('p', `CV: ${fact}`, 'field-help'));
+        for (const clause of row.clauses?.length > 1 ? row.clauses : []) {
+          const part = el('div', undefined, 'score-clause');
+          part.append(el('p', `“${clause.quote}”`), el('strong', clause.status === 'overlap' ? 'Supported clause' : 'No documented support'), el('p', clause.reason, 'field-help'));
+          for (const fact of clause.candidate_evidence || []) part.append(el('p', `CV: ${fact}`, 'field-help'));
+          item.append(part);
+        }
         group.append(item);
       }
       root.append(group);

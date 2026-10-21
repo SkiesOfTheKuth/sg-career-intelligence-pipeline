@@ -68,10 +68,14 @@ class ScoreTests(unittest.TestCase):
         self.assertIn('Vietnamese',gate['reason']);self.assertNotIn('Japanese,',gate['reason'])
 
     def test_specialist_tools_and_video_skills_cannot_earn_duty_points(self):
-        for duty in ['Manage social media and paid advertising budgets.','Create content and edit videos with Adobe Premiere.','Analyse content analytics using SQL.']:
+        for duty in ['Manage social media and paid advertising budgets.','Analyse content analytics using SQL.']:
             score = self.score(description=f'Responsibilities\n{duty}\nRequirements\nExperience in social media')
             self.assertEqual(score['components'][1]['earned'],0,duty)
             self.assertTrue(all(row['status']=='check' for row in score['duties']))
+        score = self.score(description='Responsibilities\nCreate content and edit videos with Adobe Premiere.\nRequirements\nExperience in social media')
+        self.assertEqual(score['duties'][0]['status'], 'partial')
+        self.assertEqual(score['components'][1]['earned'], 25)
+        self.assertFalse(score['duties'][0]['clauses'][1]['candidate_evidence'])
 
     def test_repeating_supported_duty_cannot_dilute_unknowns(self):
         base = 'Responsibilities\nManage social media accounts.\nEdit videos.\nRequirements\nExperience in social media'
@@ -105,7 +109,7 @@ class ScoreTests(unittest.TestCase):
         old=role();old['assessment']={'fit':'Relevant','score':{'value':99,'version':'old'}}
         original=old['raw_evidence'].copy()
         current=present_job(old)
-        self.assertEqual(current['assessment']['score']['version'],'documented-fit-v1')
+        self.assertEqual(current['assessment']['score']['version'],'documented-fit-v2')
         self.assertEqual(old['assessment']['score']['version'],'old')
         self.assertEqual(current['raw_evidence'],original)
 

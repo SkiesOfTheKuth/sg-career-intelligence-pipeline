@@ -4,6 +4,8 @@
   const $ = id => document.getElementById(id);
   const STAGES = ['Saved', 'Preparing', 'Applied', 'Interviewing', 'Offer', 'Closed'];
   const RECOVERY_KEY = 'sg_career_recovery_v1';
+  const RECOVERY_PREFIX = 'sg_career_recovery_v2:';
+  const editorId = crypto.randomUUID();
   const LEGACY_KEY = 'sg_career_shortlist_v2';
   const IMPORT_KEY = 'sg_career_shortlist_v2_imported';
   const mobile = window.matchMedia('(max-width: 1023px)');
@@ -76,12 +78,19 @@
       node.append(button('Review edits', () => openRole(id)));
       fragment.append(node);
     }
+    const recoveredJobs = new Set(Object.values(state.recovery).filter(record => record.editor_id !== editorId).map(record => String(record.job_id)));
+    if (recoveredJobs.size > 1) {
+      const choices = el('details', 'notice warning'); choices.append(el('summary', '', 'Choose a role to recover'));
+      for (const id of recoveredJobs) choices.append(button(getJob(id).title || id, () => openRole(id)));
+      fragment.append(choices);
+    }
     $('global-notices').replaceChildren(fragment);
   }
   async function api(path, options = {}) {
-    const response = await fetch(path, { credentials: 'same-origin', ...options, headers: { Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers } });
+    const signal = options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(20000)]) : AbortSignal.timeout(20000);
+    const response = await fetch(path, { credentials: 'same-origin', ...options, signal, headers: { Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers } });
     let data;
-    try { data = await response.json(); } catch { data = null; }
+    try { data = await response.json(); } catch (error) { if (['AbortError', 'TimeoutError'].includes(error.name)) throw error; data = null; }
     if (!response.ok) {
       const error = new Error(response.status === 401 ? 'Your session needs authentication. Reload this page to sign in.' : (typeof data?.detail === 'string' ? data.detail : data?.detail?.message || `The request failed (${response.status}). Please retry.`));
       error.status = response.status;
@@ -205,16 +214,16 @@
       if (epoch === state.searchEpoch) { $('job-list').setAttribute('aria-busy', 'false'); $('load-more').disabled = false; }
     }
   }
-  function getJob(id) { return state.jobs.get(String(id)) || state.applications.get(String(id))?.job || state.applications.get(String(id))?.job_snapshot || state.recovery[id]?.job_snapshot || { id, title: 'Unavailable listing', company: '' }; }
+  function getJob(id) { return state.jobs.get(String(id)) || state.applications.get(String(id))?.job || state.applications.get(String(id))?.job_snapshot || Object.values(state.recovery).find(record => String(record.job_id) === String(id))?.job_snapshot || { id, title: 'Unavailable listing', company: '' }; }
   function effectiveApplication(id) {
     const saved = state.applications.get(String(id));
     const session = state.sessions.get(String(id));
-    if (!saved && !session) return null;
-    return mergePatch(mergePatch(saved || { job_id: id, stage: 'Saved', revision: 0, notes: '' }, session?.inFlight), session?.pending);
+    if (!saved && !hasKeys(session?.pending) && !hasKeys(session?.inFlight)) return null;
+    return mergePatch(mergePatch(session?.base || saved || { job_id: id, stage: 'Saved', revision: 0, notes: '' }, session?.inFlight), session?.pending);
   }
   function verificationText(job) {
     const verification = job.verification || {};
-    const checked = date(verification.checked_at);
+    const checked = date(verification.last_success_at || verification.checked_at);
     const closed = ['closed', 'expired', 'unavailable'].includes(String(job.status || '').toLowerCase());
     if (closed) return `${job.status === 'expired' ? 'Deadline has passed' : 'Listing unavailable'}${verification.last_success_at ? `. Last verified ${date(verification.last_success_at)}` : ''}`;
     if (!checked) return 'Source verification unavailable';
@@ -224,7 +233,7 @@
   function roleMetadata(job) {
     const node = el('div', 'role-metadata');
     node.append(el('span', 'salary', job.salary?.display || 'Salary not disclosed'));
-    if (job.employment_type) node.append(el('span', '', job.employment_type));
+    node.append(el('span', '', (job.employment_types?.length ? job.employment_types : [job.employment_type || 'Not stated']).join(' · ')));
     if (job.location) node.append(el('span', '', job.location));
     return node;
   }
@@ -249,7 +258,7 @@
       row.append(heading, paragraph(job.company || 'Company not stated', 'company'), roleMetadata(job));
       const assessment = job.assessment || {};
       const fit = assessment.fit || 'Check requirements';
-      const reason = listValues(assessment.reasons)[0];
+      const reason = job.assessment_summary || listValues(assessment.reasons)[0];
       const line = paragraph('', 'assessment-line');
       line.append(el('strong', fit === 'Relevant' ? 'fit-relevant' : fit === 'Check requirements' ? 'fit-check' : '', fit));
       if (reason) line.append(document.createTextNode(` — ${reason}`));
@@ -285,24 +294,54 @@
     } catch (error) { notice('options', `Filter choices couldn’t be loaded. ${error.message}`, loadOptions, 'Retry filters'); }
   }
 
-  // Local recovery is written synchronously on each edit, before any network request.
+  // Immutable records are scoped to one editor, job and version.
   function readRecovery() {
     try {
-      const raw = JSON.parse(localStorage.getItem(RECOVERY_KEY) || '{}');
-      state.recovery = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-    } catch { notice('storage', 'Browser recovery could not be read. New edits will still be sent to the server.'); }
+      const legacyRaw = localStorage.getItem(RECOVERY_KEY);
+      if (legacyRaw && localStorage.getItem('sg_career_recovery_v2_imported') !== legacyRaw) {
+        for (const [id, record] of Object.entries(JSON.parse(legacyRaw) || {})) {
+          if (!hasKeys(record.patch)) continue;
+          const key = RECOVERY_PREFIX + 'legacy:' + crypto.randomUUID();
+          const raw = JSON.stringify({...record, job_id: id, editor_id: 'legacy'});
+          localStorage.setItem(key, raw);
+          if (localStorage.getItem(key) !== raw) throw new Error('Recovery verification failed');
+        }
+        // Retain the original map after verified conversion.
+        localStorage.setItem('sg_career_recovery_v2_imported', legacyRaw);
+      }
+      const records = {};
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (!key?.startsWith(RECOVERY_PREFIX)) continue;
+        const record = JSON.parse(localStorage.getItem(key));
+        if (record?.job_id && hasKeys(record.patch)) records[key] = record;
+      }
+      state.recovery = records;
+    } catch { notice('storage', 'Browser recovery could not be read. Keep this page open until your edits save.'); }
   }
   function persistRecovery(id) {
     const session = state.sessions.get(id);
     const patch = mergePatch(session?.inFlight, session?.pending);
-    if (hasKeys(patch)) state.recovery[id] = { job_id: id, expected_revision: session.revision, patch, job_snapshot: getJob(id), updated_at: new Date().toISOString() };
-    else delete state.recovery[id];
-    try { localStorage.setItem(RECOVERY_KEY, JSON.stringify(state.recovery)); clearNotice('storage'); }
-    catch { notice('storage', 'Browser recovery could not be stored. Server saving is still available; unsaved text remains on this page.'); }
+    try {
+      const previous = session.recoveryKey;
+      if (hasKeys(patch)) {
+        const key = RECOVERY_PREFIX + editorId + ':' + encodeURIComponent(id) + ':' + crypto.randomUUID();
+        const record = {job_id: id, editor_id: editorId, expected_revision: session.revision, base: session.base, patch, job_snapshot: getJob(id), updated_at: new Date().toISOString()};
+        const raw = JSON.stringify(record);
+        localStorage.setItem(key, raw);
+        if (localStorage.getItem(key) !== raw) throw new Error('Recovery verification failed');
+        state.recovery[key] = record; session.recoveryKey = key;
+      } else session.recoveryKey = null;
+      if (previous) { localStorage.removeItem(previous); delete state.recovery[previous]; }
+      clearNotice('storage');
+    } catch { notice('storage', 'Browser recovery could not be stored. Keep this page open until server saving succeeds.'); }
   }
   function sessionFor(id) {
     id = String(id);
-    if (!state.sessions.has(id)) state.sessions.set(id, { revision: Number(state.applications.get(id)?.revision || 0), pending: {}, inFlight: {}, saving: false, error: null, conflict: null, timer: null });
+    if (!state.sessions.has(id)) {
+      const base = state.applications.get(id) || {job_id: id, stage: 'Saved', notes: '', revision: 0};
+      state.sessions.set(id, {base, revision: Number(base.revision), pending: {}, inFlight: {}, saving: false, error: null, conflict: null, timer: null, recoveryKey: null});
+    }
     return state.sessions.get(id);
   }
   function queueWrite(id, patch, immediate = false) {
@@ -326,6 +365,7 @@
     updateSaveFeedback(id);
     try {
       const saved = await api(`/api/applications/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ ...session.inFlight, expected_revision: session.revision }) });
+      session.base = saved;
       session.revision = Number(saved.revision);
       state.applications.set(id, saved);
       session.inFlight = {};
@@ -402,6 +442,7 @@
     const current = session.conflict;
     if (!current || !Number.isFinite(Number(current.revision))) { toast('The server version is unavailable. Refresh applications and retry.'); return; }
     state.applications.set(id, current);
+    session.base = current;
     session.revision = Number(current.revision);
     session.conflict = null;
     session.error = null;
@@ -427,9 +468,15 @@
       state.applicationsLoaded = true;
       state.applicationsError = null;
       for (const [id, session] of state.sessions) {
-        if (!session.saving && !hasKeys(session.pending) && !session.conflict) session.revision = Number(state.applications.get(id)?.revision || 0);
+        const current = state.applications.get(id) || {job_id: id, revision: 0};
+        if (!session.saving && !hasKeys(session.pending) && !session.conflict) {
+          session.base = current; session.revision = Number(current.revision);
+        } else if (!session.saving && Number(current.revision) !== session.revision) {
+          session.conflict = current; clearTimeout(session.timer);
+        }
       }
       restoreRecovery();
+      if (state.activeId) renderDetail(getJob(state.activeId), false);
       renderApplications();
       refreshAllRowStages();
       updateImportNotice();
@@ -441,20 +488,36 @@
     } finally { $('application-list').setAttribute('aria-busy', 'false'); $('refresh-applications').disabled = false; }
   }
   function restoreRecovery() {
-    for (const [id, recovered] of Object.entries(state.recovery)) {
-      if (state.sessions.has(id) || !hasKeys(recovered.patch)) continue;
-      const session = sessionFor(id);
-      session.pending = recovered.patch;
-      session.revision = Number(recovered.expected_revision || 0);
-      const current = state.applications.get(id);
-      if (Number(current?.revision || 0) !== session.revision) {
-        // A lost acknowledgement may have saved these exact edits; avoid a false conflict.
-        const alreadySaved = Object.entries(session.pending).every(([key, value]) => key === 'drafts' ? Object.entries(value).every(([name, text]) => current?.drafts?.[name] === text) : current?.[key] === value);
-        if (alreadySaved) { session.pending = {}; session.revision = Number(current.revision); persistRecovery(id); }
-        else { session.conflict = current || { job_id: id, revision: 0 }; session.error = 'Recovered edits differ from the server copy.'; }
-      } else flushWrite(id);
-    }
+    readRecovery();
+    const other = Object.entries(state.recovery).filter(([, record]) => record.editor_id !== editorId);
+    if (other.length) notice('recovery', `${other.length} browser recovery versions are available. Review before applying saved text.`, () => openRole(String(other[0][1].job_id)), 'Review recovery', 'warning');
+    else clearNotice('recovery');
     renderNotices();
+  }
+  function renderRecovery(id, container) {
+    const records = Object.entries(state.recovery).filter(([, record]) => String(record.job_id) === id && record.editor_id !== editorId);
+    if (!records.length) return;
+    const section = el('details', 'detail-section'); section.open = true;
+    section.append(el('summary', '', `Browser recovery (${records.length} versions)`));
+    section.append(paragraph('Each version retains its original base revision. Saving this editor does not discard another editor’s copy.', 'field-help'));
+    for (const [key, record] of records) {
+      const version = el('details'); version.open = true;
+      version.append(el('summary', '', `Saved ${record.updated_at ? new Date(record.updated_at).toLocaleString('en-SG') : 'date unknown'} · base revision ${record.expected_revision || 0}`));
+      version.append(el('pre', 'conflict-copy', printableApplication(mergePatch(record.base, record.patch))));
+      version.append(button('Load this recovery for review', () => {
+        const session = sessionFor(id);
+        if (session.saving || hasKeys(session.pending)) { toast('Save or resolve your pending changes before loading recovery.'); return; }
+        session.base = record.base || state.applications.get(id) || {job_id: id, revision: 0};
+        session.revision = Number(record.expected_revision || 0); session.pending = record.patch;
+        session.conflict = state.applications.get(id) || {job_id: id, revision: 0};
+        persistRecovery(id); renderDetail(getJob(id), false); renderNotices();
+      }));
+      version.append(button('Discard this recovery copy', () => {
+        localStorage.removeItem(key); delete state.recovery[key]; restoreRecovery(); renderDetail(getJob(id), false);
+      }, 'text-button'));
+      section.append(version);
+    }
+    container.append(section);
   }
   function refreshAllRowStages() { for (const job of state.results) refreshRowStage(String(job.id)); }
   function filteredApplications() {
@@ -626,9 +689,11 @@
   function renderDetail(job, focus) {
     const id = String(job.id || state.activeId);
     const application = effectiveApplication(id);
+    sessionFor(id); // Bind displayed values before the first edit.
     const pane = $('role-detail');
     const previousScroll = pane.scrollTop;
     const previousFocusId = pane.contains(document.activeElement) ? document.activeElement.id : null;
+    const previousSelection = previousFocusId && ['TEXTAREA', 'INPUT'].includes(document.activeElement.tagName) ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
     const fragment = document.createDocumentFragment();
     const closeRow = el('div', 'detail-close-row');
     closeRow.append(button('← Back to roles', () => closeRole(), 'text-button'));
@@ -708,19 +773,16 @@
     }
     const feedback = el('div', 'save-feedback'); feedback.id = 'save-feedback'; tracking.append(feedback);
     fragment.append(tracking);
+    renderRecovery(id, fragment);
     const preparation = el('div'); preparation.id = 'preparation'; fragment.append(preparation);
-    if (application?.history?.length) {
-      const section = el('details', 'detail-section'); section.append(el('summary', '', 'Application history'));
-      const list = el('ul', 'history-list');
-      for (const event of [...application.history].reverse()) {
-        const text = typeof event === 'string' ? event : `${date(event.at || event.created_at || event.timestamp) || ''}${event.stage ? ` — ${event.stage}` : ''}${event.action || event.type ? ` — ${event.action || event.type.replaceAll('_', ' ')}` : ''}${event.changed_fields?.length ? `: ${event.changed_fields.map(field => field.replaceAll('_', ' ')).join(', ')}` : ''}${event.note ? `: ${event.note}` : ''}`;
-        const item = el('li', '', text || 'Application updated');
-        if (event && typeof event === 'object' && (event.conflict || event.imported || event.incoming || event.legacy)) {
-          const details = el('details'); details.append(el('summary', '', 'Retained import details'), el('pre', 'conflict-copy', JSON.stringify(event.conflict || event.imported || event.incoming || event.legacy, null, 2))); item.append(details);
-        }
-        list.append(item);
-      }
-      section.append(list); fragment.append(section);
+    if (application?.revision) {
+      const historySection = el('details', 'detail-section'); historySection.id = 'application-history';
+      historySection.append(el('summary', '', 'Application history'));
+      const historyContent = el('div'); historySection.append(historyContent);
+      historySection.addEventListener('toggle', () => {
+        if (historySection.open && !historyContent.childNodes.length) loadApplicationHistory(id, historyContent);
+      });
+      fragment.append(historySection);
     }
     pane.replaceChildren(fragment);
     updateDetailEvidence(job);
@@ -729,18 +791,59 @@
     renderPreparation(id);
     pane.scrollTop = previousScroll;
     if (focus) title.focus({ preventScroll: true });
-    else if (previousFocusId) $(previousFocusId)?.focus({ preventScroll: true });
+    else if (previousFocusId) {
+      const input = $(previousFocusId); input?.focus({ preventScroll: true });
+      if (previousSelection && previousSelection[0] !== null && input?.setSelectionRange) input.setSelectionRange(...previousSelection);
+    }
+  }
+  async function loadApplicationHistory(id, container, offset = 0) {
+    const progress = paragraph('Loading application history…', 'field-help'); container.append(progress);
+    try {
+      const data = await api(`/api/applications/${encodeURIComponent(id)}/history?offset=${offset}&limit=25`);
+      if (!container.isConnected) return;
+      progress.remove();
+      if (!data.total) container.append(paragraph('No history recorded yet.', 'field-help'));
+      for (const event of data.items || []) {
+        const row = el('div', 'history-event');
+        row.append(paragraph(`${date(event.at || event.created_at) || 'Date not recorded'} · ${(event.type || event.action || 'Application updated').replaceAll('_', ' ')}${event.stage ? ' · ' + event.stage : ''}`));
+        if (event.changed_fields?.length) row.append(paragraph(event.changed_fields.map(field => field.replaceAll('_', ' ')).join(', '), 'field-help'));
+        if (event.type === 'import_version') {
+          row.append(paragraph(`Import ${event.resolution_status}. Original entry retained ${date(event.created_at) || 'date unknown'}${event.resolved_at ? '. Resolved ' + date(event.resolved_at) : ''}.`, 'field-help'));
+          const original = el('details'); original.append(el('summary', '', 'Original browser notes and stage'), el('pre', 'conflict-copy', printableApplication(event.incoming?.application || event.incoming)));
+          row.append(original);
+          if (event.resolution) {
+            const resolved = el('details'); resolved.append(el('summary', '', 'Resolution saved to application'), el('pre', 'conflict-copy', printableApplication(event.resolution))); row.append(resolved);
+          } else if (event.resolution_status === 'resolved') row.append(paragraph('The resolution predates retained resolution snapshots. The original entry is available above.', 'field-help'));
+        }
+        container.append(row);
+      }
+      const next = offset + (data.items || []).length;
+      if (next < data.total) container.append(button('Load older application history', event => { event.currentTarget.remove(); loadApplicationHistory(id, container, next); }));
+    } catch (error) {
+      progress.remove(); const retry = el('div', 'notice warning');
+      retry.append(paragraph(error.message), button('Retry application history', () => {retry.remove(); loadApplicationHistory(id, container, offset);})); container.append(retry);
+    }
+  }
+  function fieldProvenance(job, name, container) {
+    const evidence = job.field_provenance?.[name] || {};
+    const available = name === 'requirements' ? Boolean(job.source_requirements) : Boolean(job.description);
+    const retained = available ? date(evidence.checked_at || evidence.source_record_date) : null;
+    container.append(paragraph(`${name === 'description' ? 'Description retained' : name === 'requirements' ? 'Explicit requirements retained' : 'Description-derived requirements retained'}: ${retained || 'not recorded'}. Listing checks do not refresh retained content.`, 'field-help'));
+    if (safeURL(evidence.url)) { const link = el('a', 'button-link', 'Open field source'); link.href = safeURL(evidence.url); link.target = '_blank'; link.rel = 'noopener noreferrer'; container.append(link); }
   }
   function updateDetailEvidence(job) {
     const container = $('detail-evidence');
     if (!container) return;
     const responsibilities = detailSection('Role description');
     responsibilities.append(paragraph(job.description || 'The source does not provide a complete role description.', 'source-description'));
+    fieldProvenance(job, 'description', responsibilities);
     const requirements = detailSection('Employer requirements');
     requirements.id = 'employer-requirements'; requirements.tabIndex = -1;
     if (listValues(job.requirements?.mandatory).length) { requirements.append(el('h3', '', 'Mandatory')); appendList(requirements, job.requirements.mandatory); }
     else requirements.append(paragraph('Mandatory requirements are not available in the retained source.', 'field-help'));
     if (listValues(job.requirements?.preferred).length) { requirements.append(el('h3', '', 'Preferred')); appendList(requirements, job.requirements.preferred); }
+    fieldProvenance(job, 'requirements', requirements);
+    if (job.field_provenance?.derived_requirements) fieldProvenance(job, 'derived_requirements', requirements);
     const consider = detailSection('Why consider this');
     consider.append(paragraph(job.assessment?.fit || 'Check requirements'));
     if (window.FitScore) {const score = window.FitScore.detail(job); score.id = 'fit-score-detail'; score.tabIndex = -1; consider.append(score);}
@@ -807,6 +910,9 @@
       section.append(field);
     }
     const hint = paragraph('Edits save automatically with your application.', 'field-help'); hint.id = 'draft-save-hint'; section.append(hint);
+    const checklist = el('details'); checklist.id = 'preparation-checklist'; checklist.append(el('summary', '', 'Requirements to resolve before applying'));
+    appendList(checklist, state.drafts.get(id)?.requirements_to_check || getJob(id).assessment?.gaps, 'Review the original listing and confirm any requirements not established by your CV.');
+    section.append(checklist);
     container.append(section);
     updateSaveFeedback(id);
     const generated = state.drafts.get(id);
@@ -833,6 +939,8 @@
       if (hasKeys(patch)) queueWrite(id, { drafts: patch });
       // Do not replace draft inputs the user is currently editing.
       if (state.activeId === id) {
+        const checklist = $('preparation-checklist');
+        if (checklist) { checklist.replaceChildren(el('summary', '', 'Requirements to resolve before applying')); appendList(checklist, data.requirements_to_check, 'Review the original listing before applying.'); }
         for (const [name, value] of Object.entries(patch)) { const input = $(`draft-${name}`); if (input && document.activeElement !== input) input.value = value; }
         if (effectiveApplication(id)?.stage === 'Interviewing' && !$('preparation').querySelector('.interview-preparation')) {
           const interview = detailSection('Interview preparation'); interview.classList.add('interview-preparation'); appendList(interview, data.interview_prep); $('preparation').append(interview);
@@ -848,7 +956,7 @@
   async function download(path, filename, source) {
     source.disabled = true;
     try {
-      const response = await fetch(path, { credentials: 'same-origin' });
+      const response = await fetch(path, { credentials: 'same-origin', signal: AbortSignal.timeout(20000) });
       if (!response.ok) throw new Error(`Export failed (${response.status}). Please retry.`);
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -897,6 +1005,9 @@
     const id = readURL(); const view = state.view;
     showView(view, false, false); scheduleSearch(0, false);
     if (id) openRole(id, null, false);
+  });
+  window.addEventListener('storage', event => {
+    if (event.key?.startsWith(RECOVERY_PREFIX)) restoreRecovery();
   });
   window.addEventListener('online', () => {
     for (const [id, session] of state.sessions) if (session.error && !session.conflict) { session.error = null; flushWrite(id); }

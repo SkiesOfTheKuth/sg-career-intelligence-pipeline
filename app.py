@@ -14,7 +14,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response, FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
-from evidence import repair_jobs, present_job, draft_templates, sort_key, prepare_assessments
+from evidence import repair_jobs, present_job, draft_templates, sort_key, prepare_assessments, normalize_employment_types, parse_date
 from storage import Store, Conflict, STAGES
 from exports import safe_cell, JOB_HEADERS, job_row, export_response
 from sync_engine import synchronize_upstream_jobs
@@ -142,7 +142,7 @@ async def lifespan(application):
         await asyncio.to_thread(verified_backup, store)
 
 
-app = FastAPI(title='SG Career Intelligence', version='2.1.0', lifespan=lifespan)
+app = FastAPI(title='SG Career Intelligence', version='2.2.0', lifespan=lifespan)
 app.state.database_path = DB_PATH
 app.mount('/static', StaticFiles(directory=BASE / 'static', check_dir=False), name='static')
 
@@ -186,14 +186,17 @@ def filter_jobs(jobs, **filters):
     def matches(j):
         if not filters.get('include_closed') and j.get('status') in ('closed', 'expired', 'unavailable'):
             return False
-        freelance = 'freelance' in (j.get('employment_type') or '').lower() or 'freelance' in j.get('title','').lower()
-        if filters.get('opportunity_type') == 'salaried' and freelance: return False
+        types = set(j.get('employment_types') or normalize_employment_types(j.get('employment_type')) or ['Not stated'])
+        freelance = 'Freelance' in types
+        # Unknown employment stays discoverable. A mixed listing belongs in both views.
+        employment = bool(types - {'Freelance', 'Not stated'}) or not freelance
+        if filters.get('opportunity_type') == 'salaried' and not employment: return False
         if filters.get('opportunity_type') == 'freelance' and not freelance: return False
         corpus = ' '.join(str(j.get(k) or '') for k in ('title','company','category','location','description','requirements','preferred_requirements')).lower()
         if any(t not in corpus for t in tokens): return False
         if filters.get('fit') and j.get('assessment',{}).get('fit') != filters['fit']: return False
-        for key in ('category','employment_type'):
-            if filters.get(key) and str(j.get(key) or '').lower() != filters[key].lower(): return False
+        if filters.get('category') and str(j.get('category') or '').lower() != filters['category'].lower(): return False
+        if filters.get('employment_type') and not set(normalize_employment_types(filters['employment_type']) or ['Not stated']).issubset(types): return False
         thai = filters.get('thai_relevance')
         if thai and str(j.get('thai_relevance', '')).lower().replace('thai ', '').replace('thailand market ', '') != thai.lower(): return False
         salary = j.get('salary') or {}
@@ -205,7 +208,8 @@ def filter_jobs(jobs, **filters):
     results.sort(key=sort_key)
     sort = filters.get('sort_by')
     if sort == 'salary': results.sort(key=lambda j:(j.get('salary',{}).get('monthly_minimum') or -1),reverse=True)
-    if sort == 'freshness': results.sort(key=lambda j:(j.get('verification',{}).get('checked_at') or ''),reverse=True)
+    if sort == 'freshness':
+        results.sort(key=lambda j: (parse_date(j.get('verification',{}).get('last_success_at')) or datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
     if sort in ('title','company'): results.sort(key=lambda j:j.get(sort,'').lower())
     return results
 
@@ -272,7 +276,8 @@ def get_job(job_id:str,user=Depends(verify_credentials),store=Depends(get_store)
 @app.get('/api/options')
 def get_options(user=Depends(verify_credentials),store=Depends(get_store)):
     jobs=store.list_jobs()
-    return {key:sorted({str(j[key]) for j in jobs if j.get(key)}) for key in ('category','employment_type')}
+    return {'category':sorted({str(j['category']) for j in jobs if j.get('category')}),
+            'employment_type':sorted({kind for j in jobs for kind in (normalize_employment_types(j.get('employment_type')) or ['Not stated'])})}
 
 
 @app.get('/api/applications')
@@ -298,6 +303,14 @@ def put_application(job_id:str,payload:dict,user=Depends(verify_credentials),sto
     except (ValueError,TypeError) as exc: raise HTTPException(422,str(exc))
 
 
+@app.get('/api/applications/{job_id}/history')
+def application_history(job_id:str,offset:int=Query(0,ge=0),limit:int=Query(25,ge=1,le=100),
+                        user=Depends(verify_credentials),store=Depends(get_store)):
+    result=store.application_history(job_id,offset=offset,limit=limit)
+    if result is None: raise HTTPException(404,'No saved application was found for this role.')
+    return result
+
+
 @app.get('/api/drafts/{job_id}')
 def get_drafts(job_id:str,user=Depends(verify_credentials),store=Depends(get_store)):
     job=store.get_job(job_id)
@@ -313,15 +326,17 @@ def export_jobs(filters=Depends(filter_parameters),format:str='csv',user=Depends
 
 
 @app.get('/api/export/applications')
-def export_applications(stage:str|None=None,ids:str|None=None,user=Depends(verify_credentials),store=Depends(get_store)):
+def export_applications(stage:str|None=None,ids:str|None=None,format:str='csv',user=Depends(verify_credentials),store=Depends(get_store)):
+    if stage and stage not in STAGES: raise HTTPException(422,'Unknown application stage')
     rows=store.list_applications(stage=stage)
     if ids is not None:rows=[r for r in rows if r['job_id'] in ids.split(',')]
     headers=['ID','Title','Company','Stage','Notes','Next action','Follow-up date','Applied at','Outcome','Original URL','Recruiter message','Cover letter','History']
     values=[]
     for r in rows:
         j=r['job_snapshot'];d=r.get('drafts') or {}
-        values.append([r['job_id'],j.get('title'),j.get('company'),r['stage'],r['notes'],r.get('next_action'),r.get('follow_up_date'),r.get('applied_at'),r.get('outcome'),j.get('url'),d.get('recruiter_message'),d.get('cover_letter'),json.dumps(r.get('history',[]),ensure_ascii=False)])
-    return export_response(headers,values,'Applications')
+        retained_history=store.application_history(r['job_id'],limit=None)['items']
+        values.append([r['job_id'],j.get('title'),j.get('company'),r['stage'],r['notes'],r.get('next_action'),r.get('follow_up_date'),r.get('applied_at'),r.get('outcome'),j.get('url'),d.get('recruiter_message'),d.get('cover_letter'),json.dumps(retained_history,ensure_ascii=False)])
+    return export_response(headers,values,'Applications',format)
 
 
 @app.get('/download/csv')

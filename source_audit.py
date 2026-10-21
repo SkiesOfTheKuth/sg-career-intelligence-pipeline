@@ -40,7 +40,7 @@ def coverage(jobs):
 
 
 def record_summary(job):
-    return {key:job.get(key) for key in ['id','title','company','status','description_complete','verification','url']} | {
+    return {key:job.get(key) for key in ['id','title','company','status','description_complete','verification','field_provenance','url']} | {
         'source_id':source_id(job),'requirements_available':bool(job.get('requirements',{}).get('mandatory')),
         'source_name':', '.join(s.get('name','') for s in job.get('sources',[])),
     }
@@ -115,8 +115,8 @@ def inspect_record(store,job_id,offset=0,limit=10):
     record=(latest[0]['payload'] if latest else {})
     record=record.get('record',record) if isinstance(record,dict) else {}
     provenance=[
-        {'field':'Description','basis':'Retained source description, converted from HTML to text.','value':job.get('description'),'quality':'Complete retained text' if job.get('description_complete') else 'Partial or missing source text'},
-        {'field':'Requirements','basis':'Explicit requirement fields and headings in the retained source. Unknown requirements stay empty.','value':job.get('requirements')},
+        {'field':'Description','basis':'Retained source description, converted from HTML to text.','value':job.get('description'),'quality':'Complete retained text' if job.get('description_complete') else 'Partial or missing source text','provenance':job.get('field_provenance',{}).get('description')},
+        {'field':'Requirements','basis':'Explicit requirement fields and headings in the retained source. Unknown requirements stay empty.','value':job.get('requirements'),'source_text':job.get('source_requirements'),'evidence_references':job.get('source_requirement_evidence',[]),'provenance':job.get('field_provenance',{}).get('requirements')},
         {'field':'Salary','basis':'Advertised source values. Annual amounts normalized to monthly; daily/hourly amounts retain their units.','value':job.get('salary')},
         {'field':'Thai relevance','basis':'Wording in the role title, description, and requirements; search terms are excluded.','value':job.get('thai_relevance')},
         {'field':'Assessment','basis':'Derived comparison with CV 2026.pdf. This is not an employer statement or a hiring probability.','value':job.get('assessment')},

@@ -186,3 +186,6 @@ summary:hover { color: var(--accent-hover); }
   .applications-toolbar button { font-size: .82rem; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+
+.history-event, .score-clause { padding: .8rem 0; border-bottom: 1px solid var(--line); }
+.conflict-copy { overflow-wrap: anywhere; }

@@ -15,7 +15,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit, urlunsplit
 from functools import lru_cache
-from fit_score import evaluate as evaluate_fit, requirement as check_requirement, language_gaps
+from fit_score import evaluate as evaluate_fit, requirement as check_requirement, language_gaps, normalized, is_boilerplate
 
 UTC = timezone.utc
 RAW_FILES = ("mcf_jobs_raw.json", "apify_jobs_raw.json", "cultjobs_raw.json")
@@ -166,10 +166,18 @@ def salary_presentation(raw):
 
 _REQ_HEADING = re.compile(r"^(?:(?:job|key|minimum|essential|basic|candidate)\s+)?(?:requirements|qualifications|skills)(?:\s*(?:and|&)\s*(?:experience|qualifications|skills))?\s*:?$|^what (?:we are|we're|you are) looking for\s*:?$|^about you\s*:?$|^who you are\s*:?$", re.I)
 _PREFERRED = re.compile(r"\b(?:preferred|preferably|desirable|advantage|a plus|nice to have|bonus)\b", re.I)
-_END_HEADING = re.compile(r"^(?:job responsibilities|responsibilities|benefits|what we offer|our commitment to you|about us|about the company|how to apply|equal opportunity|apply now|selling pts)\s*:?$|^(?:to apply|we regret to inform|posted by|date posted)\b", re.I)
+_END_HEADING = re.compile(r"^(?:job responsibilities|responsibilities|benefits|what we offer|why join us|our commitment to you|about us|about the company|how to apply|equal opportunity|apply now|selling pts|disclaimer)\s*[:?]?$|^(?:to apply|we regret to inform|posted by|date posted)\b", re.I)
 
 
 def extract_requirements(description, explicit=None):
+    mandatory, preferred = _requirements_cached(description, json.dumps(explicit, ensure_ascii=False, sort_keys=True))
+    # Cached values are immutable. Every caller receives its own mutable lists.
+    return {'mandatory': list(mandatory), 'preferred': list(preferred)}
+
+
+@lru_cache(maxsize=8192)
+def _requirements_cached(description, explicit_json):
+    explicit = json.loads(explicit_json)
     mandatory, preferred = [], []
     section = None
     # Explicit requirements retain all original wording, splitting only source lines.
@@ -180,7 +188,10 @@ def extract_requirements(description, explicit=None):
         for line in plain_text(explicit).splitlines():
             (preferred if _PREFERRED.search(line) else mandatory).append(line)
     for line in description.splitlines():
-        clean = line.strip(" -•\t")
+        clean = re.sub(r'^\s*(?:[-•●▪◦‣]+|\d+[.)])\s*', '', line).strip()
+        if is_boilerplate(clean):
+            section = None
+            continue
         if re.fullmatch(r"(?:preferred|desired|additional)\s+(?:qualifications|requirements|skills)\s*:?", clean, re.I):
             section = "preferred"
             continue
@@ -194,8 +205,27 @@ def extract_requirements(description, explicit=None):
             (preferred if section == "preferred" or _PREFERRED.search(clean) else mandatory).append(clean)
         elif re.search(r"\b(?:must|minimum qualifications|is required|are required)\b", clean, re.I):
             (preferred if _PREFERRED.search(clean) else mandatory).append(clean)
-    return {"mandatory": list(dict.fromkeys(filter(None, mandatory))),
-            "preferred": list(dict.fromkeys(filter(None, preferred)))}
+    def candidate_lines(lines):
+        seen = set()
+        for line in lines:
+            key = normalized(line).casefold().strip(' .')
+            if key and key not in seen and not is_boilerplate(line):
+                seen.add(key)
+                yield line
+    return tuple(candidate_lines(mandatory)), tuple(candidate_lines(preferred))
+
+
+def _canonical_requirements(job):
+    raw = job.get('raw_evidence')
+    retained = job.get('requirements') or {}
+    if raw is None and 'source_requirements' not in job and 'retained_requirements_source' not in job:
+        return copy.deepcopy(retained)
+    requirements = extract_requirements(job.get('description') or '', job.get('source_requirements',
+        job.get('retained_requirements_source', (raw or {}).get('requirements'))))
+    if job.get('requirements_source_unknown'):
+        for section in ('mandatory', 'preferred'):
+            requirements[section] = list(dict.fromkeys(requirements[section] + retained.get(section, [])))
+    return requirements
 
 
 def thai_relevance(title, description, requirements):
@@ -288,9 +318,15 @@ def _current_assessment(title, description, mandatory, preferred, complete):
     if assessment['fit'] == 'Relevant' and (score['value'] is None or score['value'] < 70 or score['unknown_duties']):
         assessment['fit'] = 'Check requirements'
     assessment['gaps'] = list(dict.fromkeys([gate['reason'] for gate in score['gates']] + assessment['gaps']))
-    supported_duties = [row for row in score['duties'] if row['status'] == 'overlap']
+    supported_duties = [clause for row in score['duties'] for clause in row['clauses'] if clause['status'] == 'overlap']
     if supported_duties:
         assessment['reasons'] = [f"The listing asks: “{row['quote']}” CV evidence: {' '.join(row['candidate_evidence'])}" for row in supported_duties]
+    else:
+        assessment['reasons'] = ['No specific responsibility overlap is established from the retained source and résumé.']
+    domain_labels = {'social':'social media management', 'content':'content planning and creation', 'influencer':'influencer outreach', 'research':'audience and market research', 'analytics':'campaign reporting', 'interpretation':'Thai–English interpretation', 'pitch':'marketing proposals', 'sponsor':'sponsor outreach'}
+    assessment['summary'] = (score['gates'][0]['reason'] if score['gates'] else
+        'Documented overlap in ' + ', '.join(dict.fromkeys(domain_labels.get(domain, domain) for row in supported_duties for domain in row['domains'])) + '.'
+        if supported_duties else score['unavailable_reason'] or 'No specific responsibility overlap is documented.')
     return assessment
 
 
@@ -301,9 +337,7 @@ def prepare_assessments(jobs):
     """
     for job in jobs:
         description = job.get('description') or ''
-        raw = job.get('raw_evidence')
-        requirements = (extract_requirements(description, job.get('retained_requirements_source', raw.get('requirements')))
-                        if raw is not None else job.get('requirements') or {})
+        requirements = _canonical_requirements(job)
         _current_assessment(job.get('title') or '', description, tuple(requirements.get('mandatory') or []),
                             tuple(requirements.get('preferred') or []), bool(job.get('description_complete')))
 
@@ -329,6 +363,20 @@ def _is_search_page(url):
             or ("glassdoor" in host and "srch_" in path)
             or ("jora." in host and path.endswith("-jobs"))
             or ("jooble." in host and path.startswith("/jobs-")))
+
+
+def normalize_employment_types(value):
+    """Canonical memberships, accepting original combined query values."""
+    if isinstance(value, (list, tuple)):
+        values = [item for part in value for item in normalize_employment_types(part)]
+    else:
+        values = []
+        for part in re.split(r'[,;/|]|\s+and\s+', str(value or ''), flags=re.I):
+            key = re.sub(r'[\s_-]+', '', part).casefold()
+            label = {'fulltime':'Full-time', 'parttime':'Part-time', 'freelance':'Freelance', 'freelancer':'Freelance', 'contract':'Contract', 'contractual':'Contract', 'temporary':'Temporary', 'temp':'Temporary', 'internship':'Internship', 'intern':'Internship', 'permanent':'Permanent'}.get(key)
+            if label: values.append(label)
+            elif part.strip() and key not in ('notstated','unknown','none'): values.append(part.strip())
+    return list(dict.fromkeys(values))
 
 
 def build_job(raw, job_id, legacy=None):
@@ -364,7 +412,7 @@ def build_job(raw, job_id, legacy=None):
         elif re.search(r"\bpart[ -]time\b", title + " " + description, re.I):
             employment = "Part-time"
     if re.search(r"\bfreelanc(?:e|er)\b", title, re.I):
-        employment = "Freelance"
+        employment = ', '.join(normalize_employment_types(employment) + ([] if 'Freelance' in normalize_employment_types(employment) else ['Freelance']))
     job = dict(id=job_id, title=title, company=plain_text(raw.get("company") or legacy.get("col_02_company") or legacy.get("company")),
                category=job_family(title), location=plain_text(raw.get("location")) or None,
                employment_type=employment, work_arrangement=_work_arrangement(raw, description), url=url,
@@ -377,6 +425,10 @@ def build_job(raw, job_id, legacy=None):
                verification=verification, deadline=raw.get("expiry_date") or legacy.get("col_12_deadline") or None,
                posted_at=raw.get("posted_date") or None, status=status, evidence_version=1,
                raw_evidence=copy.deepcopy(raw))
+    job['source_requirements'] = copy.deepcopy(raw.get('requirements'))
+    provenance = {'checked_at': checked or None, 'source_record_date': previous_checked or None, 'url': safe_url(raw.get('url')) or url}
+    job['field_provenance'] = {field: copy.deepcopy(provenance) for field in ('description', 'requirements')}
+    job['source_requirement_evidence'] = copy.deepcopy(raw.get('requirements_evidence') or provenance) if raw.get('requirements') is not None else None
     if status == "unavailable" and _is_search_page(url):
         job["source_warning"] = "This retained link is a search-results page, not an individual vacancy."
     return present_job(job)
@@ -384,7 +436,9 @@ def build_job(raw, job_id, legacy=None):
 
 def present_job(job, now=None, *, with_assessment=True):
     raw_evidence = job.get('raw_evidence')
-    job = copy.deepcopy(job) if with_assessment else {k: copy.deepcopy(v) for k,v in job.items() if k not in ('raw_evidence','assessment')}
+    # The stored assessment is obsolete derived data and will be replaced below.
+    # Copying its entire evidence tree for every search is wasted work.
+    job = {k: copy.deepcopy(v) for k,v in job.items() if k != 'assessment' and (with_assessment or k != 'raw_evidence')}
     now = parse_date(now) if isinstance(now, str) else now or datetime.now(UTC)
     if now.tzinfo is None:
         now = now.replace(tzinfo=UTC)
@@ -403,12 +457,16 @@ def present_job(job, now=None, *, with_assessment=True):
         job["status"] = "expired"
     if job.get("status") not in ("open", "expired", "closed", "unknown", "unavailable"):
         job["status"] = "unknown"
-    if raw_evidence is not None:
-        job['requirements'] = extract_requirements(job.get('description') or '', job.get('retained_requirements_source', raw_evidence.get('requirements')))
+    requirements_input = job if with_assessment else {**job, **({'raw_evidence': raw_evidence} if raw_evidence is not None else {})}
+    job['requirements'] = _canonical_requirements(requirements_input)
+    if job.get('field_provenance'):
+        job['field_provenance']['derived_requirements'] = copy.deepcopy(job['field_provenance'].get('description', {}))
     requirements = job.get('requirements') or {}
+    job['employment_types'] = normalize_employment_types(job.get('employment_type'))
     if with_assessment:
         job['assessment'] = copy.deepcopy(_current_assessment(job.get('title') or '', job.get('description') or '',
             tuple(requirements.get('mandatory') or []), tuple(requirements.get('preferred') or []), bool(job.get('description_complete'))))
+        job['assessment_summary'] = job['assessment']['summary']
     return job
 
 
@@ -457,44 +515,37 @@ def sort_key(job):
 
 
 def draft_templates(job):
-    """Editable starting points using only facts verified against the candidate CV."""
+    """Role-specific editable drafts derived from supported source/CV pairs.
+
+    The endpoint supplies starting points only; existing application draft text
+    remains authoritative and is never regenerated on save or source refresh.
+    """
+    job = present_job(job)
     title = job.get("title") or "this role"
-    company = job.get("company")
-    opportunity = f"{title} at {company}" if company else title
-    recruiter = (
-        f"Hello,\n\nI’m interested in the {opportunity} opportunity. "
-        "I work as a Marketing and PR Specialist at Social Collective Studio, where my responsibilities include "
-        "social media content and community management, monthly analytics, and influencer outreach and contracts. "
-        "I hold an MSc in Marketing from Nanyang Technological University and a BBA in International Marketing "
-        "from Kasetsart University.\n\nI’d welcome a conversation about the role and the experience you are looking for.\n\nDechsurang"
-    )
-    letter = (
-        f"Dear hiring team,\n\nI’m writing to express my interest in the {opportunity} opportunity.\n\n"
-        "In my Marketing and PR Specialist role at Social Collective Studio, I work on social media content and "
-        "community management, monthly analytics, trend and audience research, pitch decks, and influencer outreach "
-        "and contracts. My education includes an MSc in Marketing from Nanyang Technological University and a BBA "
-        "in International Marketing from Kasetsart University.\n\n"
-        "My experience also includes Thai–English interpretation at the APAC Food & Beverage Expo in August 2026 "
-        "and B2B interpretation and liaison for the Royal Thai Embassy.\n\n"
-        "[Add a specific example relevant to the responsibilities in this listing. Confirm any requirements listed "
-        "under Requirements to check before sending.]\n\n"
-        "Thank you for considering my application. I’d welcome the opportunity to discuss how my experience relates "
-        "to your team’s needs.\n\nDechsurang"
-    )
-    mandatory = job.get("requirements", {}).get("mandatory", [])
-    if mandatory:
-        quoted = mandatory[0]
-        if len(quoted) > 400:
-            quoted = quoted[:400].rstrip() + "… [source excerpt]"
-        letter = letter.replace(
-            "[Add a specific example relevant to the responsibilities in this listing. Confirm any requirements listed "
-            "under Requirements to check before sending.]",
-            f'Your listing states: “{quoted}”\n[Add a verified example addressing this requirement, '
-            'or explain what needs clarification. Review all Requirements to check before sending.]')
-    gaps = job.get("assessment", {}).get("gaps", [])
-    preparation = (
-        "Prepare examples from your documented work: a social media campaign, monthly analytics or audience research, "
-        "and influencer outreach or contract coordination. Describe your own contribution and use only results you can verify.\n\n"
-        "Questions to clarify:\n" + "\n".join("- " + gap for gap in gaps[:8])
-    )
-    return {"recruiter_message": recruiter, "cover_letter": letter, "interview_prep": preparation}
+    opportunity = f"{title} at {job['company']}" if job.get('company') else title
+    score = job['assessment']['score']
+    pairs = [clause for row in score['duties'] for clause in row['clauses'] if clause['status'] == 'overlap']
+    facts = list(dict.fromkeys(fact for pair in pairs for fact in pair['candidate_evidence']))
+    body = "\n\n".join(f'Your listing asks: “{pair["quote"]}”\nMy relevant documented experience: {" ".join(pair["candidate_evidence"])}' for pair in pairs[:4])
+    # Supported requirements are useful when a retained source has no duties;
+    # unresolved requirements belong exclusively in the preparation checklist.
+    if not body:
+        supported = [row for row in score['requirements'] if row['status'] == 'supported']
+        body = "\n\n".join(f'Your listing states: “{row["quote"]}”\nMy documented background: {" ".join(row["candidate_evidence"])}' for row in supported[:2])
+    example = '[Add a specific example from your own work and only results you can verify.]'
+    letter = (f'Dear hiring team,\n\nI’m interested in the {opportunity} opportunity.\n\n'
+              + (body + '\n\n' if body else '') + example
+              + '\n\nThank you for considering my application. I’d welcome a conversation about the role.\n\nDechsurang')
+    recruiter = (f'Hello,\n\nI’m interested in the {opportunity} opportunity.\n\n'
+                 + ('My relevant documented experience: ' + ' '.join(facts[:2]) + '\n\n' if facts else '')
+                 + 'I’d welcome a conversation about the responsibilities and experience you are looking for.\n\nDechsurang')
+    unresolved = [f'{row["quote"]} — {row["reason"]}' for row in score['requirements'] if row['status'] != 'supported']
+    unresolved += [gate['reason'] for gate in score['gates']]
+    unresolved += [f'{clause["quote"]} — {clause["reason"]}' for row in score['duties'] for clause in row['clauses'] if clause['status'] != 'overlap']
+    if not score['requirements']: unresolved.append('Mandatory requirements are absent from the retained source; check the original listing.')
+    if score['value'] is None: unresolved.append(score['unavailable_reason'])
+    preparation = ('Evidence to prepare:\n' + ('\n'.join('- ' + pair['quote'] + '\n  CV: ' + ' '.join(pair['candidate_evidence']) for pair in pairs) if pairs else '- Establish the responsibilities from the original listing before choosing examples.')
+        + '\n\nDescribe your own contribution and use only results you can verify.\n\nRequirements to check:\n'
+        + ('\n'.join('- ' + gap for gap in dict.fromkeys(unresolved)) if unresolved else '- Confirm the listing is current and review the supported evidence before sending.'))
+    return {'recruiter_message': recruiter, 'cover_letter': letter, 'interview_prep': preparation,
+            'requirements_to_check': list(dict.fromkeys(unresolved)), 'supported_pairs': copy.deepcopy(pairs)}

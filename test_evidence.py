@@ -105,7 +105,7 @@ class EvidenceTests(unittest.TestCase):
     def test_scripts_removed_and_drafts_do_not_invent_credentials(self):
         job = build_job({"title": "Marketing Executive", "description": "<script>alert(1)</script><p>Social media</p>"}, "one")
         self.assertNotIn("alert", job["description"])
-        drafts = "\n".join(draft_templates(job).values()).lower()
+        drafts = "\n".join(value for value in draft_templates(job).values() if isinstance(value, str)).lower()
         for unsupported in ("native thai", "fluent", "immediately available", "@", "+65", "i specialize in highlight"):
             self.assertNotIn(unsupported, drafts)
         self.assertIn("[add a specific example", drafts)

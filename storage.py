@@ -123,10 +123,65 @@ class Store:
                 CREATE TABLE IF NOT EXISTS metadata (
                     key TEXT PRIMARY KEY, value_json TEXT NOT NULL
                 );
-                PRAGMA user_version = 1;
                 COMMIT;
             """)
+        with self._connection(write=True) as connection:
+            version = connection.execute('PRAGMA user_version').fetchone()[0]
+            if version > 2:
+                raise ValueError('Database schema is newer than this application supports')
+            if version < 2:
+                columns = {row['name'] for row in connection.execute('PRAGMA table_info(import_conflicts)')}
+                if 'resolution_json' not in columns:
+                    connection.execute('ALTER TABLE import_conflicts ADD COLUMN resolution_json TEXT')
+                self._backfill_source_fields(connection)
+                connection.execute('PRAGMA user_version = 2')
         return self
+
+    @staticmethod
+    def _backfill_source_fields(connection):
+        """Recover explicit fields from retained payloads, never derived requirements.
+
+        Old jobs omitted raw_evidence on persistence. Source payload versions are
+        the authority for explicit requirements and their original content dates.
+        Missing historical evidence stays unknown rather than being dated today.
+        """
+        from evidence import plain_text
+        for row in connection.execute('SELECT id,data_json FROM jobs').fetchall():
+            job = json.loads(row['data_json'])
+            if not job.get('evidence_version'):
+                continue
+            records = []
+            for evidence in connection.execute('SELECT id,data_json FROM source_evidence WHERE job_id=? ORDER BY id DESC', (row['id'],)):
+                payload = json.loads(evidence['data_json'])
+                raw = payload.get('record', payload) if isinstance(payload, dict) else {}
+                if isinstance(raw, dict):
+                    records.append((raw, evidence['id']))
+            raw = job.get('raw_evidence')
+            if isinstance(raw, dict):
+                records.insert(0, (raw, None))
+            provenance = job.setdefault('field_provenance', {})
+            for field in ('description', 'requirements'):
+                expected = (job.get('description') if field == 'description' else
+                            job.get('source_requirements', job.get('retained_requirements_source')))
+                retained = next(((raw, evidence_id) for raw, evidence_id in records if raw.get(field)
+                                 and (not expected or plain_text(raw[field]) == plain_text(expected))), None)
+                if field == 'requirements' and 'source_requirements' not in job:
+                    job['source_requirements'] = (job.get('retained_requirements_source')
+                                                  or (retained[0].get(field) if retained else None))
+                    job['source_requirement_evidence'] = (retained[0].get('requirements_evidence') or []) if retained else []
+                if field not in provenance:
+                    raw, evidence_id = retained or ({}, None)
+                    provenance[field] = {'url': raw.get('url') or job.get('url'),
+                                         'checked_at': raw.get('verified_at') or raw.get('checked_at'),
+                                         'source_record_date': raw.get('source_record_date') or
+                                             (job.get('verification', {}).get('checked_at')
+                                              if not job.get('verification', {}).get('last_success_at') else None),
+                                         'evidence_id': evidence_id}
+            if not records and not job.get('source_requirements') and (job.get('requirements') or {}).get('mandatory'):
+                # Some records lack their original payload. Preserve their existing
+                # derived requirements until actual source text can be recovered.
+                job['requirements_source_unknown'] = True
+            connection.execute('UPDATE jobs SET data_json=? WHERE id=?', (_json(job), row['id']))
 
     def _write_jobs(self, jobs, replace):
         statement = ("INSERT INTO jobs(id,data_json,updated_at) VALUES(?,?,?) "
@@ -184,6 +239,32 @@ class Store:
     def get_application(self, job_id):
         with self._connection() as connection:
             return self._application(connection, job_id)
+
+    def get_application_history(self, job_id, offset=0, limit=25):
+        """Application events and retained browser versions, newest first.
+
+        limit=None returns every item for an authenticated export. Older resolved
+        imports have an unknown resolution snapshot, explicitly marked as such.
+        """
+        offset = max(0, int(offset))
+        limit = None if limit is None else max(1, min(int(limit), 100))
+        with self._connection() as connection:
+            application = self._application(connection, job_id)
+            if application is None:
+                return None
+            items = list(application.get('history', []))
+            for row in connection.execute('SELECT * FROM import_conflicts WHERE job_id=? ORDER BY id', (job_id,)):
+                resolution = json.loads(row['resolution_json']) if row['resolution_json'] else None
+                items.append({'type': 'import_version', 'id': row['id'], 'at': row['resolved_at'] or row['created_at'],
+                              'created_at': row['created_at'], 'resolved_at': row['resolved_at'],
+                              'incoming': json.loads(row['data_json']), 'resolution': resolution,
+                              'resolution_status': 'resolved' if row['resolved_at'] else 'unresolved',
+                              'resolution_snapshot_available': resolution is not None})
+        items.sort(key=lambda item: (item.get('at') or '', item.get('revision', 0), item.get('id', 0)), reverse=True)
+        return {'job_id': job_id, 'total': len(items), 'offset': offset, 'limit': limit,
+                'items': items[offset:] if limit is None else items[offset:offset + limit]}
+
+    application_history = get_application_history
 
     def list_applications(self, stage=None):
         if stage and stage not in STAGES:
@@ -281,9 +362,13 @@ class Store:
                 changed_fields.append("applied_at")
             resolved = changes.get("resolve_import_conflicts", [])
             for conflict_id in resolved:
+                resolution = {key: application.get(key) for key in
+                              ('stage', 'notes', 'drafts', 'next_action', 'follow_up_date', 'outcome', 'applied_at')}
+                resolution.update(revision=application['revision'] + 1, resolved_at=now,
+                                  method='reviewed_application', changed_fields=sorted(set(changed_fields)))
                 cursor = connection.execute(
-                    "UPDATE import_conflicts SET resolved_at=? WHERE id=? AND job_id=? AND resolved_at IS NULL",
-                    (now, conflict_id, job_id),
+                    "UPDATE import_conflicts SET resolved_at=?,resolution_json=? WHERE id=? AND job_id=? AND resolved_at IS NULL",
+                    (now, _json(resolution), conflict_id, job_id),
                 )
                 if not cursor.rowcount:
                     raise ValueError("Import conflict is missing or already resolved")

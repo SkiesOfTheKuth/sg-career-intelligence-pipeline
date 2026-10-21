@@ -99,15 +99,40 @@ def synchronize_upstream_jobs(data_file=None, queries=None, limit_per_query=DEFA
                 job_id = f"SG-OPP-{max_id:04d}"
                 added_count += 1
             updated = build_job(raw, job_id)
-            # Preserve the original application URL and full prior source evidence
-            # when the upstream responds without description/requirements.
+            # Each field keeps its own source date. A listing check does not
+            # refresh content omitted by that response, including requirements
+            # provided separately from its description.
             if previous:
                 updated["url"] = previous["url"]
+                for field, source_field in (('company', 'company'), ('location', 'location'),
+                                            ('work_arrangement', 'work_arrangement'), ('posted_at', 'posted_date'),
+                                            ('deadline', 'expiry_date'), ('employment_type', 'employment_type')):
+                    if not raw.get(source_field) and previous.get(field):
+                        updated[field] = copy.deepcopy(previous[field])
+                if not raw.get('employment_type'):
+                    updated['employment_types'] = copy.deepcopy(previous.get('employment_types', []))
+                raw_response = raw.get('raw_response')
+                salary_omitted = ('salary' not in raw_response if isinstance(raw_response, dict) else
+                                  not any(raw.get(key) not in (None, '', 'Not disclosed')
+                                          for key in ('salary_min', 'salary_max', 'advertised_salary')))
+                if salary_omitted and previous.get('salary'):
+                    updated['salary'] = copy.deepcopy(previous['salary'])
                 if not updated["description"] and previous.get("description"):
-                    for field in ("description", "description_complete", "requirements", "assessment"):
+                    for field in ("description", "description_complete"):
                         updated[field] = copy.deepcopy(previous.get(field))
-                    updated['retained_requirements_source'] = copy.deepcopy(previous.get('retained_requirements_source', previous.get('raw_evidence', {}).get('requirements')))
+                    updated.setdefault('field_provenance', {})['description'] = copy.deepcopy(previous.get('field_provenance', {}).get('description', {}))
                     updated["source_warning"] = "The latest source response omitted the description; the previously retained text is shown."
+                # The native collector normalizes omitted/empty fields to ''.
+                # Only non-empty explicit source text can supersede retained text.
+                if not raw.get('requirements'):
+                    updated['source_requirements'] = copy.deepcopy(previous.get('source_requirements',
+                        previous.get('retained_requirements_source', previous.get('raw_evidence', {}).get('requirements'))))
+                    updated['source_requirement_evidence'] = copy.deepcopy(previous.get('source_requirement_evidence', []))
+                    updated.setdefault('field_provenance', {})['requirements'] = copy.deepcopy(previous.get('field_provenance', {}).get('requirements', {}))
+                    if previous.get('requirements_source_unknown'):
+                        updated['requirements_source_unknown'] = True
+                        updated['requirements'] = copy.deepcopy(previous.get('requirements'))
+                updated = present_job(updated)
             by_id[job_id] = updated
             by_url[key] = updated
             changed[job_id] = updated

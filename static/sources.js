@@ -22,7 +22,9 @@
     return new Intl.DateTimeFormat('en-SG', {day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore'}).format(parsed) + ' SGT';
   }
   async function api(path, options = {}) {
-    const response = await fetch(path, {credentials: 'same-origin', ...options});
+    const timeout = path === '/api/sync' ? 65000 : 20000;
+    const signal = options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(timeout)]) : AbortSignal.timeout(timeout);
+    const response = await fetch(path, {credentials: 'same-origin', ...options, signal});
     if (!response.ok) throw new Error(response.status === 401 ? 'Sign-in is required. Reload this page to authenticate.' : response.status === 404 ? 'No retained evidence was found for this record.' : `Couldn’t load data (${response.status}). Please retry.`);
     return response.json();
   }
@@ -81,6 +83,10 @@
       return node;
     });
     $('source-nodes').replaceChildren(...nodes);
+    $('record-source').replaceChildren(new Option('All sources', ''), ...audit.sources.map(source => new Option(source.name, source.id)));
+    $('record-source').value = state.source;
+    const errors = audit.sources.filter(source => ['error', 'degraded'].includes(source.state));
+    $('collection-health').textContent = errors.length ? errors.map(source => `${source.name}: ${labels[source.state]}`).join(' · ') : 'Other sources remain retained imports.';
     $('engine-count').textContent = `${number(audit.total)} retained jobs`;
     $('discovery-count').textContent = `${number(audit.discovery_count)} records before your filters`;
     $('application-count').textContent = `${number(audit.applications_count)} tracked applications`;
@@ -107,6 +113,7 @@
     const source = state.audit.sources.find(item => item.id === state.source);
     if (state.source && !source) {state.source = ''; updateURL(true);}
     for (const node of $('source-nodes').children) node.setAttribute('aria-pressed', String(node.dataset.source === state.source));
+    $('record-source').value = state.source;
     $('all-sources').setAttribute('aria-pressed', String(!state.source));
     $('selected-heading').textContent = source?.name || 'All sources';
     const detail = $('selected-detail'); detail.replaceChildren();
@@ -198,6 +205,7 @@
       if (job.url) {const original = link('Open original listing ↗', job.url, true); original.className = 'button-link'; actions.append(original);}
       content.append(actions);
       facts(content, [['Record ID', id], ['Listing status', job.status], ['Last successful listing check', date(job.verification?.last_success_at)], ['Retained record date', date(job.verification?.checked_at)], ['Latest failed attempt', job.verification?.last_error ? date(job.verification?.last_attempt_at) : 'None recorded'], ['Closing date', job.deadline || 'Not stated']]);
+      for (const [name, evidence] of Object.entries(job.field_provenance || {})) facts(content, [[`${name} source date`, date(evidence.checked_at || evidence.source_record_date)], [`${name} evidence version`, evidence.evidence_id || 'Not recorded']]);
       if (job.source_warning) content.append(el('p', job.source_warning, 'notice warning'));
       if (job.verification?.last_error) content.append(el('p', job.verification.last_error, 'audit-error'));
       for (const field of data.provenance) {
@@ -238,6 +246,10 @@
   }
   $('record-inspector').addEventListener('cancel', event => {event.preventDefault(); closeRecord();});
   $('close-inspector').addEventListener('click', () => closeRecord());
+  $('record-source').addEventListener('change', event => selectSource(event.target.value));
+  const compact = window.matchMedia('(max-width: 650px)');
+  const disclosures = () => document.querySelectorAll('.responsive-disclosure').forEach(node => {node.open = !compact.matches;});
+  disclosures(); compact.addEventListener('change', disclosures);
   $('all-sources').addEventListener('click', () => selectSource(''));
   $('refresh-overview').addEventListener('click', () => {loadOverview(); scheduleRecords(0);});
   $('check-source').addEventListener('click', checkSource);

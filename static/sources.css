@@ -115,3 +115,29 @@ body.inspector-open { overflow: hidden; }
   .inspector-header h2 { font-size: 1.1rem; }
   .coverage-label { flex-wrap: wrap; gap: .1rem .7rem; }
 }
+
+.flow-section > summary { font-size: 1.15rem; }
+.collection-options { flex: 1 1 100%; }
+.collection-options button { margin-top: .6rem; }
+.record-filters label { flex: 1 1 190px; }
+.record-filters label:has(#record-query) { flex: 2 1 260px; }
+.audit-detail-disclosure { margin-top: 1.4rem; }
+@media (max-width: 650px) {
+  #audit-content { display: flex; flex-direction: column; }
+  .collection-status { order: 0; padding: .5rem 0; gap: .3rem; margin: 0; }
+  .collection-status h2 { margin-bottom: .2rem; }
+  .collection-status p { margin: .2rem 0; font-size: .82rem; }
+  .collection-options { flex-basis: 100%; }
+  .records-section { order: 1; margin-top: 1rem; }
+  .flow-section { order: 2; margin-top: 1.5rem; padding: .6rem 1rem; }
+  .audit-detail-disclosure { order: 3; }
+  .history-section { order: 4; }
+  .record-filters { gap: .5rem; }
+  .record-filters label { flex: 1 1 100%; }
+  .record-filters label:has(#record-query) { flex-basis: 100%; }
+  .section-heading > a { display: none; }
+  .audit-heading { margin-bottom: .5rem; }
+  .audit-heading h1 { font-size: 1.4rem; }
+  .audit-heading > div > p { display: none; }
+  .audit-heading button { font-size: .8rem; }
+}

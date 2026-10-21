@@ -172,7 +172,7 @@ class WorkspaceAPI(unittest.TestCase):
         self.assertEqual(Store(restored).get_application('monthly')['notes'],'Backup restore check')
 
     def test_freelance_separation_and_thai_filter(self):
-        self.store.seed_jobs([vacancy('freelance',title='Freelance Thai interpreter',description='Must speak Thai. Interpretation assignments.')])
+        self.store.seed_jobs([vacancy('freelance',title='Freelance Thai interpreter',employment_type='Freelance',description='Must speak Thai. Interpretation assignments.')])
         ids=lambda query:{j['id'] for j in self.get('/api/jobs?'+query).json()['items']}
         self.assertNotIn('freelance',ids(''))
         self.assertEqual(ids('opportunity_type=freelance&thai_relevance=required'),{'freelance'})

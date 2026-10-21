@@ -24,8 +24,8 @@
     </div>
     <div id="load-feedback" role="status" aria-live="polite">Loading source records…</div>
     <div id="audit-content" hidden>
-      <section class="flow-section" aria-labelledby="flow-heading">
-        <h2 id="flow-heading">From sources to your workspace</h2>
+      <details class="flow-section responsive-disclosure" open aria-labelledby="flow-heading">
+        <summary id="flow-heading">From sources to your workspace</summary>
         <p class="secondary">Select a source to inspect its records. Counts are retained jobs, after deduplication.</p>
         <div class="source-flow">
           <div class="source-column"><h3>Collected from</h3><div id="source-nodes" class="source-nodes"></div></div>
@@ -45,19 +45,20 @@
             <p class="field-help" id="excluded-count"></p>
           </div>
         </div>
-      </section>
+      </details>
       <section class="collection-status" aria-labelledby="collection-heading">
-        <div><h2 id="collection-heading">Collection status</h2><p id="schedule-summary"></p><p class="field-help" id="schedule-detail"></p></div>
-        <button type="button" id="check-source" class="primary">Check MyCareersFuture now</button>
+        <div><h2 id="collection-heading">Collection status</h2><p id="schedule-summary"></p><p id="collection-health" class="field-help"></p></div>
+        <details class="collection-options"><summary>Check schedule and scope</summary><p class="field-help" id="schedule-detail"></p><button type="button" id="check-source" class="primary">Check MyCareersFuture now</button></details>
         <p id="check-feedback" role="status" aria-live="polite" hidden></p>
       </section>
-      <div class="audit-detail-grid">
+      <details class="audit-detail-disclosure responsive-disclosure" open><summary>Source details and evidence coverage</summary><div class="audit-detail-grid">
         <section aria-labelledby="selected-heading" class="source-detail"><h2 id="selected-heading" tabindex="-1">All sources</h2><div id="selected-detail"></div></section>
         <section aria-labelledby="coverage-heading" class="coverage-section"><h2 id="coverage-heading">Evidence coverage</h2><p class="secondary">How much source information is available. This is separate from job fit.</p><div id="coverage"></div></section>
-      </div>
+      </div></details>
       <section aria-labelledby="records-heading" class="records-section">
         <div class="section-heading"><h2 id="records-heading">Inspect retained records</h2><a href="#history-heading">Collection history ↓</a></div>
         <form id="record-filters" class="record-filters">
+          <label>Source<select id="record-source"><option value="">All sources</option></select></label>
           <label>Search title, company or ID<input id="record-query" name="q" type="search" placeholder="Search retained records" autocomplete="off"></label>
           <label>Show records<select id="record-status" name="status"><option value="">All records</option><option value="needs_recheck">Need recheck</option><option value="missing_requirements">Missing mandatory requirements</option><option value="excluded">Excluded from discovery</option><option value="recent">Successfully checked within 24 hours</option></select></label>
           <button type="submit">Search</button>
