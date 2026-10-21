@@ -14,3 +14,10 @@ deploy_to_render.py
 update_render_config.py
 print_top25.py
 check_deploy.py
+data/
+migration/
+output/
+.playwright-cli/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm

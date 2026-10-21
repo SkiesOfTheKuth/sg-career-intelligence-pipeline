@@ -1,258 +1,157 @@
+"""Upsert verified source records without discarding historical evidence.
+
+Scheduling belongs to the FastAPI lifespan; this module performs one bounded run.
+SQLite is authoritative when a Store is provided. JSON support is retained for
+offline migration and source repair, not production application state.
+"""
+import copy
+import json
+import logging
 import os
 import re
-import json
-import time
-import logging
 import tempfile
 import threading
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+from evidence import build_job, present_job, repair_jobs, source_key
 
 logger = logging.getLogger("sg_sync_engine")
-
 _sync_lock = threading.Lock()
-_export_lock = threading.Lock()
-_export_in_progress = False
-_export_pending = False
+_telemetry = {"is_syncing": False, "last_sync_timestamp": None, "last_sync_status": "idle",
+              "last_new_jobs_count": 0, "lifetime_synced_count": 0, "last_error": None}
 
-_telemetry = {
-    "is_syncing": False,
-    "last_sync_timestamp": None,
-    "last_sync_status": "idle",
-    "last_new_jobs_count": 0,
-    "lifetime_synced_count": 0,
-    "last_error": None
-}
+
+def _now():
+    return datetime.now(timezone.utc).isoformat()
+
 
 def get_sync_telemetry():
-    """Returns a snapshot copy of current synchronization telemetry."""
     return dict(_telemetry)
 
-def atomic_save_jobs(filepath: str, jobs: list) -> bool:
-    """Safely and atomically writes the jobs dataset using temporary file replacement."""
-    dir_name = os.path.dirname(os.path.abspath(filepath))
-    temp_name = None
+
+def atomic_save_jobs(filepath, jobs):
+    destination = Path(filepath).resolve()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
     try:
-        with tempfile.NamedTemporaryFile("w", dir=dir_name, delete=False, encoding="utf-8") as tf:
-            json.dump(jobs, tf, indent=2, ensure_ascii=False)
-            temp_name = tf.name
-        os.replace(temp_name, filepath)
-        logger.info(f"Atomically persisted {len(jobs)} jobs to {filepath}")
+        with tempfile.NamedTemporaryFile("w", dir=destination.parent, delete=False, encoding="utf-8") as output:
+            temporary = output.name
+            json.dump(jobs, output, ensure_ascii=False, indent=2)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, destination)
         return True
-    except Exception as e:
-        logger.error(f"Failed atomic write to {filepath}: {e}")
-        if temp_name and os.path.exists(temp_name):
-            try:
-                os.remove(temp_name)
-            except OSError:
-                pass
-        raise
+    finally:
+        if temporary and os.path.exists(temporary):
+            os.unlink(temporary)
 
-def trigger_export_refresh_async(data_file: str):
-    """Refreshes downloadable Excel workbook and master CSV database in background with serialization and coalescing."""
-    global _export_in_progress, _export_pending
-    
-    with _export_lock:
-        if _export_in_progress:
-            _export_pending = True
-            logger.info("[Export Sync] Export worker is already active; queued pending refresh.")
-            return
-        _export_in_progress = True
 
-    def _worker():
-        global _export_in_progress, _export_pending
-        try:
-            from generate_workbook import build_full_workbook
-            base_dir = os.path.dirname(os.path.abspath(data_file))
-            xlsx_path = os.path.join(base_dir, "Singapore_Career_Intelligence_Database_2026.xlsx")
-            csv_path = os.path.join(base_dir, "Singapore_Career_Intelligence_Database_2026.csv")
-            
-            while True:
-                logger.info(f"[Export Sync] Updating Excel and CSV exports from {data_file}...")
-                build_full_workbook(data_path=data_file, output_filename=xlsx_path, csv_filename=csv_path)
-                logger.info("[Export Sync] Excel and CSV exports successfully synchronized.")
-                
-                with _export_lock:
-                    if _export_pending:
-                        _export_pending = False
-                        logger.info("[Export Sync] Processing queued export request...")
-                        continue
-                    else:
-                        _export_in_progress = False
-                        break
-        except Exception as e:
-            logger.error(f"[Export Sync] Failed to synchronize exports: {e}")
-            with _export_lock:
-                _export_in_progress = False
-                _export_pending = False
+def transform_mcf_job(mcf_item, next_id_num):
+    return build_job(mcf_item, f"SG-OPP-{next_id_num:04d}")
 
-    threading.Thread(target=_worker, daemon=True, name="ExportSyncWorker").start()
 
-_trigger_export_refresh = trigger_export_refresh_async
+def synchronize_upstream_jobs(data_file=None, queries=None, limit_per_query=10, store=None):
+    """Upsert returned MCF vacancies and persist source errors separately.
 
-def transform_mcf_job(mcf_item: dict, next_id_num: int) -> dict:
-    """Transforms a raw MyCareersFuture job item into the authoritative 30-column schema using canonical pipeline rules."""
-    from pipeline_processor import categorize_job, calculate_suitability, estimate_market_salary
-    
-    title = mcf_item.get("title", "Untitled Opportunity").strip()
-    company = mcf_item.get("company", "Confidential Employer").strip()
-    query_matched = mcf_item.get("query_matched", "")
-    categories = mcf_item.get("categories", [])
-    desc = mcf_item.get("description", "See primary portal for detailed job specifications.")
-    reqs = mcf_item.get("requirements", "") or ", ".join(mcf_item.get("skills", []))
-    
-    # Authoritative domain categorization and suitability calculation
-    cat_lower = (query_matched + " " + title + " " + " ".join(categories)).lower()
-    if "thai" in cat_lower or "thailand" in cat_lower:
-        category = "Category E: Thai-Speaking & Thailand-Focused Positions"
-        thai_rel = "Critical Advantage"
-        score = 95
-        tier = "Tier 1: Excellent Direct Match"
-        priority = "Priority 1: Immediate Application"
-    else:
-        category = categorize_job(title, desc, reqs, query_matched)
-        score, tier, priority, thai_rel = calculate_suitability(
-            {"title": title, "description": desc, "requirements": reqs},
-            category
-        )
-    
-    # Authoritative salary estimation
-    adv_salary = mcf_item.get("advertised_salary", "Not disclosed")
-    est_salary = estimate_market_salary(category, title)
-    
-    industry = ", ".join(categories) if categories else "Marketing & Commercial Services"
-    today_str = time.strftime("%Y-%m-%d")
-    
-    return {
-        "col_01_id": f"SG-OPP-{next_id_num:04d}",
-        "col_02_company": company,
-        "col_03_title": title,
-        "col_04_category": category,
-        "col_05_industry": industry,
-        "col_06_location": mcf_item.get("location", "Singapore"),
-        "col_07_work_arrangement": mcf_item.get("work_arrangement", "On-site / Hybrid (Singapore)"),
-        "col_08_employment_type": mcf_item.get("employment_type", "Permanent Full-time"),
-        "col_09_advertised_salary": adv_salary,
-        "col_10_estimated_salary": est_salary,
-        "col_11_posting_date": mcf_item.get("posted_date") or today_str,
-        "col_12_deadline": mcf_item.get("expiry_date", "Not stated / Open until filled"),
-        "col_13_checked_date": today_str,
-        "col_14_source": "MyCareersFuture (Singapore Govt)",
-        "col_15_direct_url": mcf_item.get("url", ""),
-        "col_16_alt_url": "https://www.mycareersfuture.gov.sg",
-        "col_17_verification_status": "Verified active",
-        "col_18_responsibilities": desc,
-        "col_19_mandatory_reqs": reqs or "Bachelor's / Master's degree in Marketing, Business, or Communications; Professional English proficiency; Relevant digital or liaison experience.",
-        "col_20_preferred_reqs": "Thai language proficiency, agency background, regional ASEAN market exposure, stakeholder management skills.",
-        "col_21_candidate_quals": "MSc Marketing (NTU Singapore), BBA International Marketing (Kasetsart), Bilingual English & Thai, Singapore Permanent Resident.",
-        "col_22_matching_exp": "Marketing & PR Specialist at Social Collective Studio; Content Creator at uWave; Interpreter at Royal Thai Embassy and APAC F&B Expo 2026.",
-        "col_23_gaps": "Standard company and industry onboarding orientation.",
-        "col_24_thai_relevance": thai_rel,
-        "col_25_suitability_score": score,
-        "col_26_suitability_tier": tier,
-        "col_27_confidence": "High",
-        "col_28_priority": priority,
-        "col_29_explanation": f"Strategic profile alignment for {title} leveraging candidate's NTU Master's degree and commercial track record.",
-        "col_30_resume_emphasis": f"Highlight NTU MSc Marketing qualification, Singapore PR local status, and relevant project achievements for {title}."
-    }
-
-def synchronize_upstream_jobs(data_file: str, queries=None, limit_per_query=10) -> dict:
-    """Executes safe, deduplicated ingestion of new upstream positions and updates persistent storage."""
-    global _telemetry
+    An existing record absent from a limited search is not declared closed or
+    newly verified. A failed check preserves its prior source facts and check date.
+    """
+    if store is None and hasattr(data_file, "list_jobs"):
+        store, data_file = data_file, None
     if not _sync_lock.acquire(blocking=False):
-        return {
-            "status": "in_progress",
-            "message": "Synchronization is already running in background.",
-            "added_count": 0
-        }
-    
-    _telemetry["is_syncing"] = True
-    _telemetry["last_sync_status"] = "running"
-    _telemetry["last_error"] = None
-    t0 = time.time()
-    
+        return {"status": "in_progress", "added_count": 0, "updated_count": 0}
+    _telemetry.update(is_syncing=True, last_sync_status="running", last_error=None)
+    started_at, started_clock = _now(), time.monotonic()
+    result = None
     try:
-        from collector_mycareersfuture import fetch_mycareersfuture
+        from collector_mycareersfuture import fetch_mycareersfuture, SOURCE
         from pipeline_processor import is_excluded_title
-        target_queries = queries or ["Thai", "Marketing Executive", "Social Media Executive", "Public Relations"]
-        logger.info(f"Starting upstream sync for queries: {target_queries}...")
-        
-        raw_items = fetch_mycareersfuture(target_queries, limit_per_query=limit_per_query)
-        logger.info(f"Fetched {len(raw_items)} raw items from upstream.")
-        
-        # Load existing jobs
-        existing_jobs = []
-        if os.path.exists(data_file):
-            with open(data_file, "r", encoding="utf-8") as f:
-                existing_jobs = json.load(f)
-                
-        existing_urls = {j.get("col_15_direct_url", "").strip() for j in existing_jobs if j.get("col_15_direct_url")}
-        existing_tuples = {(j.get("col_02_company", "").lower().strip(), j.get("col_03_title", "").lower().strip()) for j in existing_jobs}
-        
-        # Determine highest existing ID
-        max_id = 0
-        for j in existing_jobs:
-            id_str = j.get("col_01_id", "")
-            if id_str.startswith("SG-OPP-"):
-                try:
-                    num = int(id_str.split("-")[-1])
-                    if num > max_id:
-                        max_id = num
-                except ValueError:
-                    pass
-        if max_id == 0:
-            max_id = len(existing_jobs)
-            
-        newly_added = []
-        for item in raw_items:
-            raw_title = item.get("title", "").strip()
-            if is_excluded_title(raw_title):
-                logger.info(f"Skipping excluded title: '{raw_title}'")
+        existing = store.list_jobs() if store else json.loads(Path(data_file).read_text(encoding="utf-8-sig")) if data_file and Path(data_file).exists() else []
+        if any(not job.get("evidence_version") for job in existing):
+            existing = repair_jobs(existing)
+        by_id = {job["id"]: job for job in existing}
+        by_url = {source_key(job.get("url")): job for job in existing if source_key(job.get("url"))}
+        max_id = max((int(job["id"].split("-")[-1]) for job in existing
+                      if re.fullmatch(r"SG-OPP-\d+", job["id"])), default=0)
+        report = fetch_mycareersfuture(queries or ["Thai", "Marketing Executive", "Social Media Executive", "Public Relations"],
+                                      limit_per_query=limit_per_query, return_report=True)
+        # Accept legacy/custom collectors only as returned records, never as proof
+        # that all previously stored vacancies were checked.
+        if isinstance(report, list):
+            report = {"jobs": report, "errors": [], "successes": [], "status": "success"}
+        changed, updated_ids, added_count, updated_count = {}, set(), 0, 0
+        for raw in report["jobs"]:
+            key = source_key(raw.get("url"))
+            if not key:
                 continue
-
-            url = item.get("url", "").strip()
-            comp = item.get("company", "").lower().strip()
-            title = raw_title.lower()
-            
-            if url and url in existing_urls:
+            previous = by_url.get(key)
+            if previous is None and is_excluded_title(raw.get("title")):
                 continue
-            if comp and title and (comp, title) in existing_tuples:
-                continue
-                
-            max_id += 1
-            new_record = transform_mcf_job(item, max_id)
-            newly_added.append(new_record)
-            if url:
-                existing_urls.add(url)
-            if comp and title:
-                existing_tuples.add((comp, title))
-                
-        if newly_added:
-            updated_jobs = existing_jobs + newly_added
-            atomic_save_jobs(data_file, updated_jobs)
-            logger.info(f"Successfully integrated {len(newly_added)} new unique jobs. Total now: {len(updated_jobs)}")
-            _trigger_export_refresh(data_file)
-        else:
-            logger.info("All harvested items were duplicates. Master dataset unchanged.")
-            
-        _telemetry["last_sync_timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        _telemetry["last_sync_status"] = "success"
-        _telemetry["last_new_jobs_count"] = len(newly_added)
-        _telemetry["lifetime_synced_count"] += len(newly_added)
-        
-        return {
-            "status": "success",
-            "added_count": len(newly_added),
-            "total_jobs": len(existing_jobs) + len(newly_added),
-            "duration_seconds": round(time.time() - t0, 2)
-        }
-    except Exception as e:
-        logger.error(f"Synchronization failed: {e}")
-        _telemetry["last_sync_status"] = "error"
-        _telemetry["last_error"] = str(e)
-        return {
-            "status": "error",
-            "message": str(e),
-            "added_count": 0
-        }
+            if previous:
+                job_id = previous["id"]
+                updated_count += 1
+            else:
+                max_id += 1
+                job_id = f"SG-OPP-{max_id:04d}"
+                added_count += 1
+            updated = build_job(raw, job_id)
+            # Preserve the original application URL and full prior source evidence
+            # when the upstream responds without description/requirements.
+            if previous:
+                updated["url"] = previous["url"]
+                if not updated["description"] and previous.get("description"):
+                    for field in ("description", "description_complete", "requirements", "assessment"):
+                        updated[field] = copy.deepcopy(previous.get(field))
+                    updated["source_warning"] = "The latest source response omitted the description; the previously retained text is shown."
+            by_id[job_id] = updated
+            by_url[key] = updated
+            changed[job_id] = updated
+            updated_ids.add(job_id)
+            if store:
+                store.record_source_evidence(job_id, SOURCE, {"status": "success", "checked_at": raw.get("verified_at"), "record": raw})
+        errors = report.get("errors", [])
+        if errors:
+            latest_attempt = max((error.get("attempted_at", started_at) for error in errors), default=started_at)
+            message = "; ".join(dict.fromkeys(error["message"] for error in errors))
+            for job_id, job in by_id.items():
+                if job_id in updated_ids or not any("mycareersfuture" in str(source.get("name", "")).lower() for source in job.get("sources", [])):
+                    continue
+                degraded = copy.deepcopy(job)
+                degraded.setdefault("verification", {}).update(status="degraded", last_attempt_at=latest_attempt, last_error=message)
+                degraded = present_job(degraded)
+                by_id[job_id] = changed[job_id] = degraded
+            if store:
+                store.record_source_evidence("__source__:mycareersfuture", SOURCE, {"status": report["status"], "errors": errors})
+        # Expiry can change even when no new upstream record is returned.
+        for job_id, job in list(by_id.items()):
+            current = present_job(job)
+            if current != job:
+                by_id[job_id] = changed[job_id] = current
+        if store and changed:
+            store.upsert_jobs(list(changed.values()))
+        elif data_file and changed:
+            atomic_save_jobs(data_file, list(by_id.values()))
+        result = {"status": report.get("status", "success"), "started_at": started_at, "finished_at": _now(),
+                  "added_count": added_count, "updated_count": updated_count, "total_jobs": len(by_id),
+                  "errors": errors, "sources": report.get("successes", []),
+                  "duration_seconds": round(time.monotonic() - started_clock, 2)}
+        if store:
+            store.record_sync(result)
+        _telemetry.update(last_sync_timestamp=result["finished_at"], last_sync_status=result["status"],
+                          last_new_jobs_count=added_count, lifetime_synced_count=_telemetry["lifetime_synced_count"] + added_count,
+                          last_error=errors[0]["message"] if errors else None)
+        return result
+    except Exception as error:
+        logger.exception("Source synchronization failed")
+        result = {"status": "error", "started_at": started_at, "finished_at": _now(),
+                  "added_count": 0, "updated_count": 0, "message": str(error),
+                  "errors": [{"source": "MyCareersFuture (Singapore Govt)", "attempted_at": _now(), "message": str(error)}]}
+        _telemetry.update(last_sync_status="error", last_error=str(error), last_sync_timestamp=result["finished_at"])
+        if store:
+            store.record_sync(result)
+        return result
     finally:
         _telemetry["is_syncing"] = False
         _sync_lock.release()

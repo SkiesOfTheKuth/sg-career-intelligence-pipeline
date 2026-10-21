@@ -1,696 +1,293 @@
-import os
-import re
-import io
-import csv
-import json
+"""Private, evidence-based workspace: one process and one durable SQLite store."""
+import asyncio
+from contextlib import asynccontextmanager, suppress
+from datetime import datetime, timezone
 import html
-import threading
-import time
+import json
 import logging
+import os
+from pathlib import Path
 import secrets
-from dataclasses import dataclass
+import time
 from urllib.parse import urlparse
-from fastapi import FastAPI, Query, Depends, HTTPException, status
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, Response
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Depends, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, Response, FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.staticfiles import StaticFiles
+from evidence import repair_jobs, present_job, draft_templates, sort_key
+from storage import Store, Conflict, STAGES
+from exports import safe_cell, JOB_HEADERS, job_row, export_response
+from sync_engine import synchronize_upstream_jobs
 
-from sync_engine import synchronize_upstream_jobs, get_sync_telemetry, atomic_save_jobs
-
-# Configure structured logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-)
-logger = logging.getLogger("sg_career_pipeline")
-
-app = FastAPI(
-    title="Singapore Career Intelligence Pipeline",
-    description="Executive recruitment intelligence and automated job-matching engine for candidate Dechsurang Kawintra",
-    version="1.6.0"
-)
-
-# Restrict CORS appropriately
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["GET", "HEAD", "OPTIONS"],
-    allow_headers=["*"],
-)
-
-DATA_FILE = "processed_master_jobs.json"
-EXCEL_FILE = "Singapore_Career_Intelligence_Database_2026.xlsx"
-CSV_FILE = "Singapore_Career_Intelligence_Database_2026.csv"
-AUDIT_FILE = "apify_spend_audit.json"
-TEMPLATE_FILE = os.path.join(os.path.dirname(__file__), "templates", "index.html")
-
-AUTH_USERNAME = os.environ.get("AUTH_USERNAME", "Kawa")
-AUTH_PASSWORD = os.environ.get("AUTH_PASSWORD", "Kawa123")
-
+BASE = Path(__file__).resolve().parent
+DATA_FILE = BASE / 'processed_master_jobs.json'
+DB_PATH = Path(os.environ.get('DATABASE_PATH', str(BASE / 'data' / 'career.sqlite3')))
+AUTH_USERNAME = os.environ.get('AUTH_USERNAME', 'Kawa')
+AUTH_PASSWORD = os.environ.get('AUTH_PASSWORD', 'Kawa123')
 security = HTTPBasic()
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+REFRESH_SECONDS = 12 * 60 * 60
+
 
 def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
-    """Enforces constant-time HTTP Basic Authentication."""
-    is_user_correct = secrets.compare_digest(credentials.username.encode("utf8"), AUTH_USERNAME.encode("utf8"))
-    is_pass_correct = secrets.compare_digest(credentials.password.encode("utf8"), AUTH_PASSWORD.encode("utf8"))
-    if not (is_user_correct and is_pass_correct):
-        logger.warning(f"Failed authentication attempt for user '{credentials.username}'")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password",
-            headers={"WWW-Authenticate": 'Basic realm="Singapore Career Intelligence Pipeline"'},
-        )
+    if not (secrets.compare_digest(credentials.username.encode(), AUTH_USERNAME.encode())
+            and secrets.compare_digest(credentials.password.encode(), AUTH_PASSWORD.encode())):
+        raise HTTPException(401, 'Invalid username or password', headers={'WWW-Authenticate': 'Basic realm="SG Career Intelligence"'})
     return credentials.username
 
-@dataclass(frozen=True)
-class DatasetSnapshot:
-    mtime: float
-    jobs: list
-    by_id: dict
-    search_index: list
-    stats: dict
 
-# In-Memory Cache and Search Index to maximize throughput and search recall
-_current_snapshot: DatasetSnapshot = None
-_cache_lock = threading.Lock()
-_start_time = time.time()
+def get_store(request: Request):
+    return request.app.state.store
 
-def extract_salary_range(sal_str: str):
-    """Extracts min and max numeric monthly figures from salary string, normalizing annual and hourly rates."""
-    if not sal_str:
-        return (0, 0)
-    
-    sal_low = sal_str.lower()
-    is_hourly = any(k in sal_low for k in ['hour', 'hourly', '/hr', 'an hour', 'ph'])
-    
-    if is_hourly:
-        raw_nums = re.findall(r'\b\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?\b', sal_str)
-        nums = [int(round(float(n.replace(',', '')))) for n in raw_nums if n.replace(',', '').replace('.', '').isdigit()]
-    else:
-        nums = [int(n.replace(',', '')) for n in re.findall(r'\b\d{1,3}(?:,\d{3})+\b|\b\d{4,6}\b', sal_str)]
-        
-    if not nums:
-        return (0, 0)
-    
-    min_val, max_val = min(nums), max(nums)
-    
-    # Normalize annual base compensation to monthly equivalent
-    if any(k in sal_low for k in ['year', 'annually', 'per annum', 'p.a']):
-        min_val = int(round(min_val / 12))
-        max_val = int(round(max_val / 12))
-    # Normalize hourly wage to monthly equivalent (~173 standard working hours/month)
-    elif is_hourly:
-        min_val = int(round(min_val * 173))
-        max_val = int(round(max_val * 173))
-        
-    return (min_val, max_val)
 
-def compute_fit_scorecard(job: dict) -> dict:
-    """Computes dynamic, structured fit scorecard and strategic talking points for the candidate."""
-    if not job:
-        return {}
-    
-    title = (job.get("col_03_title") or "").lower()
-    cat = (job.get("col_04_category") or "").lower()
-    thai_rel = (job.get("col_24_thai_relevance") or "").lower()
-    resp = (job.get("col_18_responsibilities") or "").lower()
-    reqs = (job.get("col_19_mandatory_reqs") or "").lower()
-    pref = (job.get("col_20_preferred_reqs") or "").lower()
-    expl = (job.get("col_29_explanation") or "").lower()
-    emph = (job.get("col_30_resume_emphasis") or "").lower()
-    combined_text = f"{title} {cat} {thai_rel} {resp} {reqs} {pref} {expl} {emph}"
-    
-    # 1. Thai bilingual advantage
-    is_thai = ("thai" in thai_rel) or ("thailand" in thai_rel) or ("thai" in cat) or ("thai" in title) or ("thai" in combined_text)
-    
-    # 2. NTU MSc Marketing alignment
-    ntu_degree = any(k in combined_text for k in ["marketing", "brand", "digital", "campaign", "consumer", "analytics", "communications", "localization"])
-    
-    # 3. Commercial / BBA background
-    bba_commercial = any(k in combined_text for k in ["b2b", "commercial", "business", "partnerships", "sales", "client", "revenue", "account", "stakeholder", "vendor", "coordination", "operations", "project"])
-    
-    # 4. Matched Skills List
-    skill_keywords = [
-        ("Social Media & Community", ["social media", "community", "instagram", "tiktok", "linkedin", "facebook"]),
-        ("Content & Influencer Marketing", ["content", "copywriting", "influencer", "kol", "creator"]),
-        ("Campaign Strategy & Analytics", ["campaign", "analytics", "roi", "kpi", "performance", "metrics"]),
-        ("Brand & Communications", ["brand", "pr", "public relations", "communications", "media relations"]),
-        ("Events & Activations", ["event", "exhibition", "trade show", "roadshow", "activation"]),
-        ("B2B Partnerships & Client Relations", ["partnership", "b2b", "stakeholder", "client", "commercial"]),
-        ("Cross-Border / Regional Coordination", ["regional", "apac", "asean", "southeast asia", "cross-border", "localization", "translation"])
-    ]
-    matched_skills = [name for name, kws in skill_keywords if any(k in combined_text for k in kws)]
-    if not matched_skills:
-        matched_skills = ["Commercial Marketing Strategy", "Cross-Functional Coordination"]
-        
-    # 5. Salary benchmark comparison
-    adv_sal = job.get("col_09_advertised_salary", "")
-    est_sal = job.get("col_10_estimated_salary", "")
-    sal_min, sal_max = extract_salary_range(adv_sal)
-    est_min, est_max = extract_salary_range(est_sal)
-    
-    benchmark_note = "Benchmark: In line with prevailing Singapore executive compensation standards."
-    if sal_max > 0 and est_max > 0:
-        if sal_max > est_max:
-            benchmark_note = f"Advertised (${sal_max:,}/mo) is above market median (${est_max:,}/mo)."
-        elif sal_max < est_min:
-            benchmark_note = f"Advertised (${sal_max:,}/mo) is below market median (${est_min:,}/mo)."
-        else:
-            benchmark_note = f"Advertised (${sal_max:,}/mo) aligns with market benchmark (${est_min:,} - ${est_max:,}/mo)."
-            
-    # 6. Strategic application angle
-    if is_thai:
-        strategic_angle = "Lead with native Thai & English bilingual fluency, cross-border bilateral market expansion capabilities, and NTU MSc campaign analytics."
-    elif "brand" in title or "brand" in cat:
-        strategic_angle = "Position NTU Master's training in brand equity strategy, consumer insights, and commercial growth metrics."
-    elif "social" in title or "content" in title:
-        strategic_angle = "Emphasize multi-platform content curation, creator engagement rates, and data-backed social campaign ROI."
-    elif "partner" in title or "business dev" in title:
-        strategic_angle = "Highlight BBA commercial negotiation foundation combined with NTU strategic analytical acumen."
-    else:
-        strategic_angle = "Emphasize Singapore PR status (no MOM quota/levy restriction), immediate availability, and NTU postgraduate marketing rigor."
-        
-    return {
-        "is_thai_advantage": is_thai,
-        "ntu_degree_relevance": ntu_degree,
-        "bba_commercial_background": bba_commercial,
-        "matched_skills_list": matched_skills,
-        "salary_benchmark": benchmark_note,
-        "strategic_angle": strategic_angle
-    }
+def verified_backup(store):
+    directory = store.path.parent / 'backups'
+    directory.mkdir(exist_ok=True)
+    path = directory / (datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ') + '.sqlite3')
+    result = store.backup(path)
+    store.set_meta('last_backup', {'path': str(path), 'at': time.time(), 'verification': result})
+    for old in sorted(directory.glob('*.sqlite3'))[:-3]:
+        old.unlink()
+    return path
 
-def get_snapshot() -> DatasetSnapshot:
-    """Returns the current immutable dataset snapshot using thread-safe double-checked caching."""
-    global _current_snapshot
-    if not os.path.exists(DATA_FILE):
-        return DatasetSnapshot(0, [], {}, [], {})
-    try:
-        current_mtime = os.path.getmtime(DATA_FILE)
-        snap = _current_snapshot
-        if snap is not None and snap.mtime >= current_mtime:
-            return snap
-        with _cache_lock:
-            snap = _current_snapshot
-            if snap is not None and snap.mtime >= current_mtime:
-                return snap
-            logger.info(f"Building immutable dataset snapshot from {DATA_FILE} (mtime: {current_mtime})...")
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                raw_jobs = json.load(f)
 
-            by_id = {}
-            index_data = []
-            tiers = {}
-            cats = {}
-            thai_count = 0
-            salary_count = 0
-
-            for j in raw_jobs:
-                jid = j.get("col_01_id", "")
-                if jid:
-                    by_id[jid] = j
-
-                t_str = j.get("col_03_title", "")
-                c_str = j.get("col_02_company", "")
-                cat_str = j.get("col_04_category", "")
-                ind_str = j.get("col_05_industry", "")
-                loc_str = j.get("col_06_location", "")
-                tier_str = j.get("col_26_suitability_tier", "")
-                sal_str = j.get("col_09_advertised_salary", "")
-                resp_str = j.get("col_18_responsibilities", "")
-                thai_rel_str = j.get("col_24_thai_relevance", "")
-
-                t_low = t_str.lower()
-                c_low = c_str.lower()
-                cat_low = cat_str.lower()
-                tier_low = tier_str.lower()
-                thai_rel_low = thai_rel_str.lower()
-                ind_low = ind_str.lower()
-                loc_low = loc_str.lower()
-                resp_low = resp_str.lower()
-
-                is_thai = ("thai" in thai_rel_low) or ("thai" in cat_low) or ("thai" in t_low)
-                if is_thai:
-                    thai_count += 1
-
-                has_salary = bool(sal_str and "not disclosed" not in sal_str.lower() and sal_str.strip())
-                if has_salary:
-                    salary_count += 1
-
-                tiers[tier_str] = tiers.get(tier_str, 0) + 1
-                cats[cat_str] = cats.get(cat_str, 0) + 1
-
-                sal_min, sal_max = extract_salary_range(sal_str)
-
-                try:
-                    num_score = int(j.get("col_25_suitability_score", 0))
-                except (ValueError, TypeError):
-                    num_score = 0
-
-                # High-precision search corpus: ONLY genuine job posting attributes!
-                # Strictly excludes static candidate resume strings (col_21 / col_19)
-                corpus = f"{t_low} {c_low} {cat_low} {ind_low} {loc_low} {thai_rel_low} {resp_low}"
-
-                index_data.append({
-                    "title": t_low,
-                    "company": c_low,
-                    "category": cat_low,
-                    "tier": tier_low,
-                    "is_thai": is_thai,
-                    "has_salary": has_salary,
-                    "max_salary": sal_max,
-                    "score": num_score,
-                    "corpus": corpus
-                })
-
-            stats_dict = {
-                "total_jobs": len(raw_jobs),
-                "tiers": tiers,
-                "categories": cats,
-                "thai_relevance_jobs": thai_count,
-                "salary_disclosed_jobs": salary_count
-            }
-
-            new_snapshot = DatasetSnapshot(
-                mtime=current_mtime,
-                jobs=raw_jobs,
-                by_id=by_id,
-                search_index=index_data,
-                stats=stats_dict
-            )
-            _current_snapshot = new_snapshot
-            logger.info(f"Published dataset snapshot: {len(raw_jobs)} jobs, {len(by_id)} indexed IDs.")
-            return new_snapshot
-    except Exception as e:
-        logger.error(f"Error loading dataset snapshot: {e}")
-        return _current_snapshot or DatasetSnapshot(0, [], {}, [], {})
-
-def load_jobs():
-    """Loads jobs dataset from the current consistent snapshot."""
-    return get_snapshot().jobs
-
-def load_audit():
-    if os.path.exists(AUDIT_FILE):
+async def run_sync(application):
+    if application.state.sync_lock.locked():
+        return {'status': 'in_progress'}
+    async with application.state.sync_lock:
+        store = application.state.store
         try:
-            with open(AUDIT_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+            result = await asyncio.to_thread(synchronize_upstream_jobs, store=store)
+            await asyncio.to_thread(verified_backup, store)
+            return result
         except Exception:
-            pass
-    return {"total_spend_usd": 33.5563, "runs_count": 33, "audit_log": []}
+            logger.exception('Refresh failed')
+            result = {'status': 'error', 'message': 'Source refresh failed; previous evidence retained.'}
+            store.record_sync(result)
+            return result
+        finally:
+            store.set_meta('next_sync_at', time.time() + REFRESH_SECONDS)
 
-_template_cache = None
-_template_mtime = 0
 
-def load_template() -> str:
-    """Loads HTML template with mtime caching."""
-    global _template_cache, _template_mtime
-    if not os.path.exists(TEMPLATE_FILE):
-        return "<html><body>Template missing</body></html>"
-    try:
-        mtime = os.path.getmtime(TEMPLATE_FILE)
-        if _template_cache is None or mtime > _template_mtime:
-            with open(TEMPLATE_FILE, "r", encoding="utf-8") as f:
-                _template_cache = f.read()
-            _template_mtime = mtime
-        return _template_cache
-    except Exception as e:
-        logger.error(f"Error loading template: {e}")
-        return _template_cache or ""
-
-def sanitize_url(url: str) -> str:
-    """Ensures URLs only use http/https to prevent javascript: pseudo-protocol XSS."""
-    if not url:
-        return "#"
-    try:
-        parsed = urlparse(url)
-        if parsed.scheme in ["http", "https"]:
-            return html.escape(url, quote=True)
-    except Exception:
-        pass
-    return "#"
-
-def filter_jobs(jobs, category=None, tier=None, thai_only=False, min_salary=None, salary_only=False, q=None, sort_by="score"):
-    """Unified, high-precision in-memory filtering and sorting engine with multi-token recall and relevance ranking."""
-    snap = _current_snapshot
-
-    # Fast-path: use precomputed search index if querying against the active master snapshot
-    if snap is not None and jobs is snap.jobs and len(snap.search_index) == len(jobs):
-        matching = list(range(len(jobs)))
-
-        if category:
-            cat_low = category.lower()
-            matching = [i for i in matching if cat_low in snap.search_index[i]["category"]]
-        if tier:
-            tier_low = tier.lower()
-            matching = [i for i in matching if tier_low in snap.search_index[i]["tier"]]
-        if thai_only:
-            matching = [i for i in matching if snap.search_index[i]["is_thai"]]
-        if salary_only:
-            matching = [i for i in matching if snap.search_index[i]["has_salary"]]
-        if min_salary and min_salary > 0:
-            matching = [i for i in matching if snap.search_index[i]["max_salary"] >= min_salary]
-        if q:
-            q_raw = q.strip()
-            q_low = q_raw.lower()
-            if (q_raw.startswith('"') and q_raw.endswith('"')) or (q_raw.startswith("'") and q_raw.endswith("'")):
-                phrase = q_low[1:-1].strip()
-                matching = [i for i in matching if phrase in snap.search_index[i]["corpus"]]
-            else:
-                tokens = [t for t in q_low.split() if t]
-                if tokens:
-                    matching = [i for i in matching if all(t in snap.search_index[i]["corpus"] for t in tokens)]
-
-        # Sorting
-        if sort_by == "title":
-            matching.sort(key=lambda i: snap.search_index[i]["title"])
-        elif sort_by == "company":
-            matching.sort(key=lambda i: snap.search_index[i]["company"])
-        elif sort_by == "salary":
-            matching.sort(key=lambda i: snap.search_index[i]["max_salary"], reverse=True)
-        elif sort_by == "relevance" or (q and sort_by == "score"):
-            def get_relevance(i):
-                item = snap.search_index[i]
-                rel = item["score"]
-                if q:
-                    q_clean = q.strip().lower()
-                    if q_clean == item["title"]:
-                        rel += 200
-                    elif q_clean in item["title"]:
-                        rel += 100
-                    elif all(t in item["title"] for t in q_clean.split()):
-                        rel += 60
-                    if q_clean in item["company"]:
-                        rel += 40
-                return rel
-            matching.sort(key=get_relevance, reverse=True)
-        else:
-            matching.sort(key=lambda i: snap.search_index[i]["score"], reverse=True)
-
-        return [snap.jobs[i] for i in matching]
-
-    # Fallback path for arbitrary or mock job lists (unit tests)
-    filtered = jobs
-    if category:
-        cat_low = category.lower()
-        filtered = [j for j in filtered if cat_low in j.get("col_04_category", "").lower()]
-    if tier:
-        tier_low = tier.lower()
-        filtered = [j for j in filtered if tier_low in j.get("col_26_suitability_tier", "").lower()]
-    if thai_only:
-        filtered = [
-            j for j in filtered
-            if "thai" in j.get("col_24_thai_relevance", "").lower()
-            or "thai" in j.get("col_04_category", "").lower()
-            or "thai" in j.get("col_03_title", "").lower()
-        ]
-    if salary_only:
-        filtered = [
-            j for j in filtered
-            if j.get("col_09_advertised_salary")
-            and "not disclosed" not in j.get("col_09_advertised_salary", "").lower()
-            and j.get("col_09_advertised_salary", "").strip()
-        ]
-    if min_salary and min_salary > 0:
-        filtered = [
-            j for j in filtered
-            if extract_salary_range(j.get("col_09_advertised_salary", ""))[1] >= min_salary
-        ]
-    if q:
-        q_raw = q.strip()
-        q_low = q_raw.lower()
-        def get_item_corpus(j):
-            return f"{j.get('col_03_title', '')} {j.get('col_02_company', '')} {j.get('col_04_category', '')} {j.get('col_05_industry', '')} {j.get('col_06_location', '')} {j.get('col_18_responsibilities', '')} {j.get('col_24_thai_relevance', '')}".lower()
-
-        if (q_raw.startswith('"') and q_raw.endswith('"')) or (q_raw.startswith("'") and q_raw.endswith("'")):
-            phrase = q_low[1:-1].strip()
-            filtered = [j for j in filtered if phrase in get_item_corpus(j)]
-        else:
-            tokens = [t for t in q_low.split() if t]
-            if tokens:
-                filtered = [j for j in filtered if all(t in get_item_corpus(j) for t in tokens)]
-
-    if sort_by == "title":
-        filtered.sort(key=lambda j: j.get("col_03_title", "").lower())
-    elif sort_by == "company":
-        filtered.sort(key=lambda j: j.get("col_02_company", "").lower())
-    elif sort_by == "salary":
-        filtered.sort(key=lambda j: extract_salary_range(j.get("col_09_advertised_salary", ""))[1], reverse=True)
-    elif sort_by == "relevance" or (q and sort_by == "score"):
-        def get_fallback_rel(j):
-            try:
-                rel = int(j.get("col_25_suitability_score", 0))
-            except (ValueError, TypeError):
-                rel = 0
-            if q:
-                q_clean = q.strip().lower()
-                t_low = j.get("col_03_title", "").lower()
-                c_low = j.get("col_02_company", "").lower()
-                if q_clean == t_low:
-                    rel += 200
-                elif q_clean in t_low:
-                    rel += 100
-                elif all(t in t_low for t in q_clean.split()):
-                    rel += 60
-                if q_clean in c_low:
-                    rel += 40
-            return rel
-        filtered.sort(key=get_fallback_rel, reverse=True)
-    else:
-        def get_score(job):
-            try:
-                return int(job.get("col_25_suitability_score", 0))
-            except (ValueError, TypeError):
-                return 0
-        filtered.sort(key=get_score, reverse=True)
-
-    return filtered
-
-# Autonomous Background Sync Worker
-def background_refresh_loop():
-    """Runs periodic sync every 12 hours with thread-safety and error isolation."""
+async def refresh_loop(application):
+    store = application.state.store
     while True:
-        time.sleep(43200) # 12 hours
-        try:
-            logger.info("[Continuous Pipeline] Running automated periodic sync...")
-            res = synchronize_upstream_jobs(DATA_FILE)
-            logger.info(f"[Continuous Pipeline] Sync completed: {res}")
-        except Exception as e:
-            logger.error(f"[Continuous Pipeline] Sync loop exception: {e}")
+        due = store.get_meta('next_sync_at', time.time() + REFRESH_SECONDS)
+        await asyncio.sleep(max(0, min(60, due - time.time())))
+        if time.time() >= due:
+            await run_sync(application)
 
-sync_thread = threading.Thread(target=background_refresh_loop, daemon=True, name="SyncWorker")
-sync_thread.start()
 
-# --- Health Check (Unauthenticated for Cloud Orchestrator / Render monitoring) ---
-@app.get("/healthz")
-def healthz():
-    jobs = load_jobs()
-    return {
-        "status": "healthy",
-        "version": app.version,
-        "uptime_seconds": int(time.time() - _start_time),
-        "total_jobs_indexed": len(jobs),
-        "sync_worker_alive": sync_thread.is_alive(),
-        "sync_telemetry": get_sync_telemetry()
-    }
+@asynccontextmanager
+async def lifespan(application):
+    store = Store(application.state.database_path).initialize()
+    application.state.store = store
+    application.state.sync_lock = asyncio.Lock()
+    if not store.get_meta('seed_version'):
+        raw = json.loads(DATA_FILE.read_text(encoding='utf-8'))
+        jobs = repair_jobs(raw)
+        store.seed_jobs(jobs)
+        store.record_source_batch([(job['id'], job.get('sources',[{'name':'Retained source'}])[0]['name'], job.get('raw_evidence',job)) for job in jobs])
+        store.set_meta('seed_version', 2)
+        store.set_meta('migration_job_ids', sorted(job['id'] for job in jobs))
+        verified_backup(store)
+    if store.get_meta('next_sync_at') is None:
+        store.set_meta('next_sync_at', time.time() + REFRESH_SECONDS)
+    task = None
+    if os.environ.get('DISABLE_BACKGROUND_SYNC') != '1':
+        task = asyncio.create_task(refresh_loop(application), name='source-refresh')
+    application.state.refresh_task = task
+    try:
+        yield
+    finally:
+        if task:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+        await asyncio.to_thread(verified_backup, store)
 
-# --- Authenticated Endpoints (Protected by User Kawa / Pass Kawa123) ---
 
-@app.get("/api/jobs")
-def get_jobs(
-    category: str = Query(None),
-    tier: str = Query(None),
-    thai_only: bool = Query(False),
-    min_salary: int = Query(None, ge=0),
-    salary_only: bool = Query(False),
-    q: str = Query(None),
-    sort_by: str = Query("score"),
-    limit: int = Query(100, ge=1, le=250),
-    offset: int = Query(0, ge=0),
-    user: str = Depends(verify_credentials)
-):
-    jobs = load_jobs()
-    filtered = filter_jobs(
-        jobs,
-        category=category,
-        tier=tier,
-        thai_only=thai_only,
-        min_salary=min_salary,
-        salary_only=salary_only,
-        q=q,
-        sort_by=sort_by
-    )
-    total = len(filtered)
-    results = filtered[offset : offset + limit]
-    return {
-        "authenticated_user": user,
-        "total": total,
-        "offset": offset,
-        "limit": limit,
-        "items": results
-    }
+app = FastAPI(title='SG Career Intelligence', version='2.0.0', lifespan=lifespan)
+app.state.database_path = DB_PATH
+app.mount('/static', StaticFiles(directory=BASE / 'static', check_dir=False), name='static')
 
-@app.get("/api/jobs/batch")
-def get_jobs_batch(ids: str = Query(...), user: str = Depends(verify_credentials)):
-    """Fetches any arbitrary list of jobs by comma-separated IDs in a single query."""
-    id_list = [i.strip() for i in ids.split(",") if i.strip()]
-    snap = get_snapshot()
-    results = [snap.by_id[jid] for jid in id_list if jid in snap.by_id]
-    return {
-        "authenticated_user": user,
-        "count": len(results),
-        "items": results
-    }
 
-@app.get("/api/jobs/{job_id}")
-def get_job_by_id(job_id: str, user: str = Depends(verify_credentials)):
-    snap = get_snapshot()
-    job = snap.by_id.get(job_id)
-    if job:
-        scorecard = compute_fit_scorecard(job)
-        return {"authenticated_user": user, "job": job, "fit_scorecard": scorecard}
-    raise HTTPException(status_code=404, detail="Job position not found")
+@app.middleware('http')
+async def security_headers(request, call_next):
+    if request.method in {'PUT', 'POST', 'PATCH', 'DELETE'}:
+        origin = request.headers.get('origin')
+        if request.headers.get('sec-fetch-site') == 'cross-site' or (origin and urlparse(origin).netloc != request.headers.get('host')):
+            return Response('Cross-origin writes are not allowed', status_code=403)
+    response = await call_next(request)
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['Referrer-Policy'] = 'same-origin'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Cache-Control'] = 'no-store'
+    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    return response
 
-@app.post("/api/sync")
-def trigger_sync(user: str = Depends(verify_credentials)):
-    """Allows authorized operator to trigger an on-demand upstream synchronization."""
-    logger.info(f"Manual synchronization triggered by operator: '{user}'")
-    result = synchronize_upstream_jobs(DATA_FILE)
-    return {
-        "authenticated_user": user,
-        "sync_result": result,
-        "telemetry": get_sync_telemetry()
-    }
 
-@app.get("/api/export/filtered")
-def export_filtered_csv(
-    category: str = Query(None),
-    tier: str = Query(None),
-    thai_only: bool = Query(False),
-    min_salary: int = Query(None, ge=0),
-    salary_only: bool = Query(False),
-    q: str = Query(None),
-    sort_by: str = Query("score"),
-    user: str = Depends(verify_credentials)
-):
-    """Exports currently filtered search results directly into an Excel-friendly CSV with UTF-8 BOM."""
-    jobs = load_jobs()
-    filtered = filter_jobs(
-        jobs,
-        category=category,
-        tier=tier,
-        thai_only=thai_only,
-        min_salary=min_salary,
-        salary_only=salary_only,
-        q=q,
-        sort_by=sort_by
-    )
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow([
-        "ID", "Company", "Title", "Category", "Location", "Advertised Salary",
-        "Suitability Score", "Suitability Tier", "Priority", "Direct URL",
-        "Strategic Match Rationale", "Tailored Resume Focus"
-    ])
-    for j in filtered:
-        writer.writerow([
-            j.get("col_01_id", ""),
-            j.get("col_02_company", ""),
-            j.get("col_03_title", ""),
-            j.get("col_04_category", ""),
-            j.get("col_06_location", ""),
-            j.get("col_09_advertised_salary", ""),
-            j.get("col_25_suitability_score", ""),
-            j.get("col_26_suitability_tier", ""),
-            j.get("col_28_priority", ""),
-            j.get("col_15_direct_url", ""),
-            j.get("col_29_explanation", ""),
-            j.get("col_30_resume_emphasis", "")
-        ])
-    csv_bytes = output.getvalue().encode("utf-8-sig")
-    return Response(
-        content=csv_bytes,
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=Filtered_Singapore_Opportunities.csv"}
-    )
+def sanitize_url(url):
+    try:
+        parsed = urlparse(url or '')
+        return html.escape(url, quote=True) if parsed.scheme in ('http', 'https') and parsed.netloc else '#'
+    except (TypeError, ValueError):
+        return '#'
 
-@app.get("/api/stats")
-def get_stats(user: str = Depends(verify_credentials)):
-    snap = get_snapshot()
-    audit = load_audit()
-    stats = snap.stats
-    return {
-        "authenticated_user": user,
-        "total_jobs": stats.get("total_jobs", len(snap.jobs)),
-        "tiers": stats.get("tiers", {}),
-        "categories": stats.get("categories", {}),
-        "thai_relevance_jobs": stats.get("thai_relevance_jobs", 0),
-        "salary_disclosed_jobs": stats.get("salary_disclosed_jobs", 0),
-        "apify_spend_usd": audit.get("total_spend_usd", 33.5563),
-        "apify_runs_completed": audit.get("runs_count", 33)
-    }
 
-@app.get("/api/top25")
-def get_top25(user: str = Depends(verify_credentials)):
-    jobs = load_jobs()
-    return {
-        "authenticated_user": user,
-        "count": min(25, len(jobs)),
-        "items": jobs[:25]
-    }
+def filter_parameters(q: str = '', category: str = '', fit: str = '', thai_relevance: str = '',
+                      employment_type: str = '', salary_only: bool = False,
+                      min_salary: float | None = Query(None, ge=0), sort_by: str = 'recommended',
+                      include_closed: bool = False, opportunity_type: str = 'salaried'):
+    return dict(q=q, category=category, fit=fit, thai_relevance=thai_relevance,
+                employment_type=employment_type, salary_only=salary_only,
+                min_salary=min_salary, sort_by=sort_by, include_closed=include_closed, opportunity_type=opportunity_type)
 
-@app.get("/download/excel")
-def download_excel(user: str = Depends(verify_credentials)):
-    if os.path.exists(EXCEL_FILE):
-        return FileResponse(
-            EXCEL_FILE,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            filename="Singapore_Career_Intelligence_Database_2026.xlsx"
-        )
-    raise HTTPException(status_code=404, detail="Excel workbook not found")
 
-@app.get("/download/csv")
-def download_csv(user: str = Depends(verify_credentials)):
-    if os.path.exists(CSV_FILE):
-        return FileResponse(
-            CSV_FILE,
-            media_type="text/csv",
-            filename="Singapore_Career_Intelligence_Database_2026.csv"
-        )
-    raise HTTPException(status_code=404, detail="CSV database not found")
+def filter_jobs(jobs, **filters):
+    results = [present_job(j) for j in jobs]
+    q = filters.get('q', '').strip().lower()
+    tokens = [q[1:-1]] if len(q) > 1 and q[0] == q[-1] and q[0] in "\"'" else q.split()
+    def matches(j):
+        if not filters.get('include_closed') and j.get('status') in ('closed', 'expired', 'unavailable'):
+            return False
+        freelance = 'freelance' in (j.get('employment_type') or '').lower() or 'freelance' in j.get('title','').lower()
+        if filters.get('opportunity_type') == 'salaried' and freelance: return False
+        if filters.get('opportunity_type') == 'freelance' and not freelance: return False
+        corpus = ' '.join(str(j.get(k) or '') for k in ('title','company','category','location','description','requirements','preferred_requirements')).lower()
+        if any(t not in corpus for t in tokens): return False
+        if filters.get('fit') and j.get('assessment',{}).get('fit') != filters['fit']: return False
+        for key in ('category','employment_type'):
+            if filters.get(key) and str(j.get(key) or '').lower() != filters[key].lower(): return False
+        thai = filters.get('thai_relevance')
+        if thai and str(j.get('thai_relevance', '')).lower().replace('thai ', '').replace('thailand market ', '') != thai.lower(): return False
+        salary = j.get('salary') or {}
+        if filters.get('salary_only') and not salary.get('disclosed'): return False
+        threshold = filters.get('min_salary')
+        if threshold is not None and (salary.get('monthly_minimum') is None or salary['monthly_minimum'] < threshold or salary.get('currency') != 'SGD'): return False
+        return True
+    results = [j for j in results if matches(j)]
+    results.sort(key=sort_key)
+    sort = filters.get('sort_by')
+    if sort == 'salary': results.sort(key=lambda j:(j.get('salary',{}).get('monthly_minimum') or -1),reverse=True)
+    if sort == 'freshness': results.sort(key=lambda j:(j.get('verification',{}).get('checked_at') or ''),reverse=True)
+    if sort in ('title','company'): results.sort(key=lambda j:j.get(sort,'').lower())
+    return results
 
-@app.get("/", response_class=HTMLResponse)
-def index(user: str = Depends(verify_credentials)):
-    snap = get_snapshot()
-    jobs = snap.jobs
-    top25 = jobs[:25]
-    audit = load_audit()
-    
-    stats = snap.stats
-    if stats:
-        tiers_dict = stats.get("tiers", {})
-        tier1_count = sum(v for k, v in tiers_dict.items() if "Tier 1" in k)
-        thai_count = stats.get("thai_relevance_jobs", 0)
-        salary_count = stats.get("salary_disclosed_jobs", 0)
-    else:
-        tier1_count = len([j for j in jobs if "Tier 1" in j.get("col_26_suitability_tier", "")])
-        thai_count = len([j for j in jobs if "thai" in j.get("col_24_thai_relevance", "").lower() or "thai" in j.get("col_04_category", "").lower() or "thai" in j.get("col_03_title", "").lower()])
-        salary_count = len([j for j in jobs if j.get("col_09_advertised_salary") and "not disclosed" not in j.get("col_09_advertised_salary", "").lower() and j.get("col_09_advertised_salary", "").strip()])
 
-    template = load_template()
-    safe_user = html.escape(user)
-    
-    content = template.replace("__SAFE_USER__", safe_user)
-    content = content.replace("__TOTAL_JOBS__", f"{len(jobs):,}")
-    content = content.replace("__TIER1_COUNT__", f"{tier1_count:,}")
-    content = content.replace("__THAI_COUNT__", f"{thai_count:,}")
-    content = content.replace("__SALARY_COUNT__", f"{salary_count:,}")
-    content = content.replace("__TOP25_JSON__", json.dumps(top25, ensure_ascii=False))
-    content = content.replace("__AUDIT_SPEND__", f"${audit.get('total_spend_usd', 33.56):.2f}")
-    content = content.replace("__AUDIT_RUNS__", str(audit.get("runs_count", 33)))
-    
-    return HTMLResponse(content=content)
+@app.get('/healthz')
+def healthz(request: Request, store=Depends(get_store)):
+    task = request.app.state.refresh_task
+    return {'status':'healthy','version':app.version,'total_jobs_indexed':store.count_jobs(),
+            'sync_worker_alive':bool(task and not task.done())}
 
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("app:app", host="0.0.0.0", port=port, log_level="info")
+
+@app.get('/', response_class=HTMLResponse)
+def index(user=Depends(verify_credentials)):
+    return HTMLResponse((BASE/'templates'/'index.html').read_text(encoding='utf-8').replace('__SAFE_USER__',html.escape(user)))
+
+
+@app.get('/api/jobs')
+def get_jobs(filters=Depends(filter_parameters),limit:int=Query(50,ge=1,le=250),offset:int=Query(0,ge=0),
+             user=Depends(verify_credentials),store=Depends(get_store)):
+    rows=filter_jobs(store.list_jobs(),**filters)
+    return {'total':len(rows),'offset':offset,'limit':limit,'items':rows[offset:offset+limit]}
+
+
+@app.get('/api/jobs/batch')
+def get_jobs_batch(ids:str,user=Depends(verify_credentials),store=Depends(get_store)):
+    rows=[present_job(j) for jid in ids.split(',') if (j:=store.get_job(jid))]
+    return {'count':len(rows),'items':rows}
+
+
+@app.get('/api/jobs/{job_id}')
+def get_job(job_id:str,user=Depends(verify_credentials),store=Depends(get_store)):
+    job=store.get_job(job_id)
+    if not job:
+        saved=store.get_application(job_id)
+        if saved:
+            job=dict(saved['job_snapshot'],status='unavailable')
+        else: raise HTTPException(404,'This listing is unavailable.')
+    return {'job':present_job(job)}
+
+
+@app.get('/api/options')
+def get_options(user=Depends(verify_credentials),store=Depends(get_store)):
+    jobs=store.list_jobs()
+    return {key:sorted({str(j[key]) for j in jobs if j.get(key)}) for key in ('category','employment_type')}
+
+
+@app.get('/api/applications')
+def get_applications(stage:str|None=None,user=Depends(verify_credentials),store=Depends(get_store)):
+    if stage and stage not in STAGES: raise HTTPException(422,'Unknown application stage')
+    rows=store.list_applications(stage=stage)
+    for row in rows:
+        job=store.get_job(row['job_id'])
+        row['job']=present_job(job or dict(row['job_snapshot'],status='unavailable'))
+    return {'items':rows,'total':len(rows)}
+
+
+@app.post('/api/applications/import')
+def import_applications(payload:dict,user=Depends(verify_credentials),store=Depends(get_store)):
+    try: return store.import_applications(payload.get('records',payload))
+    except (ValueError,TypeError) as exc: raise HTTPException(422,str(exc))
+
+
+@app.put('/api/applications/{job_id}')
+def put_application(job_id:str,payload:dict,user=Depends(verify_credentials),store=Depends(get_store)):
+    try: return store.put_application(job_id,payload)
+    except Conflict as exc: return Response(json.dumps({'detail':str(exc),'current':exc.current}),status_code=409,media_type='application/json')
+    except (ValueError,TypeError) as exc: raise HTTPException(422,str(exc))
+
+
+@app.get('/api/drafts/{job_id}')
+def get_drafts(job_id:str,user=Depends(verify_credentials),store=Depends(get_store)):
+    job=store.get_job(job_id)
+    saved=store.get_application(job_id)
+    if not job and saved: job=saved['job_snapshot']
+    if not job: raise HTTPException(404,'This listing is unavailable.')
+    return draft_templates(present_job(job))
+
+
+@app.get('/api/export/filtered')
+def export_jobs(filters=Depends(filter_parameters),format:str='csv',user=Depends(verify_credentials),store=Depends(get_store)):
+    return export_response(JOB_HEADERS,[job_row(j) for j in filter_jobs(store.list_jobs(),**filters)],'Singapore_roles',format)
+
+
+@app.get('/api/export/applications')
+def export_applications(stage:str|None=None,ids:str|None=None,user=Depends(verify_credentials),store=Depends(get_store)):
+    rows=store.list_applications(stage=stage)
+    if ids is not None:rows=[r for r in rows if r['job_id'] in ids.split(',')]
+    headers=['ID','Title','Company','Stage','Notes','Next action','Follow-up date','Applied at','Outcome','Original URL','Recruiter message','Cover letter','History']
+    values=[]
+    for r in rows:
+        j=r['job_snapshot'];d=r.get('drafts') or {}
+        values.append([r['job_id'],j.get('title'),j.get('company'),r['stage'],r['notes'],r.get('next_action'),r.get('follow_up_date'),r.get('applied_at'),r.get('outcome'),j.get('url'),d.get('recruiter_message'),d.get('cover_letter'),json.dumps(r.get('history',[]),ensure_ascii=False)])
+    return export_response(headers,values,'Applications')
+
+
+@app.get('/download/csv')
+def download_csv(user=Depends(verify_credentials),store=Depends(get_store)):
+    return export_response(JOB_HEADERS,[job_row(j) for j in filter_jobs(store.list_jobs())],'Singapore_roles')
+
+
+@app.get('/download/excel')
+def download_excel(user=Depends(verify_credentials),store=Depends(get_store)):
+    return export_response(JOB_HEADERS,[job_row(j) for j in filter_jobs(store.list_jobs())],'Singapore_roles','xlsx')
+
+
+@app.get('/api/stats')
+def stats(user=Depends(verify_credentials),store=Depends(get_store)):
+    return {'authenticated_user':user,'total_jobs':store.count_jobs(),'sync_history':store.get_sync_history(10),'next_sync_at':store.get_meta('next_sync_at'), 'storage': {'path': str(store.path),'last_backup':store.get_meta('last_backup')}}
+
+
+@app.get('/api/backup')
+def download_backup(user=Depends(verify_credentials),store=Depends(get_store)):
+    path=verified_backup(store)
+    return FileResponse(path,media_type='application/vnd.sqlite3',filename='career-backup.sqlite3')
+
+
+@app.post('/api/sync')
+async def trigger_sync(request:Request,user=Depends(verify_credentials)):
+    return await run_sync(request.app)
