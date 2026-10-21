@@ -14,7 +14,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response, FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
-from evidence import repair_jobs, present_job, draft_templates, sort_key
+from evidence import repair_jobs, present_job, draft_templates, sort_key, prepare_assessments
 from storage import Store, Conflict, STAGES
 from exports import safe_cell, JOB_HEADERS, job_row, export_response
 from sync_engine import synchronize_upstream_jobs
@@ -115,6 +115,10 @@ async def lifespan(application):
         store.set_meta('seed_version', 2)
         store.set_meta('migration_job_ids', sorted(job['id'] for job in jobs))
         verified_backup(store)
+    # Preparation belongs to lifespan: health checks only report ready after it
+    # finishes, rather than making the first user's search do the cold work.
+    logger.info('Preparing documented-fit assessments')
+    await asyncio.to_thread(prepare_assessments, store.list_jobs())
     if store.get_meta('next_sync_at') is None:
         store.set_meta('next_sync_at', time.time() + REFRESH_SECONDS)
     if store.get_meta('active_sync'):

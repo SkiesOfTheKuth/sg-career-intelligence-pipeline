@@ -294,6 +294,20 @@ def _current_assessment(title, description, mandatory, preferred, complete):
     return assessment
 
 
+def prepare_assessments(jobs):
+    """Prepare bounded derived-data caches before the service becomes ready.
+
+    Source records remain unchanged. Changed evidence produces a new cache key.
+    """
+    for job in jobs:
+        description = job.get('description') or ''
+        raw = job.get('raw_evidence')
+        requirements = (extract_requirements(description, job.get('retained_requirements_source', raw.get('requirements')))
+                        if raw is not None else job.get('requirements') or {})
+        _current_assessment(job.get('title') or '', description, tuple(requirements.get('mandatory') or []),
+                            tuple(requirements.get('preferred') or []), bool(job.get('description_complete')))
+
+
 def _work_arrangement(raw, description):
     value = raw.get("work_arrangement")
     if value and value not in ("On-site / Hybrid (Singapore)", "On-site / Hybrid", "Not stated"):
