@@ -14,6 +14,8 @@ The implementation and acceptance pass found no remaining critical or major defe
 
 Scope and decisions: [execution brief](EXECUTION_BRIEF.md), [decision record](DECISIONS.md), [operation and rubric documentation](README.md).
 
+The original execution brief guided implementation. The final artifact audit expanded that same file into one self-contained master prompt, covering the supplied design framework's expert role, screen/workflow/component contracts, alternatives, uncertainty, accessibility, execution and completion requirements. This was a documentation refinement after rollout, not a claim that new participant research or additional implementation occurred. The supplied source file remains unchanged.
+
 ## Regression and journey results
 
 The final explicit suite passed **103 tests**: 91 backend/offline checks and 12 browser regressions. All three JavaScript files passed `node --check`; `git diff --check` passed. Evidence: `output/workspace-v2-regression.log`.
@@ -75,6 +77,8 @@ Local recovery artifacts include:
 The final post-refresh backup passed SQLite integrity checks and contained **4,402 jobs, 4,478 source-evidence versions, four collection-history entries, and zero applications/import receipts/import conflicts**. Every predeployment job ID remains present and every predeployment source-payload row is byte-for-byte identical. Additional versions came from live checks. Evidence: `output/production-final-data-check.json`.
 
 Deployment used the existing Render service and persistent disk. Restarts briefly returned 502 responses, including to the initial manual source-check request. Retained interrupted-run markers caused automatic retry after restart. The final service reports healthy 2.2.0 with the scheduler alive. Protected jobs, applications, history, audit, exports and backup routes reject unauthenticated requests. A live PropertyGuru search and filtered export contain the same two IDs in the same order, with the v2 rubric. Sources search intentionally searches title/company/ID, while discovery also searches role content. Evidence: `output/production-final-api-check.json`, `output/render-v2-deploys-final.json`.
+
+The completion audit additionally exercised the actual `sort_by` parameter across complete paginated live results: Thai by freshness (280 records), Marketing/Full-time with disclosed monthly minimum S$3,000 by salary (223), and Freelance by title (26). Each export matched every result ID in exact order. Evidence: `output/production-filter-order-check.json`.
 
 ## Actual collection result and external limits
 
