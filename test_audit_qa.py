@@ -48,7 +48,8 @@ class WorkspaceAPI(unittest.TestCase):
     def test_every_data_interface_requires_auth(self):
         for path in ['/', '/api/jobs','/api/jobs/monthly','/api/jobs/batch?ids=monthly','/api/options',
                      '/api/applications','/api/drafts/monthly','/api/export/applications','/api/export/filtered',
-                     '/download/excel','/download/csv','/api/stats','/api/backup']:
+                     '/download/excel','/download/csv','/api/stats','/api/backup','/sources',
+                     '/api/audit/sources','/api/audit/records','/api/audit/records/monthly']:
             r=self.client.get(path);self.assertEqual(401,r.status_code,path)
         for method,url in [('put','/api/applications/monthly'),('post','/api/applications/import'),('post','/api/sync')]:
             self.assertEqual(getattr(self.client,method)(url,json={}).status_code,401)
@@ -109,6 +110,24 @@ class WorkspaceAPI(unittest.TestCase):
     def test_details_and_search_have_identical_presentation(self):
         found=self.get('/api/jobs?q=social').json()['items']
         for job in found:self.assertEqual(job,self.get('/api/jobs/'+job['id']).json()['job'])
+        self.assertEqual(found[0],self.get('/api/audit/records/'+found[0]['id']).json()['job'])
+
+    def test_audit_pages_and_bounds(self):
+        self.assertEqual(self.get('/sources').status_code,200)
+        self.assertEqual(self.get('/api/audit/sources').json()['total'],len(self.jobs))
+        self.assertEqual(self.get('/api/audit/records?status=excluded').json()['total'],1)
+        self.assertEqual(self.get('/api/audit/records/missing').status_code,404)
+        self.assertEqual(self.get('/api/audit/records?offset=-1').status_code,422)
+        self.assertEqual(self.get('/api/audit/records/monthly?limit=51').status_code,422)
+
+    def test_lifespan_records_interrupted_run_and_schedules_retry(self):
+        self.store.set_meta('active_sync',{'started_at':'2026-10-20T01:00:00Z'})
+        async def restart():
+            async with web.lifespan(web.app):
+                self.assertEqual(self.store.get_sync_history(1)[0]['status'],'interrupted')
+                self.assertIsNone(self.store.get_meta('active_sync'))
+                self.assertLessEqual(self.store.get_meta('next_sync_at'),time.time())
+        asyncio.run(restart())
 
     def test_drafts_and_listing_reads_do_not_mark_applied(self):
         self.put('monthly',{'expected_revision':0})

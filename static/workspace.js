@@ -216,9 +216,9 @@
     const verification = job.verification || {};
     const checked = date(verification.checked_at);
     const closed = ['closed', 'expired', 'unavailable'].includes(String(job.status || '').toLowerCase());
-    if (closed) return `${job.status === 'expired' ? 'Deadline has passed' : 'Listing unavailable'}${checked ? `. Last verified ${checked}` : ''}`;
+    if (closed) return `${job.status === 'expired' ? 'Deadline has passed' : 'Listing unavailable'}${verification.last_success_at ? `. Last verified ${date(verification.last_success_at)}` : ''}`;
     if (!checked) return 'Source verification unavailable';
-    if (verification.status === 'historical') return `Source record dated ${checked}. Needs recheck`;
+    if (!verification.last_success_at) return `Source record dated ${checked}. No successful check recorded`;
     return `Last verified ${checked}${verification.needs_recheck || ['failed', 'degraded'].includes(verification.status) ? '. Needs recheck' : ''}`;
   }
   function roleMetadata(job) {
@@ -254,6 +254,7 @@
       line.append(el('strong', fit === 'Relevant' ? 'fit-relevant' : fit === 'Check requirements' ? 'fit-check' : '', fit));
       if (reason) line.append(document.createTextNode(` — ${reason}`));
       row.append(line, paragraph(verificationText(job), 'verification-line'));
+      if (window.FitScore) row.append(paragraph(window.FitScore.summary(job), 'score-line'));
       const actions = el('div', 'row-actions');
       actions.append(button('View role', event => openRole(id, event.currentTarget), 'text-button'));
       if (application) actions.append(el('span', 'row-stage', application.stage));
@@ -646,6 +647,7 @@
     const actions = el('div', 'detail-actions'); actions.id = 'detail-actions'; header.append(actions);
     const jumps = el('div', 'row-actions');
     jumps.append(button('Requirements', () => { $('employer-requirements')?.scrollIntoView({ block: 'start' }); $('employer-requirements')?.focus({ preventScroll: true }); }, 'text-button'));
+    jumps.append(button('Fit score & evidence', () => { $('fit-score-detail')?.scrollIntoView({block: 'start'}); $('fit-score-detail')?.focus({preventScroll: true}); }, 'text-button'));
     jumps.append(button('Your notes', () => { $('application-notes')?.focus(); }, 'text-button'));
     header.append(jumps);
     fragment.append(header);
@@ -741,11 +743,13 @@
     if (listValues(job.requirements?.preferred).length) { requirements.append(el('h3', '', 'Preferred')); appendList(requirements, job.requirements.preferred); }
     const consider = detailSection('Why consider this');
     consider.append(paragraph(job.assessment?.fit || 'Check requirements'));
-    appendList(consider, job.assessment?.reasons, 'There is not enough source evidence to establish a fit.');
+    if (window.FitScore) {const score = window.FitScore.detail(job); score.id = 'fit-score-detail'; score.tabIndex = -1; consider.append(score);}
+    if (!window.FitScore) appendList(consider, job.assessment?.reasons, 'There is not enough source evidence to establish a fit.');
     const gaps = detailSection('Requirements to check');
     appendList(gaps, job.assessment?.gaps, 'No further requirements are documented in the assessment. Review the original listing before applying.');
     const source = detailSection('Source evidence');
     source.append(paragraph(verificationText(job), 'field-help'));
+    const auditLink = el('a', 'button-link', 'Inspect retained source evidence'); auditLink.href = `/sources?job=${encodeURIComponent(job.id)}`; source.append(auditLink);
     const sources = Array.isArray(job.sources) && job.sources.length ? job.sources : [{ name: 'Original listing', url: job.url }];
     for (const item of sources) {
       const url = safeURL(item.url);

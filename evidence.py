@@ -14,6 +14,8 @@ from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit, urlunsplit
+from functools import lru_cache
+from fit_score import evaluate as evaluate_fit, requirement as check_requirement, language_gaps
 
 UTC = timezone.utc
 RAW_FILES = ("mcf_jobs_raw.json", "apify_jobs_raw.json", "cultjobs_raw.json")
@@ -164,7 +166,7 @@ def salary_presentation(raw):
 
 _REQ_HEADING = re.compile(r"^(?:(?:job|key|minimum|essential|basic|candidate)\s+)?(?:requirements|qualifications|skills)(?:\s*(?:and|&)\s*(?:experience|qualifications|skills))?\s*:?$|^what (?:we are|we're|you are) looking for\s*:?$|^about you\s*:?$|^who you are\s*:?$", re.I)
 _PREFERRED = re.compile(r"\b(?:preferred|preferably|desirable|advantage|a plus|nice to have|bonus)\b", re.I)
-_END_HEADING = re.compile(r"^(?:job responsibilities|responsibilities|benefits|what we offer|our commitment to you|about us|about the company|how to apply|equal opportunity|apply now)\s*:?$", re.I)
+_END_HEADING = re.compile(r"^(?:job responsibilities|responsibilities|benefits|what we offer|our commitment to you|about us|about the company|how to apply|equal opportunity|apply now|selling pts)\s*:?$|^(?:to apply|we regret to inform|posted by|date posted)\b", re.I)
 
 
 def extract_requirements(description, explicit=None):
@@ -182,7 +184,7 @@ def extract_requirements(description, explicit=None):
         if re.fullmatch(r"(?:preferred|desired|additional)\s+(?:qualifications|requirements|skills)\s*:?", clean, re.I):
             section = "preferred"
             continue
-        if _REQ_HEADING.search(clean):
+        if _REQ_HEADING.search(clean.replace('’', "'")):
             section = "mandatory"
             continue
         if _END_HEADING.search(clean):
@@ -191,7 +193,7 @@ def extract_requirements(description, explicit=None):
         if section:
             (preferred if section == "preferred" or _PREFERRED.search(clean) else mandatory).append(clean)
         elif re.search(r"\b(?:must|minimum qualifications|is required|are required)\b", clean, re.I):
-            mandatory.append(clean)
+            (preferred if _PREFERRED.search(clean) else mandatory).append(clean)
     return {"mandatory": list(dict.fromkeys(filter(None, mandatory))),
             "preferred": list(dict.fromkeys(filter(None, preferred)))}
 
@@ -231,20 +233,6 @@ def job_family(title):
     return next((label for label, pattern in _FAMILIES if re.search(pattern, title, re.I)), "Other roles")
 
 
-def _supported_requirement(line):
-    """Only narrow statements directly supported by the verified résumé pass."""
-    text = line.lower().strip(" .-•")
-    if re.search(r"\b(?:years?|native|fluent|fluency|expert|certifi\w*|advanced|extensive|proven|excellent|strong|leadership|manage a team|sql|python|adobe|seo|sem|cpa|roas|crm|paid media)\b", text):
-        return False
-    if re.fullmatch(r"(?:(?:a|minimum) )?(?:bachelor'?s?|master'?s?|university) degree(?: in (?:marketing|business|communications?)(?: (?:or|and) (?:a )?related (?:field|discipline))?)?(?: or equivalent(?: practical experience)?)?", text):
-        return True
-    if re.fullmatch(r"(?:singapore (?:citizen or )?(?:permanent resident|pr)|(?:ability to (?:speak|communicate in)|knowledge of) (?:english|thai)(?: and (?:english|thai))?)", text):
-        return True
-    if re.fullmatch(r"(?:experience (?:in|with)|knowledge of) (?:social media|content creation|community management|influencer outreach|audience research|marketing|thai.?english interpretation)(?: and (?:social media|content creation|community management|influencer outreach|audience research|marketing))?", text):
-        return True
-    return False
-
-
 def assess(title, description, requirements, source_complete=True):
     family = job_family(title)
     reasons, gaps = [], []
@@ -265,20 +253,14 @@ def assess(title, description, requirements, source_complete=True):
     language_sentences = [sentence for sentence in re.split(r"[\n.!?]", description)
                           if re.search(r"\b(?:must|required|requires|fluency|fluent|proficiency|command of|ability to communicate)\b", sentence, re.I)]
     language_text = title + "\n" + "\n".join(requirements["mandatory"] + language_sentences)
-    unsupported_language = []
-    for language in ("Japanese", "Vietnamese", "Mandarin", "Chinese", "Korean", "Tamil", "Malay", "Indonesian", "French", "German"):
-        for sentence in re.split(r"[\n.!?]", language_text):
-            if re.search(r"\b" + language + r"\b", sentence, re.I) and not _PREFERRED.search(sentence) and re.search(r"speaking|language|fluen\w*|proficien\w*|communicat\w*|written|spoken|(?:English|Thai)[, /]", sentence, re.I):
-                unsupported_language.append(language)
-                break
-    for language in unsupported_language:
-        gaps.append(f"The listing requests {language}; the résumé documents English and Thai only.")
+    unsupported_language = language_gaps(language_text.splitlines())
+    gaps.extend(gap['reason'] for gap in unsupported_language)
     financial = re.search(r"\b(?:accounts? receivable|accounts? payable|accountant|accounting|financial (?:controller|analyst)|audit(?:or)?|credit (?:analyst|control))\b", title, re.I)
     if financial:
         gaps.append("Specialist finance or accounting experience is not documented in the résumé.")
     if not requirements["mandatory"]:
         gaps.append("Mandatory requirements are not clearly available in the retained source; check the original listing.")
-    unsupported = [line for line in requirements["mandatory"] if not _supported_requirement(line)]
+    unsupported = [line for line in requirements["mandatory"] if check_requirement(line)['status'] != 'supported']
     gaps.extend("Check against your experience: " + line for line in unsupported)
     if not source_complete:
         gaps.append("The retained source is incomplete or is a search-result snippet; confirm the full vacancy with the employer.")
@@ -293,6 +275,23 @@ def assess(title, description, requirements, source_complete=True):
     if not reasons:
         reasons.append("No specific responsibility overlap is established from the retained source and résumé.")
     return {"fit": fit, "reasons": reasons, "gaps": list(dict.fromkeys(gaps)), "overlap": len(reasons) if not reasons[0].startswith("No specific") else 0}
+
+
+@lru_cache(maxsize=8192)
+def _current_assessment(title, description, mandatory, preferred, complete):
+    requirements = {'mandatory': list(mandatory), 'preferred': list(preferred)}
+    assessment = assess(title, description, requirements, complete)
+    score = evaluate_fit(title, description, mandatory, preferred, complete, job_family(title))
+    assessment['score'] = score
+    if score['gates'] and assessment['fit'] != 'Not suitable':
+        assessment['fit'] = 'Check requirements'
+    if assessment['fit'] == 'Relevant' and (score['value'] is None or score['value'] < 70 or score['unknown_duties']):
+        assessment['fit'] = 'Check requirements'
+    assessment['gaps'] = list(dict.fromkeys([gate['reason'] for gate in score['gates']] + assessment['gaps']))
+    supported_duties = [row for row in score['duties'] if row['status'] == 'overlap']
+    if supported_duties:
+        assessment['reasons'] = [f"The listing asks: “{row['quote']}” CV evidence: {' '.join(row['candidate_evidence'])}" for row in supported_duties]
+    return assessment
 
 
 def _work_arrangement(raw, description):
@@ -331,6 +330,7 @@ def build_job(raw, job_id, legacy=None):
     checked = raw.get("verified_at") or raw.get("checked_at")
     previous_checked = legacy.get("col_13_checked_date")
     verification = {"checked_at": checked or previous_checked or None,
+                    "last_success_at": checked or None,
                     "status": "verified" if checked else "historical" if previous_checked else "unverified",
                     "needs_recheck": True,
                     "last_attempt_at": raw.get("last_attempt_at") or checked,
@@ -368,15 +368,20 @@ def build_job(raw, job_id, legacy=None):
     return present_job(job)
 
 
-def present_job(job, now=None):
-    job = copy.deepcopy(job)
+def present_job(job, now=None, *, with_assessment=True):
+    raw_evidence = job.get('raw_evidence')
+    job = copy.deepcopy(job) if with_assessment else {k: copy.deepcopy(v) for k,v in job.items() if k not in ('raw_evidence','assessment')}
     now = parse_date(now) if isinstance(now, str) else now or datetime.now(UTC)
     if now.tzinfo is None:
         now = now.replace(tzinfo=UTC)
     verification = job.setdefault("verification", {})
+    if not verification.get("last_success_at"):
+        verification["last_success_at"] = (raw_evidence or {}).get("verified_at")
     checked = parse_date(verification.get("checked_at"))
     verification["needs_recheck"] = not checked or now - checked >= timedelta(hours=24) or verification.get("status") != "verified"
     deadline = parse_date(job.get("deadline"))
+    if not deadline:
+        job['deadline'] = None
     # Date-only closing dates remain open through the recorded Singapore date.
     deadline_expired = bool(deadline and (deadline.date() < (now + timedelta(hours=8)).date()
                             if len(str(job.get("deadline"))) == 10 else deadline < now))
@@ -384,6 +389,12 @@ def present_job(job, now=None):
         job["status"] = "expired"
     if job.get("status") not in ("open", "expired", "closed", "unknown", "unavailable"):
         job["status"] = "unknown"
+    if raw_evidence is not None:
+        job['requirements'] = extract_requirements(job.get('description') or '', job.get('retained_requirements_source', raw_evidence.get('requirements')))
+    requirements = job.get('requirements') or {}
+    if with_assessment:
+        job['assessment'] = copy.deepcopy(_current_assessment(job.get('title') or '', job.get('description') or '',
+            tuple(requirements.get('mandatory') or []), tuple(requirements.get('preferred') or []), bool(job.get('description_complete'))))
     return job
 
 
@@ -426,7 +437,7 @@ def repair_jobs(legacy_jobs, raw_dir=None):
 def sort_key(job):
     assessment = job.get("assessment", {})
     verification = job.get("verification", {})
-    return (FIT_ORDER.get(assessment.get("fit"), 2), -assessment.get("overlap", 0),
+    return (FIT_ORDER.get(assessment.get("fit"), 2), -(assessment.get('score',{}).get('value') if assessment.get('score',{}).get('value') is not None else -1),
             {"Thai required": 0, "Thai preferred": 1, "Thailand market context": 2}.get(job.get("thai_relevance"), 3),
             verification.get("needs_recheck", True), job.get("title", "").lower(), job.get("id", ""))
 

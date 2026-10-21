@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sources · SG Career Intelligence</title>
+  <link rel="stylesheet" href="/static/workspace.css">
+  <link rel="stylesheet" href="/static/sources.css">
+  <script src="/static/fit-score.js" defer></script>
+  <script src="/static/sources.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to source audit</a>
+  <header class="site-header">
+    <a class="wordmark" href="/">SG Career Intelligence</a>
+    <nav aria-label="Workspace">
+      <a href="/">Find roles</a><a href="/?view=applications">Applications</a><a href="/sources" aria-current="page">Sources</a>
+    </nav>
+  </header>
+  <main id="main" class="audit-workspace">
+    <div class="audit-heading">
+      <div><h1>Follow the evidence</h1><p>See where roles come from, what we know, and what needs checking.</p></div>
+      <button id="refresh-overview" type="button">Reload audit</button>
+    </div>
+    <div id="load-feedback" role="status" aria-live="polite">Loading source records…</div>
+    <div id="audit-content" hidden>
+      <section class="flow-section" aria-labelledby="flow-heading">
+        <h2 id="flow-heading">From sources to your workspace</h2>
+        <p class="secondary">Select a source to inspect its records. Counts are retained jobs, after deduplication.</p>
+        <div class="source-flow">
+          <div class="source-column"><h3>Collected from</h3><div id="source-nodes" class="source-nodes"></div></div>
+          <div class="flow-connector" aria-hidden="true">→</div>
+          <div class="engine-column">
+            <h3>Evidence and assessment</h3>
+            <button id="all-sources" class="engine-node" type="button" aria-pressed="true">
+              <strong>Career intelligence</strong><span id="engine-count"></span>
+              <span class="engine-process">Retain source text<br>Check requirements against the CV<br>Keep gaps and source dates visible</span>
+              <span class="node-link">Inspect all records</span>
+            </button>
+          </div>
+          <div class="flow-connector" aria-hidden="true">→</div>
+          <div class="output-column"><h3>Used in</h3>
+            <a class="output-node" href="/"><strong>Find roles <span aria-hidden="true">↗</span></strong><span id="discovery-count"></span></a>
+            <a class="output-node" href="/?view=applications"><strong>Applications <span aria-hidden="true">↗</span></strong><span id="application-count"></span></a>
+            <p class="field-help" id="excluded-count"></p>
+          </div>
+        </div>
+      </section>
+      <section class="collection-status" aria-labelledby="collection-heading">
+        <div><h2 id="collection-heading">Collection status</h2><p id="schedule-summary"></p><p class="field-help" id="schedule-detail"></p></div>
+        <button type="button" id="check-source" class="primary">Check MyCareersFuture now</button>
+        <p id="check-feedback" role="status" aria-live="polite" hidden></p>
+      </section>
+      <div class="audit-detail-grid">
+        <section aria-labelledby="selected-heading" class="source-detail"><h2 id="selected-heading" tabindex="-1">All sources</h2><div id="selected-detail"></div></section>
+        <section aria-labelledby="coverage-heading" class="coverage-section"><h2 id="coverage-heading">Evidence coverage</h2><p class="secondary">How much source information is available. This is separate from job fit.</p><div id="coverage"></div></section>
+      </div>
+      <section aria-labelledby="records-heading" class="records-section">
+        <div class="section-heading"><h2 id="records-heading">Inspect retained records</h2><a href="#history-heading">Collection history ↓</a></div>
+        <form id="record-filters" class="record-filters">
+          <label>Search title, company or ID<input id="record-query" name="q" type="search" placeholder="Search retained records" autocomplete="off"></label>
+          <label>Show records<select id="record-status" name="status"><option value="">All records</option><option value="needs_recheck">Need recheck</option><option value="missing_requirements">Missing mandatory requirements</option><option value="excluded">Excluded from discovery</option><option value="recent">Successfully checked within 24 hours</option></select></label>
+          <button type="submit">Search</button>
+        </form>
+        <p id="record-count" class="secondary" role="status" aria-live="polite"></p>
+        <div id="records" class="audit-records" aria-busy="false"></div>
+        <div class="pagination"><button type="button" id="previous-records">Previous</button><span id="record-page"></span><button type="button" id="next-records">Next</button></div>
+      </section>
+      <section aria-labelledby="history-heading" class="history-section"><h2 id="history-heading">Collection history</h2><p class="secondary">The most recent 100 runs. Each run records query outcomes; it does not verify every stored listing.</p><div id="history"></div></section>
+    </div>
+  </main>
+  <dialog id="record-inspector" aria-labelledby="inspector-title">
+    <div class="inspector-header"><div><p class="field-help">Source evidence</p><h2 id="inspector-title" tabindex="-1">Retained record</h2></div><button type="button" id="close-inspector" autofocus>Close</button></div>
+    <div id="inspector-content"></div>
+  </dialog>
+</body>
+</html>

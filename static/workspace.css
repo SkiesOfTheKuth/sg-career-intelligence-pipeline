@@ -111,6 +111,13 @@ summary:hover { color: var(--accent-hover); }
 .detail-section li { margin: .4rem 0; }
 .detail-section p, .detail-section li { max-width: 75ch; }
 .source-description { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .925rem; line-height: 1.7; }
+.score-summary { font-weight: 650; font-variant-numeric: tabular-nums; }
+.score-component, .score-evidence { padding: .8rem 0; border-bottom: 1px solid var(--line); }
+.score-component p, .score-evidence p { margin: .4rem 0; }
+.score-evidence strong { font-size: .85rem; }
+.score-quote { overflow-wrap: anywhere; }
+.fit-score { font-size: .9rem; }
+.score-line { font-size: .85rem; color: var(--secondary); }
 .detail-facts { margin: 1rem 0 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .5rem 1rem; font-size: .875rem; }
 .detail-facts dt { color: var(--secondary); }
 .detail-facts dd { margin: 0; overflow-wrap: anywhere; }

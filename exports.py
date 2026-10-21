@@ -8,12 +8,14 @@ def safe_cell(value):
     return "'"+text if text.lstrip().startswith(('=','+','-','@')) or text.startswith(('\t','\r','\n')) else text
 
 
-JOB_HEADERS=['ID','Company','Title','Job family','Employment type','Advertised salary','Fit','Thai relevance','Status','Last verified','Source','Original URL','Description','Requirements','Preferred requirements','Why consider this','Requirements to check']
+JOB_HEADERS=['ID','Company','Title','Job family','Employment type','Advertised salary','Fit','Thai relevance','Status','Last verified','Source','Original URL','Description','Requirements','Preferred requirements','Why consider this','Requirements to check','Documented fit score /100','Score provisional','Score limits','Score version']
 def job_row(j):
     return [j.get(k,'') for k in ('id','company','title','category','employment_type')]+[
         j.get('salary',{}).get('display','Not disclosed'),j.get('assessment',{}).get('fit'),j.get('thai_relevance'),j.get('status'),
-        j.get('verification',{}).get('checked_at'),'; '.join(x['name'] for x in j.get('sources',[])),j.get('url'),j.get('description'),
-        '\n'.join(j.get('requirements',{}).get('mandatory') or []),'\n'.join(j.get('requirements',{}).get('preferred') or []),'\n'.join(j.get('assessment',{}).get('reasons') or []),'\n'.join(j.get('assessment',{}).get('gaps') or [])]
+        j.get('verification',{}).get('last_success_at'),'; '.join(x['name'] for x in j.get('sources',[])),j.get('url'),j.get('description'),
+        '\n'.join(j.get('requirements',{}).get('mandatory') or []),'\n'.join(j.get('requirements',{}).get('preferred') or []),'\n'.join(j.get('assessment',{}).get('reasons') or []),'\n'.join(j.get('assessment',{}).get('gaps') or []),
+        j.get('assessment',{}).get('score',{}).get('value'),j.get('assessment',{}).get('score',{}).get('provisional'),
+        '\n'.join(x['reason'] for x in j.get('assessment',{}).get('score',{}).get('limits',[])), j.get('assessment',{}).get('score',{}).get('version')]
 
 
 def export_response(headers,rows,name,format='csv'):

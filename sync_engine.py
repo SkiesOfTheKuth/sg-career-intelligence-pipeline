@@ -19,6 +19,8 @@ from evidence import build_job, present_job, repair_jobs, source_key
 
 logger = logging.getLogger("sg_sync_engine")
 _sync_lock = threading.Lock()
+DEFAULT_QUERIES = ("Thai", "Marketing Executive", "Social Media Executive", "Public Relations")
+DEFAULT_LIMIT = 10
 _telemetry = {"is_syncing": False, "last_sync_timestamp": None, "last_sync_status": "idle",
               "last_new_jobs_count": 0, "lifetime_synced_count": 0, "last_error": None}
 
@@ -52,7 +54,7 @@ def transform_mcf_job(mcf_item, next_id_num):
     return build_job(mcf_item, f"SG-OPP-{next_id_num:04d}")
 
 
-def synchronize_upstream_jobs(data_file=None, queries=None, limit_per_query=10, store=None):
+def synchronize_upstream_jobs(data_file=None, queries=None, limit_per_query=DEFAULT_LIMIT, store=None):
     """Upsert returned MCF vacancies and persist source errors separately.
 
     An existing record absent from a limited search is not declared closed or
@@ -75,7 +77,7 @@ def synchronize_upstream_jobs(data_file=None, queries=None, limit_per_query=10, 
         by_url = {source_key(job.get("url")): job for job in existing if source_key(job.get("url"))}
         max_id = max((int(job["id"].split("-")[-1]) for job in existing
                       if re.fullmatch(r"SG-OPP-\d+", job["id"])), default=0)
-        report = fetch_mycareersfuture(queries or ["Thai", "Marketing Executive", "Social Media Executive", "Public Relations"],
+        report = fetch_mycareersfuture(queries or DEFAULT_QUERIES,
                                       limit_per_query=limit_per_query, return_report=True)
         # Accept legacy/custom collectors only as returned records, never as proof
         # that all previously stored vacancies were checked.
@@ -104,6 +106,7 @@ def synchronize_upstream_jobs(data_file=None, queries=None, limit_per_query=10, 
                 if not updated["description"] and previous.get("description"):
                     for field in ("description", "description_complete", "requirements", "assessment"):
                         updated[field] = copy.deepcopy(previous.get(field))
+                    updated['retained_requirements_source'] = copy.deepcopy(previous.get('retained_requirements_source', previous.get('raw_evidence', {}).get('requirements')))
                     updated["source_warning"] = "The latest source response omitted the description; the previously retained text is shown."
             by_id[job_id] = updated
             by_url[key] = updated

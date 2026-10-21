@@ -408,6 +408,13 @@ class Store:
             return [{"id": row["id"], "source": row["source"], "payload": json.loads(row["data_json"]), "captured_at": row["captured_at"]}
                     for row in connection.execute("SELECT * FROM source_evidence WHERE job_id=? ORDER BY id DESC", (job_id,))]
 
+    def get_source_evidence_page(self, job_id, offset=0, limit=10):
+        with self._connection() as connection:
+            total = connection.execute('SELECT COUNT(*) FROM source_evidence WHERE job_id=?',(job_id,)).fetchone()[0]
+            items = [{'id':row['id'],'source':row['source'],'payload':json.loads(row['data_json']),'captured_at':row['captured_at']}
+                     for row in connection.execute('SELECT * FROM source_evidence WHERE job_id=? ORDER BY id DESC LIMIT ? OFFSET ?', (job_id,limit,offset))]
+            return {'total':total,'items':items,'offset':offset,'limit':limit}
+
     @staticmethod
     def verify_database(path):
         """Read-only integrity and logical content manifest for restore verification."""

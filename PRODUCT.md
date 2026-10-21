@@ -23,7 +23,8 @@ Avoid executive dashboards, metric tiles, nested cards, invented percentages, re
 ## Design Principles
 
 - Show employer evidence before candidate advice; missing facts remain unknown.
-- Two destinations: Find roles and Applications.
+- Two task destinations: Find roles and Applications, with a Sources audit for provenance and collection health.
+- Documented fit scores must expose their calculation, source quotes, CV evidence, unknowns and limits. They are review aids, never hiring probabilities.
 - Preserve edits and history, including unavailable roles.
 - Use specific actions and explicit application submission tracking.
 - Keep search and useful content immediately visible on phones.

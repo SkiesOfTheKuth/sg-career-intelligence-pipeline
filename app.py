@@ -18,6 +18,7 @@ from evidence import repair_jobs, present_job, draft_templates, sort_key
 from storage import Store, Conflict, STAGES
 from exports import safe_cell, JOB_HEADERS, job_row, export_response
 from sync_engine import synchronize_upstream_jobs
+from source_audit import build_audit, audit_records, inspect_record
 
 BASE = Path(__file__).resolve().parent
 DATA_FILE = BASE / 'processed_master_jobs.json'
@@ -53,21 +54,42 @@ def verified_backup(store):
 
 
 async def run_sync(application):
-    if application.state.sync_lock.locked():
+    active = getattr(application.state, 'sync_run_task', None)
+    if active and not active.done():
         return {'status': 'in_progress'}
+    task = asyncio.create_task(_run_sync_once(application), name='source-check')
+    application.state.sync_run_task = task
+    # Disconnecting a browser must not release the lock while the worker thread
+    # still writes. Lifespan owns and awaits this task during graceful shutdown.
+    return await asyncio.shield(task)
+
+
+async def _run_sync_once(application):
     async with application.state.sync_lock:
         store = application.state.store
+        store.set_meta('active_sync', {'started_at':datetime.now(timezone.utc).isoformat()})
+        completed = False
         try:
             result = await asyncio.to_thread(synchronize_upstream_jobs, store=store)
-            await asyncio.to_thread(verified_backup, store)
+            try:
+                await asyncio.to_thread(verified_backup, store)
+                store.set_meta('last_backup_error', None)
+            except Exception:
+                logger.exception('Backup failed after source check')
+                store.set_meta('last_backup_error', {'at':datetime.now(timezone.utc).isoformat(), 'message':'Backup failed after source check.'})
+                result = {**result, 'storage_warning':'The source result was saved, but the backup could not be completed.'}
+            completed = True
             return result
         except Exception:
             logger.exception('Refresh failed')
             result = {'status': 'error', 'message': 'Source refresh failed; previous evidence retained.'}
             store.record_sync(result)
+            completed = True
             return result
         finally:
-            store.set_meta('next_sync_at', time.time() + REFRESH_SECONDS)
+            if completed:
+                store.set_meta('active_sync', None)
+                store.set_meta('next_sync_at', time.time() + REFRESH_SECONDS)
 
 
 async def refresh_loop(application):
@@ -84,6 +106,7 @@ async def lifespan(application):
     store = Store(application.state.database_path).initialize()
     application.state.store = store
     application.state.sync_lock = asyncio.Lock()
+    application.state.sync_run_task = None
     if not store.get_meta('seed_version'):
         raw = json.loads(DATA_FILE.read_text(encoding='utf-8'))
         jobs = repair_jobs(raw)
@@ -94,6 +117,10 @@ async def lifespan(application):
         verified_backup(store)
     if store.get_meta('next_sync_at') is None:
         store.set_meta('next_sync_at', time.time() + REFRESH_SECONDS)
+    if store.get_meta('active_sync'):
+        store.record_sync({'status':'interrupted','started_at':store.get_meta('active_sync')['started_at'], 'message':'Refresh was interrupted by a restart and will be retried.'})
+        store.set_meta('active_sync', None)
+        store.set_meta('next_sync_at', time.time())
     task = None
     if os.environ.get('DISABLE_BACKGROUND_SYNC') != '1':
         task = asyncio.create_task(refresh_loop(application), name='source-refresh')
@@ -105,10 +132,13 @@ async def lifespan(application):
             task.cancel()
             with suppress(asyncio.CancelledError):
                 await task
+        active = application.state.sync_run_task
+        if active and not active.done():
+            await active
         await asyncio.to_thread(verified_backup, store)
 
 
-app = FastAPI(title='SG Career Intelligence', version='2.0.0', lifespan=lifespan)
+app = FastAPI(title='SG Career Intelligence', version='2.1.0', lifespan=lifespan)
 app.state.database_path = DB_PATH
 app.mount('/static', StaticFiles(directory=BASE / 'static', check_dir=False), name='static')
 
@@ -193,6 +223,29 @@ def get_jobs(filters=Depends(filter_parameters),limit:int=Query(50,ge=1,le=250),
              user=Depends(verify_credentials),store=Depends(get_store)):
     rows=filter_jobs(store.list_jobs(),**filters)
     return {'total':len(rows),'offset':offset,'limit':limit,'items':rows[offset:offset+limit]}
+
+
+@app.get('/sources',response_class=HTMLResponse)
+def source_page(user=Depends(verify_credentials)):
+    return HTMLResponse((BASE/'templates'/'sources.html').read_text(encoding='utf-8'))
+
+
+@app.get('/api/audit/sources')
+def source_overview(request:Request,user=Depends(verify_credentials),store=Depends(get_store)):
+    task=request.app.state.refresh_task
+    return build_audit(store,scheduler_enabled=bool(task and not task.done()),running=request.app.state.sync_lock.locked(),interval_seconds=REFRESH_SECONDS)
+
+
+@app.get('/api/audit/records')
+def source_records(source:str='',q:str='',status:str='',offset:int=Query(0,ge=0),limit:int=Query(25,ge=1,le=100),user=Depends(verify_credentials),store=Depends(get_store)):
+    return audit_records(store,source,q,status,offset,limit)
+
+
+@app.get('/api/audit/records/{job_id}')
+def source_record(job_id:str,offset:int=Query(0,ge=0),limit:int=Query(10,ge=1,le=50),user=Depends(verify_credentials),store=Depends(get_store)):
+    result=inspect_record(store,job_id,offset,limit)
+    if result is None:raise HTTPException(404,'No retained source record was found for this job.')
+    return result
 
 
 @app.get('/api/jobs/batch')
