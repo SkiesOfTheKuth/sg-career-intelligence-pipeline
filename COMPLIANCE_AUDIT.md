@@ -1,138 +1,79 @@
-# Execution-brief compliance audit — 23 October 2026
+# Independent compliance audit — 23 October 2026
 
-Current release: **2.2.1**, application commit **`3b8664de31376ef9c35ecd6412107697a8b9d5b0`**, Render deployment **`dep-dbdaiq0u01pc73cfuvi0`**, live at **2026-10-23 00:26:45 UTC**. Workspace: https://sg-career-intelligence.onrender.com.
+Canonical specification: [EXECUTION_BRIEF.md](EXECUTION_BRIEF.md). Implementation **2.2.2**, revision **ef71193d68456ea4437da4433685cbf46a81a617**. Existing workspace: https://sg-career-intelligence.onrender.com. This audit supersedes prior completion claims. Deployment verification is P/B below; all application mutations used isolated storage.
 
-This is the requirement-to-evidence record for all twelve sections of [the canonical execution brief](EXECUTION_BRIEF.md). It supersedes this file's earlier pending audit. Results below distinguish fixture tests, real-data isolated mutations, deployed reads and actual upstream responses. [The acceptance report](ACCEPTANCE_REPORT.md) gives the delivery narrative; [DECISIONS.md](DECISIONS.md) specifies the surfaces/components/transitions and alternatives.
+## Evidence register
 
-## Evidence key and scope
+Private artifacts are excluded from Git. Paths are relative to this repository. Each test supplies its stimulus/assertions; JSON reports distinguish actual outcomes from intended behavior. The baseline was clean commit `09ce6cbc`, with deployed `3b8664d`. Current implementation is the revision above. Official FastAPI lifespan, Python 3.12 SQLite backup, MDN storage events, Playwright contexts, Render disks/deploys, XML and Python parsing references were inspected before changes. No repository AGENTS.md exists; `C:/Users/Study/AGENTS.md` and user-supplied global instructions apply.
 
-Paths below are local private artifacts excluded from Git unless they are repository source/tests/docs. These identifiers make each requirement's proof explicit without repeating large reports.
-
-| Key | Evidence and exercised environment |
+| Key | Current evidence and scope |
 | --- | --- |
-| R | `output/goal-20261022/final-regression.log`: 154 explicit tests passed in 26.796s on the implementation deployed as `4ae01fc`. Final commit changes only the source-link CSS selector and its target test; all 11 accessibility tests passed after that refinement. `test_storage`, `test_audit_qa`, `test_evidence`, `test_sync`, `test_source_audit`, `test_source_preservation`, `test_fit_v2`, `test_workspace_v2`, `test_browser_workspace`, `test_offline_safety`, `test_accessibility` supply executable stimuli/assertions. JavaScript syntax and whitespace checks passed. |
-| J | `output/playwright/compliance-20261023/journey/journey-report.json`: real retained role SG-OPP-2507, isolated `http://127.0.0.1:8769`, two authenticated contexts; prepare/edit → explicit Applied → competing edit/conflict resolution → Closed/draft → import resolution/history → exactly one selected exported record. All steps passed, zero page errors. External listing requests were intercepted; no employer submission or production application mutation. |
-| P | `output/goal-20261022/production-final-compliance.json`: deployed 2.2.1 authenticated reads, unauthorized 401s, safe same-origin invalid write validation 422, complete paginated search/export ID-order comparisons (Thai/freshness 274; Marketing/Full-time/disclosed minimum S$3,000/salary 220; Freelance/title 25), source state and database preservation. No application was created. These checks preceded the final CSS-only correction; API/JS are unchanged. |
-| F | `output/goal-20261022/final-release-verification.json`, `deployment-final.json`, `final-touch-release.json`: final commit is live, served CSS matches it; healthy 2.2.1/scheduler alive, database integrity ok and preserved table data, same persisted schedule. Both live source website and endpoint links measure 44px; no page errors. |
-| B | `output/goal-20261022/browser-final-production.json`: deployed reads at 390×844, 768×1000, 1440×1000; no horizontal overflow, keyboard detail return passed; source inspector/Applications empty passed, zero page errors/5xx. First phone result y=415.9; source search y=473.5. |
-| Z | `output/playwright/compliance-20261023/native-zoom.json`: native Chromium Appearance zoomLevel=2 in temporary profile, window 1440×1000; viewport 713×453, DPR 1.5→3, document width 705. Find/Sources/Applications fit; detail Escape/return focus passed. This is native zoom, not a resized-viewport substitute. |
-| A | `output/goal-20261022/a11y-final.json`, `manual-contrast-motion.json`: axe 4.11 zero violations on Find/filters/desktop+phone detail/desktop+phone Sources/inspector/Applications. Overlap/decorative-arrow incompletes inspected separately: body/notes 16.186:1, secondary 6.421:1, control boundary 3.758:1, focus 5.169:1, decorative arrows 4.309:1; reduced-motion transition 0s. `touch-targets.json` records the reproduced endpoint target defect before its final correction in F. Combined with R/B/Z/F and inspected screenshots; not WCAG certification or screen-reader/participant research. |
-| S | `output/goal-20261022/scoring-final-review.json`, `fit_review_corpus.json`, `fit_review_real_sources.json`, `test_fit_v2.py`: original two-page CV inspected; SHA256 `c4cf734637cfe8a06a214544c500c63aa61ea5d9dc93fb25391a394e86eea14f`; all supported clauses in nine real retained listings and targeted synthetic duties reviewed. |
-| M | `migration/20261023-compliance/rehearsal.json`: consistent production backup → two migration startups → restore, integrity/content/digest/idempotence all pass. 4,406 jobs, 4,518 evidence versions, six collection runs, zero applications/imports; original fields/payloads equal. F additionally proves preservation after final deployment. |
-| H | `output/goal-20261022/restart-performance-final.json`: hard termination/restart of isolated server preserves complete application JSON, including drafts/snapshot/history. Local warm HTTP search 25=3.094s/options 1.235s/Sources 1.984s/audit 20=2.281s on 4,402 retained jobs. P records separate live timings, including filtered export 5.797–7.391s and backup 17.782s; measurements are not latency guarantees. |
+| R | `output/independent-20261023/final-regression.log`: **170 explicit tests pass, 28.525s**, current final implementation. All three JS syntax checks and git diff whitespace check pass. Tests use isolated SQLite/memory and mocked collection; imports inspected. Test names and assertions are the executable requirement stimuli. |
+| E | `output/independent-20261023/editor/audit.json`, `final-review-contradictory-import-ack.json`: failing-before/fixed editor cases, actual SQLite concurrent import rebase, validated acknowledgement, current 33-browser-test suite. Includes immutable recovery, independent tabs, immediate close, in-flight edits, clean/dirty refresh, 401/timeout/offline/storage failure and stale search cases. |
+| J | `output/playwright/independent-20261023/journey-final/journey-report.json`: real retained SG-OPP-2507 on isolated `127.0.0.1:8771`, two authenticated contexts, complete prepare/edit/apply/follow-up/conflict/close/import-history/one-selected-export journey, zero page errors. External listing navigation intercepted; no employer contact. |
+| H | `output/independent-20261023/restart-performance.json`: hard kill/restart preserves entire application JSON, including drafts/history/snapshot. 4,406-job isolated dataset; search 25 2.094s, options .703s, Sources .984s, audit20 .954s. Environment-specific observations, not latency guarantees. |
+| S | `output/independent-20261023/evidence/scoring-review.json`, `review.md`, fixed JSON corpora and `test_fit_v2.py`: 17 real retained corpus records; original two-page CV SHA256 `c4cf734637cfe8a06a214544c500c63aa61ea5d9dc93fb25391a394e86eea14f`; exact retained payload matching, supported claims, top recommendations, clause quotes, generated drafts and meaningful rankings. Reviewer supplement `final-review-fixes.json`. No live vacancy claim from retained text. |
+| X | `output/independent-20261023/persistence/report.json`, `safe-test-review.json`: isolated API/storage/source/export review, failing-before XLSX character regression and lossless reconstruction. CSV/database unchanged; selected XLSX remains one main record. |
+| M | `migration/20261023-independent/predeploy-rehearsal.json`: fresh production SQLite snapshot, initialize twice, restore; **every table value, schema and sequence equal**, integrity ok. 4,406 jobs, 4,538 evidence rows, seven sync histories, zero applications/imports. Independent earlier rehearsal `persistence-rehearsal.json` corroborates. No schema migration required. |
+| A | `output/independent-20261023/a11y-final.json`: axe 4.11 zero violations across eight Find/filter/detail/Sources/inspector/Applications states. `manual-accessibility.json` resolves incomplete contrast checks: body/notes 16.186:1, secondary 6.421:1, decorative arrows 4.309:1; reduced motion 0s, source links 44px, 200% root-text resize at all three widths. R measures focus/control boundaries and keyboard states. |
+| Z | `output/playwright/independent-20261023/native-zoom.json`: native Chromium 145 Appearance `zoomLevel=2` in disposable profile, window 1440×1000, viewport 713×453, DPR 1.5→3, document 705px; Find/Sources/Applications no horizontal overflow, detail Escape/return focus passes. Native surface screenshots inspected, distinct from resized viewport tests. |
+| P | `output/independent-20261023/final-live.json`, `deployment.json`, `postdeploy-preservation.json`: final deployed reads, auth, five assessment/draft comparisons (`live-assessment-parity.json`), exact filtered search/export IDs/order, source status/schedule, served-asset equality and fresh full-data postdeploy comparison. No application write or manual collection trigger. |
+| B | `output/independent-20261023/browser-production.json`: final deployed read-only Chromium at 390×844, 768×1000, 1440×1000; discovery/details/Sources/inspector/empty Applications, keyboard return, no overflow/page errors/5xx after readiness. Screenshots in `output/playwright/independent-20261023/`. |
+| I | `output/independent-20261023/independent-final-review.json`, `independent-review-focused.log`, `final-review-fixes.json`: separate reviewer read original brief/CV, scanned supported scopes and invalid saves, reproduced four additional findings, then independently verified fixes. Root also reviewed export diff/reconstruction tests. |
 
-## 1. Mission and working context
+## Requirement matrix
 
-| Requirement | Verified proof / qualification |
+All rows below were evaluated against current files/runtime. PASS means the stated exercised outcome, not universal guarantees for future input. Source outages and participant research are explicitly qualified.
+
+| Brief requirement | Expected / actual current evidence |
 | --- | --- |
-| Whole discovery→assessment→sources→preparation→tracking for one private candidate | J exercises the complete application workflow; B/P/F verify deployed discovery/source/app surfaces. No separate application layer was introduced. |
-| Current repository/service/auth/stack/worker/persistent disk; preserve existing work | Current README/render.yaml/source and native Render configuration review; M/F prove retained production data across rollout. Historical baseline 601ff7d was not checked out or treated as defect proof. |
-| Candidate facts from actual CV; unknown facts remain unknown | S and inspected preparation pairs/checklists; no invented qualifications/contact/availability/achievements. Source/candidate/derived/user facts remain distinct. |
-| Verify current facts rather than inherit historical acceptance | Fresh backup M, current tests R, deployed P/B/F and final CSS hash. Older 2.2.0 report is explicitly historical. |
+| §1 Whole private journey; one candidate; inspect current repo/deployment/CV | PASS R/J/S/P/B. Original baseline not checked out; supplied CV verified, no candidate facts invented. |
+| §1–2 FastAPI/plain JS/SQLite/auth, IDs/URLs/payloads/snapshots/notes/drafts/history, native worker/disk | PASS M/P compare complete persisted data. Render API confirms existing Singapore service, one worker/instance, `/var/data`; live runtime plan `1c-2g`, Starter build plan preserved. Older README plan shorthand corrected. |
+| §2 Revision-checked PUT/409; distinction between facts/derived/user decisions; no assumed salary/probability | PASS R/E/J/S. Server concurrency unchanged; caps/unknowns and separate evidence visible. |
+| §2 No paid/new integrations/keys/wrappers/employer messages; isolated application mutations | PASS inspected explicit modules, X/J/P. No collector triggered, no lifecycle action, no production application created. Historical paid-probe incident remains disclosed in acceptance history. |
+| §2/4/6 Bounded MCF four named searches × 10 every 12h; retained imports; absence not closure | PASS R/P. Latest actual run is **degraded**, two successes/two timeouts; previous successes and failures preserved. Scope/schedule unchanged. |
+| §3 Find search→count/order/export→compact facts/fit/reason; missing pay/type; useful loading/empty/retry | PASS R/B; long evidence in detail, filters disclosed, first phone result visible. |
+| §3 Detail facts/listing first, requirements/fit/notes/prep reachable, pane/mobile modal, unavailable snapshot | PASS J/B/R/Z; role/direct/app/source entry, Escape/focus/context and retained closed snapshot. |
+| §3 Preparation supported pairs→editable draft→separate unresolved checks | PASS S/J/R; clipboard rejection selects text; no regeneration over intentional empty/edited draft. |
+| §3 Applications stage/action/date/notes/history/selection; Closed remains reviewable | PASS J/H/R/E. Same editor ownership/retry/recovery from all entry points. |
+| §3 Sources desktop flow, phone health/source/search, disclosure, source scope/errors/fields/payload versions | PASS B/A/Z/R/P; DOM and keyboard order agree; escaped payload inspector, actual success/attempt dates. |
+| §3/7 Purpose/entry/exit/actions/data/states/responsive/keyboard component contracts | PASS current `DECISIONS.md` surface, state, component tables and independent corrections. No decorative mockup/new design layer. |
+| §4 Discover stale response suppression, search/filter/selection/scroll/focus, empty/error retry | PASS R/J/B; reversed responses, pagination retry, keyboard return, no reset of failed export selection. |
+| §4 First note Saved; persist local patch before debounce; actual base; Saved only on acknowledgement | PASS R/E/J; invalid200 and contradictory import resolution acknowledgements rejected, recovery retained. |
+| §4 Clean refresh changes displayed/base/revision together; dirty preserves base; explicit comparison/rebase | PASS R/E/J. Major consumed-import-ID rebase fixed without weakening server; newer keystrokes survive late acknowledgement. |
+| §4 All role/browser recovery versions; own ack only; verify replacement before remove; legacy retained | PASS R/E; two tabs through other acknowledgement/reload, immediate close, corrupt/quota/denied/removal cases, explicit recovery review never auto-submits another editor. |
+| §4 Preparing/listing/explicit Applied, clipboard failure | PASS J/R. External listing navigation alone does not advance stage; explicit acknowledgement required. |
+| §4 Six stages, follow-up/outcome, corrections/history/snapshot, validation preserves text | PASS J/H/R. Import Closed selection now reveals Outcome, history immediately available and refreshed in place. |
+| §4 Import receipts idempotent, different versions retained, dated original/resolution snapshots/pagination/full exports | PASS J/E/R/X. Old missing historical resolution explicitly labelled. First resolution preserved after concurrent rebase. |
+| §4 Refresh single-flight/partial/failed/interrupted/last success/persisted schedule/restart | PASS R/P. Actual retained degraded run not relabelled success; isolated lifecycle/rollback/overdue/interruption coverage; deployed scheduler alive after native restart. |
+| §4 Exports normalized set/order, one selected app, all fields/history/snapshot, formula protection/failure selection | PASS P/J/R/X. XLSX long/invalid-XML text reconstructs exactly from labelled parts; CSV intact. |
+| §4 Explicit editor states and inFlight/pending ownership; usable retry/busy states | PASS DECISIONS/R/E/J. Dirty/saving/saved/error/conflict/recovery differentiated; no false persisted claim on storage failure. |
+| §5 documented-fit-v2 20/50/30, formula/caps/withholding/reasons/shared server presentation | PASS S/R/P. Same read-time assessment in search/detail/audit/export; no salary/prestige/geography/freshness credit. |
+| §5 Action/scope, compound literal clauses/full original quote, partial support, distinct groups | PASS S/R/I. Duplicate domain combinations corrected; comma leadership/research split; interviews/EDMs/website/design/tool/finance scope unproven. |
+| §5 Unicode/bullets/degrees/preferences/boilerplate/PropertyGuru | PASS S/R/I. Optional industry cannot waive required duration; degree+skill separated; alternate headings equivalent; geographic Thai inference prohibited. |
+| §5 Missing source/candidate/incompatibility distinct, mandatory cap/withhold, preferred separate | PASS S/R. Unsupported is not incapable; incomplete descriptions withhold; documented residency mismatch separate. |
+| §5 Fixed synthetic+real corpus/top/adjacent/language/finance/creative/degree/boilerplate/incomplete/rankings | PASS S/R/I. Exact retained quotations matched to source payloads and CV; representative aligned role outranks adjacent finance/event/mixed specialist roles for documented reasons. No desired distribution. |
+| §6 Raw source intact, explicit vs derived requirements/references, omission vs explicit empty/provenance | PASS R/M/P/X. Japanese requirement roundtrip/omission and employer facts/date restrictions retained; changed derived arrangements recomputed. |
+| §6 Listing success vs attempts/errors/source/content dates, safe URLs/redaction/escaped text | PASS R/S/B/P. Recent order uses successful checks, unverified last. Source evidence versions/payloads inspectable. |
+| §6 Normalized employment/mixed/missing/legacy query parameters | PASS R/P. Shared search/export including sort_by and old combined values. |
+| §6 Salary disclosure independent of threshold; SGD advertised minimum, annual conversion, hourly/daily/foreign/unknown | PASS R/P. No invented salary threshold or currency equivalence. |
+| §6 Authenticated history pagination and complete exports; additive/idempotent storage/backfills/restore | PASS R/J/M/P. Full content/schema/sequence comparisons, not just row counts; this patch changes no stored schema/source data. |
+| §7 Calm blue existing tokens/type/compact rows/facts hierarchy; states/labels/retry/no color-only meaning | PASS inspected B/J/Z/A and unchanged existing CSS. Stable labels, 44px controls, truthful save/recovery text. Reuse existing components. |
+| §8 Landmarks/labels/names/keyboard/focus/modal/announcements/contrast/touch/reduced motion | PASS R/A/J/B/Z. Axe incomplete nodes separately measured; actual native zoom and root text resize. No WCAG certification or screen-reader participant claim. |
+| §8 390/768/1440 and native 200%; initial phone result/search; no clipping | PASS B/Z/A. Phone result y=415.9, source search y=473.5; viewport heights and zoom method recorded. |
+| §9 Consequential alternatives/trade-offs, facts/assumptions, actual research only | PASS DECISIONS explains inline update vs rerender, command filtering vs server relaxation, literal scoring vs opaque matching, JSON encoding vs loss/rejection. Source/CV/walkthrough evidence used. |
+| §9 Participant protocol if unavailable | N/A actual participant study; explicitly **unperformed**. Concrete candidate tasks retained in DECISIONS. No invented interviews or metrics. |
+| §10 Protect→correct evidence→journey→audit→rehearse→deploy; inspect scripts/explicit modules | PASS E/S/J/R/M/P/I. Fail-before tests precede fixes. Native Git auto-deploy existing service only. Later docs use documented skip-render commit. |
+| §11 Failure/performance/acceptance command/environment/artifacts | PASS R/E/J/H/P/B; local versus live timing separated. Brief resize test race reproduced as asynchronous MatchMedia dispatch; assertion waits for resulting state rather than arbitrary first frame. No product change for test timing. |
+| §12 Brief/implementation/tests/decisions/corpora/screenshots/report/live URL/final independent review | PASS current files and evidence above, acceptance report links. Brief remains canonical unchanged. No remaining substantiated critical/major defect after I and final verification. |
 
-## 2. Scope, priorities and boundaries
+## Findings resolved and remaining limits
 
-| Requirement | Verified proof / qualification |
-| --- | --- |
-| Preserve IDs/original URLs/payloads/snapshots/notes/drafts/history and older queries | M/F compare original tables/fields/payloads; R covers MCF stable UUID/original URL, snapshots, drafts, stage history and legacy query memberships; J/H prove retained application work. |
-| Revision-checked PUT and409 unchanged; no silent overwrite | R browser/storage/API regressions and J real competing contexts/resolution. Client base/revision ownership corrected; server checks remain. |
-| Distinct facts/uncertainty, no assumed salary or invented candidate facts, no score distribution target | S/R; visible score method/caps and separate source/requirement/checklist presentation in J/B. |
-| No paid collectors/new integrations/key lifecycle/wrappers/unrelated scope | This pass used explicit safe modules and offline-safety guards, existing platform/source/native entry points. No paid call or credential lifecycle change in this pass. Historical US$0.0191 incident remains disclosed in the acceptance report. |
-| MCF 12h/four named queries/max 10, retained imports labelled, bounded absence not closure | P/F preserve interval 12h/Thai/Marketing Executive/Social Media Executive/Public Relations/max 10; source scopes/labels and R absent-result tests. |
-| No employer message/submission; only explicit action Applied | J intercepted external listing navigation, verified no stage change on opening and Applied only after explicit action. R verifies failed Applied never announces success. |
-| Isolated mutation tests, production backup/rehearsal before rollout | J/H mutation environments isolated; M precedes rollout; P/F production applications/imports remain zero. |
+Reproduced before fixes: consumed import commands blocked explicit conflict recovery; contradictory acknowledgements falsely confirmed review; first-save/open history and import outcome feedback stayed stale; valid copied controls broke XLSX; optional industry waived years; compound/gerund/channel/degree scopes and duplicate task groups distorted evidence. Independent review added matching heading boundaries, comma-separated leadership/research, interview method, and contradictory acknowledgement checks. All pass after fixes. Minor history/outcome feedback issues are resolved, not hidden.
 
-## 3. Experience architecture and screen contracts
+Latest real MCF check (23 October 02:35–02:36 UTC) succeeded Thai and Public Relations (10 each), timed out Marketing Executive and Social Media Executive, updated 19 and added 0. Next persisted check is 23 October 14:36:33 UTC. This is partial live evidence. The prior four-query success remains historical; no extra collection was triggered to manufacture acceptance. Other sources remain retained imports. Missing candidate facts, incomplete sources, unusual future wording and participant/screen-reader research remain explicit limitations. Deterministic corpus coverage does not certify all semantics.
 
-| Required surface/outcome | Verified proof |
-| --- | --- |
-| Find search-first/optional filters, compact title/company/pay/type/check/score/reason, missing values, long quotes in detail | Current shared presentation/rows; R normalized filters/empty/retry/stale requests; B phone initial-result position and responsive images. |
-| Detail facts/listing first, direct requirements/score/notes/preparation; desktop pane/phone full-screen; return search/selection/scroll/focus and unavailable snapshot | J/B/Z/R, including keyboard entry/Escape/return and unavailable application snapshot regressions. |
-| Preparation supported pairs → editable drafts → separate unresolved checklist; preserve edits/copy fallback | S/J/R, including late suggestions versus user edits and clipboard rejection. |
-| Applications one list, stage/action/date/notes/history, same persistence/conflict/recovery, Closed remains reviewable | J/H/R; B verifies deployed empty state without production mutation. |
-| Sources desktop requested→processing→outputs; phone health→source→search/disclosures; inspect scope/errors/fields/payload versions | B/A/R and actual DOM reordering/focus regressions; P confirms source coverage/state. |
-| Per-surface purpose/entry/exit/order/actions/data/loading/empty/error/responsive/keyboard contracts | DECISIONS surface table, verified against current scripts and J/B/R. |
-
-## 4. Workflow and state contracts
-
-| Required behavior | Verified proof |
-| --- | --- |
-| Discover/inspect rejects obsolete results, preserves context; empty/reset/failure/retry | R reversed-response/append-retry tests; J/B detail keyboard return, B screenshots. |
-| First note saves, immediate recovery before debounce, actual base, Saved only on valid ack | R first-note/immediate-close/invalid200/storage tests; J/H complete persisted field equality. |
-| Clean vs dirty refresh, explicit conflict/rebase, in-flight/newer keystrokes/late acknowledgements | R refresh/base/dirty/inFlight/late-ack tests; J independent contexts and explicit resolution. |
-| Recovery all roles/versions/base/patch; ack only own saved version; legacy retained/verified; no auto-submit other tab | R two-tab failed drafts through save/reload, all-job menu, immutable ack ownership, legacy conversion, corrupt/quota/deletion failures. Recovery screenshot listed in§12. |
-| Prepare/copy/listing/explicit Apply; failures preserve work | J clipboard/navigation/explicit Applied and R failed-save/late-generation guards. |
-| Follow-up/close/correct decisions without erasing fields/history | J stage/action/date/outcome/Closed draft; H restart equality; R snapshots/history. |
-| Import idempotence, originals/resolution/date, paginated review and complete export; old absent snapshot explicit | J resolved import/history/export; R API/browser pagination/import/export/older-resolution limitation tests. |
-| Refresh success/error/partial/interrupted/single-flight/persisted schedule/restart recovery | R sync/lifespan/rollback/overdue/interrupted tests; P/F live persisted schedule after actual deploy restarts. Successful and failed upstream histories remain distinct. |
-| Export normalized filters/order/current selection; one selected record; formula protection; preserve failed selection | P complete ID-order parity, J one selected application+notes/draft/history, R CSV/XLSX injection/long-text continuation/failed export tests. |
-| Explicit editor states, inFlight/pending ownership, retries/busy semantics | DECISIONS state table and R named browser regressions; J conflict/failed clipboard; truthful quota/download screenshot. |
-
-## 5. Evidence and documented fit
-
-| Requirement | Verified proof / limitation |
-| --- | --- |
-| Version documented-fit-v2, 20/50/30, exact quote/CV support, distinct supported groups | S/R; shared server presentation inspected in P/J/source inspector. No salary/prestige/geography/freshness bonus. |
-| Action+scope, independently assessable clauses/partial credit; no topic-only graphics/animation/video/tools/finance | S/R targeted creative/specialist/negated/shared-action/tool/email/website/visual/concatenated prose tests. Original source_quote retained. Mixed inseparable noun scopes conservatively withheld. |
-| Unicode/bullets, genuine degree alternatives, no company history/recruiter/application instructions, PropertyGuru geography | S/R specific regressions. Marketing alternatives supported; unrelated exact degrees unproven. |
-| Missing source/candidate/incompatibility distinct, mandatory caps/withholding, preferred separate | S/R states/gates/components; J requirements/score evidence inspection. Unsupported evidence never claims incapability. |
-| Relevant responsibility–CV preparation pairs; unresolved requirements separate; existing draft authoritative | S/J/R, including intentionally empty and edited drafts/late suggestions. |
-| Fixed top/aligned/adjacent/language/finance/creative/degree/boilerplate/incomplete synthetic+real corpus; defensible ranking | Two fixed corpora and S/R. No arbitrary target percentage; corpus does not prove semantics for all future wording. |
-
-## 6. Sources, persistence and API compatibility
-
-| Requirement | Verified proof |
-| --- | --- |
-| Raw payloads intact; explicit vs derived requirements/evidence; omission vs explicit value/original provenance | R Japanese requirement SQLite roundtrip/omission/restriction, employer-field and original payload key tests; M/F full preservation. |
-| Successful listing/attempt/error/content dates distinct; actual verified order; redacted escaped versions/safe URLs | R provenance/freshness/redaction and safe renderer tests; J/B source inspector; P source history does not relabel failures. |
-| Derived arrangement reflects changed description but explicit/omitted arrangement preserved | R three provenance/recompute regressions; shared source-field implementation. |
-| Employment memberships/mixed/missing/legacy; concise summaries/clause evidence/field dates shared across outputs | R shared presentation and membership tests; P normalized complete export/search order parity; B rendered detail/inspector. |
-| salary_only independent of minimum; known SGD monthly minimum, annual conversion, daily/hourly/foreign/unknown units preserved; sort_by compatible | R salary/filter/export tests and P full paginated comparisons. No salary minimum default. |
-| PUT/409, authenticated history offset/limit, complete retained export history | R authenticated API/pagination/export tests and J resolved original+resolution export/history. P all protected paths return 401 unauthenticated. |
-| Additive/versioned/idempotent SQLite backfills; compare original content/restore not only counts | M twice-started migration and restoration/digests; F postdeploy table preservation. This patch needs no new schema. |
-| Native documented config/worker/disk, official docs before changes/no wrappers | Current README/render.yaml and actual Render/Uvicorn config review; P same-origin validation 422 proves HTTPS write passed origin guard without persisting a mutation. F native restart health/schedule. |
-
-## 7. Visual system, components and writing
-
-| Requirement | Verified proof |
-| --- | --- |
-| Calm blue identity, readable fixed type, compact rows, facts before advice, token consistency/wrapping | Current CSS/templates, DECISIONS component/appearance contracts and visually inspected B/J/Z screenshots. No new framework/design platform. |
-| Component purpose/anatomy/data/variants/states/events/name/keyboard/responsive contracts | DECISIONS inventory: nav/search/rows/detail/fields/status/conflict/recovery/evidence/history/inspector/export; matches current implementation. |
-| Hover/focus/active/selected/disabled/loading/error, stable labels, understandable disabled/retry, preserve data/selection | R failure/loading/selection/focus tests; A computed focus/contrast; J edits/conflict; source and native controls inspected at B/Z widths. |
-| Concrete truthful Saved/storage/conflict/empty/check/clipboard messages; diagnostics confined to inspection | R malformed ack/storage denial/401/timeout/failed Applied; J clipboard and conflict; quota recovery screenshot. |
-| Fixed readable scale, multilingual/long URLs wrapping, explicit status labels/reduced motion | B/Z overflow and action checks, A transition 0s/contrast, R long XLSX content preservation. No color-only meaning or essential animation dependency. |
-
-## 8. Accessibility and responsive behavior
-
-| Requirement | Verified proof / scope |
-| --- | --- |
-| Semantic landmarks/headings/labels/names/states, logical keyboard order, visible focus, meaningful announcements | A/R/B/J: valid region/dialog, heading, inert skip link, actual source DOM order, focus on selection/resize, modal entry/Tab/Escape/return; desktop nonmodal. |
-| Text 4.5:1/large 3:1, perceivable boundary/focus, no color-only status | A manual computed ratios resolve axe incomplete nodes; body 16.186, secondary 6.421, boundary 3.758, focus 5.169. Labels accompany colors. Not a WCAG certification. |
-| 44px targets including checkbox/disclosures, long/error content/text resizing, no invisible focus | R/A target/focus checks plus B/Z long responsive layouts; F final website and endpoint links 44px on live CSS. |
-| 390×844/768×1000/1440×1000, phone first result/source search initial viewport, no overflow/inaccessible action | B figures and current screenshots; source DOM/keyboard order agrees with display. |
-| Native 200% zoom with method/window/height/browser metrics, distinct from resized viewports | Z native Appearance setting in temporary Chromium profile, viewport 713×453/document705; screenshots and detail dismissal/return. |
-
-## 9. Alternatives, research and decision quality
-
-| Requirement | Verified proof / qualification |
-| --- | --- |
-| Diverge/evaluate/converge/validate real uncertainty; compare task/effort/evidence/recovery/access/compatibility/performance/maintenance | DECISIONS compares editor ownership/recovery granularity, provenance, clause scoring, contextual evidence, mobile order and long export strategies; alternatives tied to reproduced problems and R/J/B/A/M validation. Settled architecture not reopened. |
-| Source inspection/walkthrough/heuristics, facts vs assumptions, no invented participant findings | S original CV/source review, current tests/screenshots/journeys and explicit limitations. |
-| Candidate task protocol when participation unavailable | DECISIONS protocol covers find/explain evidence/check requirement/edit-recover/follow up. Participant validation **unperformed**, not required to fabricate completion. No interviews/times/satisfaction/conversion claims. |
-
-## 10. Dependency-aware execution
-
-| Ordered phase / constraint | Verified proof |
-| --- | --- |
-| Baseline/docs/runtime/CV before reliance | Initial production backup/current worktree and official-document review; S; historical baseline separated from current release. |
-| Protect data with failing regression then fix, correct evidence, complete experience | R reproduced acknowledgement/storage/presence/transaction/scoring/accessibility failures before fixes; S semantic review; J/B current complete journeys. |
-| Audit→fix→focused checks→final regression, not mockup/test-only acceptance | R 154 + final target regression 11; J/B/Z/A real browser and P/F deployed/data checks. Final CSS-only diff inspected so valid prior API/JS proofs are reused proportionally. |
-| Consistent backup/migrate/restore before native deploy, inspect content, verify auth/records/parity/source/scheduler/restart | M before deployment; P/F after; native Git auto-deploy existing service/disk, same persisted schedule/alive scheduler. |
-| Explicit inspected safe modules; isolated mutations; no blindly run probes/paid calls | R offline-safety guards and explicit command below; J/H isolated; production application count 0. Historical incident remains disclosed. |
-
-## 11. Acceptance evidence and commands
-
-All nine acceptance groups have direct evidence: concurrent editing/recovery R/J; durable work J/H; source preservation R/M/F; assessment S/R; search/export R/J/P; complete journey J/B/Z; responsive accessibility A/B/Z/F; failures/performance R/J/H/P; migration/rollout M/P/F. Tests cover their explicit fixtures; browser and live checks cover the actual exercised dataset/flows, not all possible future source wording or availability.
+## Repeatable commands and artifacts
 
 ```powershell
 python -m unittest test_storage test_audit_qa test_evidence test_sync test_source_audit test_source_preservation test_fit_v2 test_workspace_v2 test_browser_workspace test_offline_safety test_accessibility -q
@@ -142,20 +83,4 @@ node --check static/fit-score.js
 git diff --check
 ```
 
-Never use broad discovery: historical credential-bearing probe scripts are ignored and import-guarded. The journey runner is `test_workspace_journey.py`; read it before running and require isolated storage plus `CAREER_QA_ISOLATED=1`, `CAREER_QA_URL`, `CAREER_QA_PASSWORD`, optional username. No credentials in reports. Screenshots live under ignored `output/playwright/`; backups under `migration/`. No tool-absence substitute was counted as runtime success.
-
-Live MCF evidence in P: scheduled 22 October 14:35 UTC run succeeded four×10, added 4/updated 35. Preceding 02:34 UTC four timeouts remain failed; old interrupted runs remain interrupted. F preserves next run 23 October 02:35 UTC, 12h/four-query/max 10 scope. No extra collection was triggered for acceptance. Other sources remain retained imports; none of these results verifies every stored vacancy or future source availability. Live reads were measured separately from local H; deployment restart 502 probes are failures, not successful source checks.
-
-## 12. Required deliverables and completion review
-
-| Required output | Current authoritative evidence |
-| --- | --- |
-| One reusable canonical brief/master prompt | `EXECUTION_BRIEF.md`. |
-| Implemented workspace preserving architecture/data and focused regressions | Deployed commit 3b8664d plus R/J/M/P/F; native stack/auth/disk retained. |
-| Concise decisions/alternatives/compatibility/date/screen/component/transition contracts | `DECISIONS.md`. |
-| Fixed corpora/exact commands/safe isolated runner | Both fit JSON corpora, `test_fit_v2.py`, command block and `test_workspace_journey.py`. |
-| Representative discovery/details/Sources/recovery-conflict/history responsive and zoom images | `output/playwright/compliance-20261023/production-find-390.png`, `production-sources-390.png`, `production-detail-1440.png`, `production-source-inspector.png`; explicit fixture `conflict-fixture-1440.png` and isolated J `application-history-1440.png`; `native-200-find.png`, `native-200-sources.png`, `native-200-applications.png`. Quota recovery: `output/playwright/compliance-20261022/storage-quota-recovery-fixture-1280.png`. B/J/Z/A/F label environments/dimensions/interaction checks. |
-| Acceptance report with actual tests/browser/rollout/source/data/performance/side effects and external limits | `ACCEPTANCE_REPORT.md` current 23 October section, supported by R/J/P/F/B/Z/A/S/M/H; 21 October section explicitly historical. Historical US$0.0191 incident retained. |
-| Verified existing deployed workspace and concise delivery links | F deployment/health/data/CSS, P auth/parity/sources, B read-only browser. URL above; root's user-facing delivery links the brief/decisions/report. |
-
-The inspected current evidence identifies **no remaining critical or major defect or unverified mandatory technical gate in scope**. Participant/screen-reader research was not performed and is not claimed; source outages/incomplete retained descriptions and unproven candidate requirements remain explicit product uncertainties. Final acceptance/report consistency and user-facing delivery are root-owned documentation/communication steps. Nothing here changes the original scope or relabels failed collection as success.
+Use the inspected `test_workspace_journey.py` only with explicit isolated localhost storage and its required CAREER_QA settings. Never use broad unittest discovery. Representative screenshots: `production-find-390.png`, `production-detail-1440.png`, `production-sources-390.png`, `production-source-inspector.png`, `native-200-find.png`, `native-200-sources.png`, `native-200-applications.png`, `journey-final/conflict-1440.png`, `journey-final/application-history-1440.png`, and `editor/import-resolution-outcome-1440.png` beneath `output/playwright/independent-20261023/`.

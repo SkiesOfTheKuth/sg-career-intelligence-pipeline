@@ -1,4 +1,73 @@
-# Workspace compliance — 23 October 2026
+# Independent workspace acceptance — 23 October 2026
+
+Verified workspace: **https://sg-career-intelligence.onrender.com**. Release **2.2.2**, deployed revision **`ef71193d68456ea4437da4433685cbf46a81a617`**, Render deployment **`dep-dbdirnp5efls73atcgh0`**, live **09:51:47 UTC / 17:51:47 SGT**. This independent audit supersedes the reports below. No substantiated critical or major defect remains after fixes, a separate reviewer, and deployed verification.
+
+[Canonical brief](EXECUTION_BRIEF.md) · [Requirement matrix](COMPLIANCE_AUDIT.md) · [Decisions/contracts](DECISIONS.md). The original brief remains unchanged. The checkout started clean at `09ce6cbc`; existing deployed behavior and production data were independently read rather than inferred from old reports.
+
+## What changed
+
+- **Concurrent import recovery:** an explicit rebase no longer resubmits an import-resolution command another editor already completed. Chosen notes/stage remain, server revision checks stay strict, and the first historical resolution remains intact. Contradictory or malformed resolution acknowledgements cannot clear recovery or claim Saved.
+- **History and feedback:** first save immediately exposes history; an open history refreshes on revision changes and ignores stale responses. Accepted import review reports saved and reveals Closed outcome without replacing active input/caret.
+- **Evidence and ranking:** required years remain mandatory when only industry is preferred. Equivalent headings no longer enter duty totals; gerund duties remain counted; overlapping supported domains count once. Compound degree/design, leadership/research, plural EDM/channel, interview and spending scopes cannot inherit unsupported CV credit. Exact original quotes, source payloads, 20/50/30 rubric, caps and withholding remain.
+- **Exports:** accepted pasted control characters no longer crash XLSX. The existing full-text sheet retains affected values as labelled, ordered JSON-string parts with reconstruction instructions and formula protection. CSV and persisted text remain unchanged; one selected application remains one main record.
+
+Minor first-save/history/import-feedback defects are resolved. No visual redesign, new integration, schema change, credential lifecycle action, source-schedule change or production application mutation was introduced.
+
+## Current verification
+
+| Environment | Result and evidence |
+| --- | --- |
+| Explicit local suite | **170 tests passed in 28.525s**, including 33 browser regressions. `output/independent-20261023/final-regression.log`. JS syntax and git whitespace checks pass. New defect cases failed before fixes; imports were inspected and broad discovery was never run. |
+| Isolated real-data browser journey | Two authenticated contexts completed discovery/evidence → prepare/edit → clipboard rejection/manual copy → original listing navigation without stage change → explicit Applied → follow-up → conflict/explicit resolution → Closed → import resolution/history → exactly one selected export with notes/draft/history. Zero page errors. `output/playwright/independent-20261023/journey-final/journey-report.json`. Listing requests were intercepted; no employer contact. |
+| Recovery/failure regressions | Independent tabs, immediate close, in-flight newer keystrokes, clean/dirty refresh, timeout/401/offline, malformed acknowledgements, corruption/quota/removal errors, stale searches and export failures preserve work/selection. `editor/audit.json`, `final-review-contradictory-import-ack.json` beneath `output/independent-20261023/`. Concurrent-import regression additionally uses actual temporary SQLite. |
+| Restart persistence | Hard kill/restart retained complete application JSON including notes, drafts, snapshot and history. `output/independent-20261023/restart-performance.json`. Application mutations stayed isolated. |
+| CV and retained quotations | Original two-page CV hash `c4cf734637cfe8a06a214544c500c63aa61ea5d9dc93fb25391a394e86eea14f` verified. All 17 real-corpus descriptions match exact retained payloads; supported clauses/top recommendations and defensible pairwise rankings reviewed. `evidence/scoring-review.json` and `evidence/review.md`. No target score distribution or invented candidate facts. |
+| Deployed evidence parity | Five targeted live assessments and generated drafts exactly match corrected local calculation, including SG-OPP-0111 (required experience), 2507 (aligned), 2839 (leadership), 2707 (interviews), 2610 (spend). `output/independent-20261023/live-assessment-parity.json`. |
+| Responsive deployed browser | 390×844, 768×1000, 1440×1000: Find/details/Sources/inspector/empty Applications, no horizontal overflow, keyboard Escape and return focus pass, zero page errors/HTTP 5xx after readiness. Phone result y=415.9 / source search y=473.5. `browser-production.json`. |
+| Accessibility and zoom | Axe 4.11 zero violations across 8 exercised states. Incomplete contrast checks separately measured: body/notes 16.186:1, secondary 6.421:1, decorative arrows 4.309:1. Source links 44px, reduced motion 0s; root-text 200% at all widths. Native Chromium Appearance 200% also verified: 1440×1000 window, 713×453 viewport, DPR 1.5→3, document 705px. `a11y-final.json`, `manual-accessibility.json`, `output/playwright/independent-20261023/native-zoom.json`. This is exercised coverage, not WCAG certification or participant research. |
+| Separate final review | Reviewer read original brief/CV and independently reproduced heading, compound leadership, interviewing and contradictory acknowledgement defects; all fixed/reverified. `independent-final-review.json`, `final-review-fixes.json`, `independent-review-focused.log`. Root reviewed lossless export implementation/tests and final deployed screenshots. |
+
+A resize regression initially inspected the first frame before asynchronous MatchMedia change dispatch and failed intermittently. It now waits for the observable modal/inert state; runtime behavior passed. A few local inspection scripts initially used hidden/mismatched selectors and were corrected; these failed probes were not counted as product acceptance. No paid source call or other unintended external mutation occurred in this pass. The historical paid-probe incident remains below.
+
+## Data protection and deployed result
+
+Fresh production capture immediately before rollout: `migration/20261023-independent/production-predeploy.sqlite3`. Native SQLite backup/restore plus two initialization passes compared **all table values, schema, user_version and sqlite_sequence**, not only counts. Rehearsal passed: `predeploy-rehearsal.json`; independent corroboration: `persistence-rehearsal.json`. No schema change was necessary.
+
+Final snapshot `migration/20261023-independent/production-final.sqlite3` is intact: **4,406 jobs, 4,538 source-evidence versions, 7 collection histories, 0 applications/imports**. Every business row/field/payload, schema and sequence equals predeploy. Only operational `last_backup` metadata advanced; persisted next-sync time is unchanged. `output/independent-20261023/postdeploy-preservation.json`.
+
+Existing Render service/native Git auto-deploy, one Uvicorn worker/instance and `/var/data` disk are preserved. The live runtime plan is `1c-2g` and build plan Starter; the prior README's plan shorthand was corrected without changing the service. Health is 2.2.2, scheduler alive, all served JS/CSS match the local release. Protected pages, jobs, applications/history, audit, exports and backup reject unauthenticated reads. No production PUT/POST or manual collector trigger was used in this pass.
+
+Complete paginated search and filtered export IDs/order match for Thai/freshness (**274**), Marketing/Full-time/disclosed monthly minimum S$3,000/salary (**220**), and Freelance/title (**25**). `final-live.json`, `deployment.json`, `postdeploy-preservation.json` under `output/independent-20261023/`.
+
+Local warm API measurements on 4,406 retained jobs: search 25 **2.094s**, options **.703s**, Sources **.984s**, audit 20 **.954s**. Final live search pages **2.843–8.688s**, exports **3.328–7.375s**, source overview **1.640s**, consistent backup **21.875s**, during simultaneous browser verification. Interactive requests completed within the 20s UI deadline. These are service/load observations, not guarantees; the backup download is separate from interactive search.
+
+## Real source results and limitations
+
+The most recent scheduled MCF run, **23 October 02:35–02:36 UTC**, is **degraded**: Thai and Public Relations returned 10 each; Marketing Executive and Social Media Executive timed out. It updated 19 records, added 0. Next persisted run: **23 October 14:36:33 UTC / 22:36:33 SGT**. The bounded 12-hour/four-query/ten-result schedule is unchanged. Earlier complete/failed/interrupted histories remain distinct; no additional query was triggered to manufacture success.
+
+This demonstrates actual partial upstream operation and truthful failure handling, not successful rechecking of every vacancy. Other sources remain retained imports. Unknown candidate/source facts remain unknown; deterministic parsing can miss future unusual wording. Participant and screen-reader research are **unperformed**, with the concrete protocol in DECISIONS. XML-invalid text requires reversible JSON representation in XLSX. These external/format/coverage limits are explicit; no unresolved minor product defect was identified in the final reviewed scope.
+
+## Representative current screenshots
+
+All are local private artifacts under `output/playwright/independent-20261023/`:
+
+- [Deployed phone discovery](output/playwright/independent-20261023/production-find-390.png), [phone Sources](output/playwright/independent-20261023/production-sources-390.png), [desktop detail](output/playwright/independent-20261023/production-detail-1440.png), [source inspector](output/playwright/independent-20261023/production-source-inspector.png).
+- [Isolated conflict comparison](output/playwright/independent-20261023/journey-final/conflict-1440.png), [retained import history](output/playwright/independent-20261023/journey-final/application-history-1440.png), [saved import/Closed outcome](output/playwright/independent-20261023/editor/import-resolution-outcome-1440.png).
+- [Native 200% Find](output/playwright/independent-20261023/native-200-find.png), [Sources](output/playwright/independent-20261023/native-200-sources.png), [Applications](output/playwright/independent-20261023/native-200-applications.png).
+
+```powershell
+python -m unittest test_storage test_audit_qa test_evidence test_sync test_source_audit test_source_preservation test_fit_v2 test_workspace_v2 test_browser_workspace test_offline_safety test_accessibility -q
+node --check static/workspace.js
+node --check static/sources.js
+node --check static/fit-score.js
+git diff --check
+```
+
+Read `test_workspace_journey.py` before using its isolated localhost runner and required CAREER_QA settings. Later evidence/documentation-only commits use `[skip render]`; the deployed implementation revision above remains authoritative.
+
+---
+
+# Historical early-23-October acceptance (superseded)
 
 Verified deployed implementation: **2.2.1**, revision **`3b8664de31376ef9c35ecd6412107697a8b9d5b0`**, Render deployment **`dep-dbdaiq0u01pc73cfuvi0`**, live at **23 October 2026 00:26:45 UTC (08:26 SGT)**. This section supersedes the historical report below. The new audit found and fixed defects that the earlier acceptance missed; passing historical tests was not treated as completion.
 
