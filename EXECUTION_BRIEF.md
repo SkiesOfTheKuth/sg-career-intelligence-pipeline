@@ -167,7 +167,7 @@ Maintain requirement-to-evidence traceability. For every check record the enviro
 Current repository verification entry points, to verify against the current checkout before execution:
 
 ```powershell
-python -m unittest test_storage test_audit_qa test_evidence test_sync test_source_audit test_source_preservation test_fit_v2 test_workspace_v2 test_browser_workspace test_offline_safety -q
+python -m unittest test_storage test_audit_qa test_evidence test_sync test_source_audit test_source_preservation test_fit_v2 test_workspace_v2 test_browser_workspace test_offline_safety test_accessibility -q
 node --check static/workspace.js
 node --check static/sources.js
 node --check static/fit-score.js

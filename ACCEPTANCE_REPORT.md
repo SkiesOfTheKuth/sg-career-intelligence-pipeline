@@ -1,4 +1,54 @@
-# Workspace v2 acceptance and rollout
+# Workspace compliance — 23 October 2026
+
+Verified deployed implementation: **2.2.1**, revision **`3b8664de31376ef9c35ecd6412107697a8b9d5b0`**, Render deployment **`dep-dbdaiq0u01pc73cfuvi0`**, live at **23 October 2026 00:26:45 UTC (08:26 SGT)**. This section supersedes the historical report below. The new audit found and fixed defects that the earlier acceptance missed; passing historical tests was not treated as completion.
+
+Specification and traceability: [execution brief](EXECUTION_BRIEF.md), [requirement audit](COMPLIANCE_AUDIT.md), [interaction contracts and decisions](DECISIONS.md). Live workspace: https://sg-career-intelligence.onrender.com.
+
+| Area | Current verified result |
+| --- | --- |
+| Edits/recovery | Validated acknowledgements preserve pending work on malformed HTTP 200 responses. Corrupt entries cannot hide valid versions; quota failures explicitly offer download/manual copying without claiming persistence. Late acknowledgements cannot regress a newer server copy. Applied success waits for acknowledgement. Closed drafts remain reviewable. |
+| Preparation/journey | Supported listing–CV pairs precede drafts; unresolved checks remain separate. Real isolated two-context journey passed discovery/evidence, preparation/edit, clipboard failure, listing navigation without stage change, explicit Applied, follow-up, conflict/resolution, Closed, resolved import history and exactly one selected exported application with notes/draft/history. |
+| Sources/persistence | Original key presence distinguishes omitted and explicit-empty values. Omitted facts retain provenance, changed descriptions replace derived arrangements, stable MCF UUID preserves ID/original URL, and evidence/jobs/history commit atomically. Japanese requirements and restrictions survive SQLite roundtrip/omission. |
+| Assessment | Actual CV and all supported clauses in nine retained listings reviewed. Mandatory/negated language, negated duties, shared actions, tool/finance/email/website/visual scope, alternative degrees and boilerplate regressions pass. The rubric remains documented-fit-v2 with 20/50/30 and existing limits/withholding. Mixed inseparable scopes remain conservatively unproven. |
+| Export | Full saved job snapshots now accompany applications. XLSX text above its 32,767-character limit is retained in labelled ordered parts on a separate sheet, preserving one main application record and formula protection. |
+| Accessibility | Valid detail dialog/region semantics, headings, inert background skip link, mobile Sources DOM/Tab order, focus across resizing/source selection, 44px website/endpoint targets and stronger input borders. Native controls, visible focus and reduced motion retained. |
+| Performance | Bounded Thai-classification cache keys include actual source/requirement values and are warmed before readiness. Changed evidence invalidates the key. Warm audit reads fell from about eight seconds to about two seconds locally. |
+
+The explicit suite passed **154 tests in 26.8 seconds**; the final endpoint-target refinement was reproduced as a failure, then all **11 accessibility tests** passed after correction. JavaScript syntax and whitespace checks passed. The current verification command includes `test_accessibility`; the historical command below records the prior pass. Evidence: `output/goal-20261022/final-regression.log`, `backend-review-tests.log`, `scoring-final-review.json`.
+
+The real-data isolated journey passed with zero page errors: `output/playwright/compliance-20261023/journey/journey-report.json`. Hard termination/restart preserved the entire application JSON, including drafts/snapshot/history: `output/goal-20261022/restart-performance-final.json`. All application mutations used isolated storage; external listing requests were blocked by the journey runner. Browser fixtures cover independent tabs, immediate close, in-flight edits, timeout/401, storage denial/corruption, recovery deletion, stale searches and failed-export selection.
+
+Current screenshots/interactions passed at **390×844, 768×1000 and 1440×1000** without horizontal page overflow. The phone's first result starts at y=415.9 and source search at y=473.5. Native Chromium Appearance zoom was set to **200%** in a temporary profile: window 1440×1000, viewport 713×453, DPR 1.5→3, document width 705. Find, Sources and Applications fit; detail Escape/return focus passed. See `output/playwright/compliance-20261023/native-zoom.json`.
+
+Axe 4.11 reported zero violations on Find, filters, desktop/phone detail, desktop/phone Sources, inspector and Applications. Incomplete overlap/decorative-arrow checks were inspected separately: body/notes contrast 16.186:1, secondary 6.421:1, input boundary 3.758:1, focus 5.169:1, decorative arrows 4.309:1; reduced-motion duration 0s. Evidence: `a11y-final.json`, `manual-contrast-motion.json` under `output/goal-20261022`. This is tested coverage, not WCAG certification or participant/screen-reader research.
+
+Representative current screenshots are under `output/playwright/compliance-20261023/`: [phone discovery](output/playwright/compliance-20261023/production-find-390.png), [phone Sources](output/playwright/compliance-20261023/production-sources-390.png), [desktop detail](output/playwright/compliance-20261023/production-detail-1440.png), [source inspector](output/playwright/compliance-20261023/production-source-inspector.png), [conflict comparison fixture](output/playwright/compliance-20261023/conflict-fixture-1440.png), [history](output/playwright/compliance-20261023/journey/application-history-1440.png), [native zoom](output/playwright/compliance-20261023/native-200-find.png). Quota/download proof is `output/playwright/compliance-20261022/storage-quota-recovery-fixture-1280.png`. Private artifacts remain excluded from Git.
+
+Local warm API timings after restart: 25 search results 3.094s, options 1.235s, Sources 1.984s, 20 audit records 2.281s against 4,402 retained jobs. These vary with local load; production measurements are separate.
+
+Fresh production backup and migration/restoration rehearsal passed: **4,406 jobs, 4,518 evidence versions, six collection-history entries, zero applications/imports**. Every original table row/field/payload and digest matched through two migration startups and restoration. This patch requires no schema change. Evidence: `migration/20261023-compliance/rehearsal.json`, with immutable predeploy/migrated/restored copies beside it.
+
+Release remains on the existing Render service, native Git auto-deploy, one Uvicorn worker and persistent disk. Official Render/Uvicorn docs and actual service config confirmed Python's native forwarded-IP handling supports HTTPS origin checks. The first patch deployment was `4ae01fc`; final CSS correction is `3b8664d`. Final live health, authentication and same-origin HTTPS validation passed. All original persisted job/application/import/evidence/history rows and payloads remain unchanged in `production-final.sqlite3`; only operational backup metadata advanced. The schedule is unchanged and the worker is alive. Restart 502 probes are not counted as successful checks.
+
+The retained scheduled MCF run on **22 October 14:35 UTC** succeeded on all four queries, ten results each, adding 4/updating 35. The preceding 02:34 UTC run timed out all four and remains failed. Next persisted run is **23 October 02:35 UTC**, same 12-hour/four-query/ten-result scope. No extra collector was triggered to improve this report. Other sources remain retained imports; bounded checks do not verify every vacancy. Participant validation is unperformed; `DECISIONS.md` supplies the protocol. No candidate facts were invented.
+
+Final live evidence: `output/goal-20261022/production-final-compliance.json`, `browser-final-production.json`, `final-release-verification.json`, `final-touch-release.json`, and `deployment-final.json`. Protected pages/jobs/applications/history/export/audit/backup rejected unauthenticated requests. An invalid revision returned 422 through HTTPS same-origin validation before any transaction; production applications remain zero. Complete paginated live search/export parity passed for Thai/freshness (274 records), Marketing/Full-time/disclosed monthly minimum S$3,000/salary order (220), and Freelance/title order (25). The final CSS equals the deployed stylesheet after newline normalization; both source links measure 44px in the deployed phone browser. The full live responsive walkthrough had zero page errors or HTTP 5xx responses after service readiness.
+
+Live API search pages took 2.8–8.8 seconds and exports 5.8–7.4 seconds while the simultaneous browser acceptance run was active; source overview took 6.39 seconds. Those requests completed within the interface timeout. This is a measured performance limit of the present service, not a guarantee of lower latency; the repeated parsing defect was removed and no unresolved timeout remained in the final pass.
+
+The final requirement review found no remaining critical or major defect in scope. Unknown employer/candidate information, external source availability, conservative semantic interpretation and unperformed participant research remain explicitly labelled limitations, not uncompleted implementation promises.
+
+```powershell
+python -m unittest test_storage test_audit_qa test_evidence test_sync test_source_audit test_source_preservation test_fit_v2 test_workspace_v2 test_browser_workspace test_offline_safety test_accessibility -q
+node --check static/workspace.js
+node --check static/sources.js
+node --check static/fit-score.js
+git diff --check
+```
+
+The historical US$0.0191 verification incident below remains disclosed. This pass used explicit safe modules and made no paid collector calls; no credentials were rotated/revoked/deleted.
+
+# Historical 21 October 2026 acceptance (superseded)
 
 Verified on 21 October 2026. The deployed workspace is **2.2.0**, application revision **`aff19ec90cf03002feb2774d30ecdbb7bc9c143e`**, at https://sg-career-intelligence.onrender.com. The final observed live Render deployment was `dep-dbccqerbc2fs73c1n3rg`, completed at 14:34 UTC. Documentation-only commits after this revision do not change the deployed application.
 
