@@ -277,9 +277,10 @@ def campaign_status(user=Depends(verify_credentials),store=Depends(get_store)):
 
 
 @app.post('/api/campaign/pause')
-def pause_campaign(user=Depends(verify_credentials),store=Depends(get_store)):
+async def pause_campaign(request:Request,user=Depends(verify_credentials),store=Depends(get_store)):
     try:
-        CampaignStore(store).state('paused','Paused from the authenticated workspace.')
+        await owned_operation(request.app.state.campaign_worker,
+            lambda:CampaignStore(store).state('paused','Paused from the authenticated workspace.'))
         return CampaignStore(store).status()
     except ValueError as exc:
         raise HTTPException(409,str(exc))
@@ -336,7 +337,7 @@ async def activate_campaign(payload:dict,request:Request,user=Depends(verify_cre
         current=journal.status()
         if store.get_meta('campaign_account_error') or current['observed_account_usage_usd'] < current['reported_run_charges_usd']:
             raise HTTPException(409,'Account usage has not reconciled the pilot charges.')
-        if current['observed_account_usage_usd'] > 3 or any(b['charge_units']>b['reserved_units'] for b in pilots):
+        if (current['mode']=='pilot' and current['observed_account_usage_usd'] > 3) or any(b['charge_units']>b['reserved_units'] for b in pilots):
             raise HTTPException(409,'Pilot cost exceeded its expected bound; investigation is required.')
         if not payload.get('pilot_verified') or not payload.get('evidence_reference'):
             raise HTTPException(422,'Provide the verified pilot evidence reference.')
