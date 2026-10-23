@@ -266,6 +266,19 @@ class CampaignWorker:
         for batch in self.journal.batches(ACTIVE):
             if batch['retry_at']<=now or expired:
                 self.poll(batch,now,expired=expired,paused=campaign['state'] in ('paused','stopped'))
+        # A deployment may introduce richer run evidence after an earlier pilot
+        # already completed. Recover its terminal metadata before retention ends.
+        for batch in self.journal.batches(('done','failed')):
+            if batch['run_id'] and not self.store.get_meta('campaign_remote_'+batch['id']):
+                account=next((a for a in self.journal.accounts() if a['account_id']==batch['account_id']),None)
+                if account:
+                    try:
+                        run=self.api.run(account['reference'],batch['run_id'])
+                        if run['status'] in TERMINAL:
+                            self.store.set_meta('campaign_remote_'+batch['id'],{k:run.get(k) for k in ('id','status','startedAt','finishedAt','usageTotalUsd','options')})
+                    except ApiError:
+                        pass  # The final report keeps this evidence unresolved.
+                break  # Bound recovery reads per tick.
         self.store.set_meta('campaign_disk',disk_capacity(self.store))
         if expired or campaign['state'] in ('paused','stopped','prepared'):
             if campaign['started_at'] and now-self.last_accounts>=120:

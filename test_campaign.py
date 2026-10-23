@@ -193,6 +193,14 @@ class CampaignTests(unittest.TestCase):
         self.assertEqual(self.j.batches()[0]['checkpoint'],1)
         self.assertEqual(self.api.launched,[])
 
+    def test_final_report_requires_remote_terminal_time_not_just_local_completion(self):
+        b=self.enqueue();self.reserve(b);self.j.update_batch(b['id'],state='done',run_id='run1',finished_at=self.now,charge_units=0)
+        self.api.remote.update(status='SUCCEEDED',finishedAt=iso(self.now+60),usageTotalUsd=0)
+        self.now+=7*DAY+1;self.worker.tick()
+        evidence=self.j.status()['shutdown_verification']
+        self.assertTrue(evidence['all_paid_runs_confirmed_stopped_by_deadline'])
+        self.assertEqual(evidence['remote_runs_with_evidence'],1)
+
     def test_low_disk_pauses_admissions_without_losing_work(self):
         self.enqueue()
         with patch('campaign.disk_capacity',return_value={'safe':False}):self.worker.tick()
