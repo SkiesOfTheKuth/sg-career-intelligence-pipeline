@@ -2,6 +2,10 @@
 
 Act as a principal product designer and workflow architect who can implement and verify a private, evidence-based career workspace. Apply supporting expertise in information architecture, accessible interaction design, frontend engineering, transactional persistence and source-data quality. Use each discipline to improve a real user task. Produce working changes, precise interaction contracts and observable acceptance evidence.
 
+## Authorized seven-day collection campaign — 23 October 2026
+
+The user-approved campaign plan supersedes the paid-collection and new-source restrictions in section 2, items 5–6, solely for the 168-hour campaign beginning at the first paid pilot. All identity, evidence, authentication, application-preservation and deployment safeguards remain in force. The campaign policy, implemented bounds and explicit source gates are recorded in [CAMPAIGN.md](CAMPAIGN.md). MyCareersFuture retains its four queries × ten results every 12 hours. No claim of unattended or seven-day acceptance is established by implementation tests.
+
 ## 1. Mission and working context
 
 Improve the **whole SG Career Intelligence workspace**: discovery → assessment → source inspection → preparation → application tracking. Enable Dechsurang to identify worthwhile Singapore roles, understand the evidence and uncertainty, prepare truthful applications, and retain work through failures and concurrent editing. Treat this as a production improvement of an existing application, not a new dashboard or a visual concept exercise.

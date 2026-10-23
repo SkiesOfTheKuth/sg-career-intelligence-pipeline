@@ -3,7 +3,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const state = {audit: null, source: '', offset: 0, job: null, recordEpoch: 0, inspectEpoch: 0, overviewEpoch: 0, controller: null, timer: null, poll: null, checking: false};
-  const labels = {scheduled: 'Automatic · every 12 hours', retained: 'Retained import', error: 'Last check failed', degraded: 'Check incomplete', paused: 'Automatic checks paused', checking: 'Checking source…'};
+  const labels = {scheduled: 'Automatic · every 12 hours', retained: 'Retained import', error: 'Last check failed', degraded: 'Check incomplete', paused: 'Automatic checks paused', checking: 'Checking source…', active: 'Campaign active', pilot: 'Pilot in progress', prepared: 'Prepared for pilot', stopped: 'Campaign ended', blocked: 'Collection blocked'};
   const number = value => Number(value || 0).toLocaleString('en-SG');
   const el = (tag, text, cls) => {const node = document.createElement(tag); if (text !== undefined && text !== null) node.textContent = text; if (cls) node.className = cls; return node;};
   const button = (text, action, cls) => {const node = el('button', text, cls); node.type = 'button'; node.addEventListener('click', action); return node;};
@@ -67,7 +67,7 @@
       $('audit-content').hidden = false;
       renderOverview(); renderSelection();
       clearTimeout(state.poll);
-      if (audit.scheduler.running) state.poll = setTimeout(loadOverview, 5000);
+      if (audit.scheduler.running || ['active','pilot'].includes(audit.campaign?.state)) state.poll = setTimeout(loadOverview, 15000);
     } catch (error) {if (epoch === state.overviewEpoch) {$('load-feedback').hidden = false; failure($('load-feedback'), error, loadOverview);}}
     finally {if (epoch === state.overviewEpoch) $('refresh-overview').disabled = false;}
   }
@@ -85,14 +85,15 @@
     $('record-source').replaceChildren(new Option('All sources', ''), ...audit.sources.map(source => new Option(source.name, source.id)));
     $('record-source').value = state.source;
     const errors = audit.sources.filter(source => ['error', 'degraded'].includes(source.state));
-    $('collection-health').textContent = errors.length ? errors.map(source => `${source.name}: ${labels[source.state]}`).join(' · ') : 'Other sources remain retained imports.';
+    $('collection-health').textContent = errors.length ? errors.map(source => `${source.name}: ${labels[source.state]}`).join(' · ') : 'Source restrictions and collection outcomes are shown below.';
     $('engine-count').textContent = `${number(audit.total)} retained jobs`;
     $('discovery-count').textContent = `${number(audit.discovery_count)} records before your filters`;
     $('application-count').textContent = `${number(audit.applications_count)} tracked applications`;
     $('excluded-count').textContent = `${number(audit.excluded_count)} expired, closed or unavailable records are kept for history.`;
     const scheduler = audit.scheduler;
     $('schedule-summary').textContent = scheduler.running ? 'MyCareersFuture check is in progress.' : scheduler.enabled ? `MyCareersFuture is scheduled every ${scheduler.interval_hours} hours.` : 'Automatic checks are paused on this service.';
-    $('schedule-detail').textContent = `Up to ${scheduler.limit_per_query} results from each of ${scheduler.queries.length} searches. Other sources are retained imports.${scheduler.next_check_at ? ' Next check: ' + date(scheduler.next_check_at) + '.' : ''}`;
+    $('schedule-detail').textContent = `Up to ${scheduler.limit_per_query} results from each of ${scheduler.queries.length} searches.${scheduler.next_check_at ? ' Next check: ' + date(scheduler.next_check_at) + '.' : ''}`;
+    renderCampaign(audit.campaign);
     $('check-source').disabled = scheduler.running || state.checking;
     const history = $('history'); history.replaceChildren();
     if (!audit.history.length) history.append(el('p', 'No collection runs have been recorded. Imported source dates are shown with each record.', 'secondary'));
@@ -106,6 +107,22 @@
       for (const error of run.errors || []) outcomes.append(el('li', `${error.query || error.source || 'Source'}: ${error.message} Attempted ${date(error.attempted_at)}.`, 'audit-error'));
       row.append(outcomes); history.append(row);
     }
+  }
+  function renderCampaign(campaign) {
+    const detail = $('campaign-detail'); detail.replaceChildren();
+    const active = ['active','pilot'].includes(campaign?.state);
+    $('pause-campaign').hidden = !active;
+    $('campaign-summary').textContent = `Seven-day campaign · ${labels[campaign?.state] || 'Not started'}`;
+    if (!campaign || campaign.state === 'not_prepared') {detail.append(el('p', 'Paid collection has not started. MyCareersFuture keeps its existing schedule.')); return;}
+    const money = value => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:4}).format(value || 0);
+    facts(detail, [['Automatic stop',date(campaign.stops_at)],['Reported run charges',money(campaign.reported_run_charges_usd)],
+      ['Account usage since baseline',money(campaign.observed_account_usage_usd)],['Actor budget committed',`${money(campaign.actor_committed_usd)} total; ${money(campaign.rolling_actor_committed_usd)} in the rolling day`],
+      ['Ceilings','US$50 per rolling 24 hours; US$350 total'],['Last worker heartbeat',date(campaign.heartbeat)]]);
+    if (campaign.reason) detail.append(el('p',campaign.reason,'audit-error'));
+    detail.append(el('p',campaign.accounting_note,'field-help'));
+    const list = el('ul');
+    for (const s of campaign.sources || []) list.append(el('li',`${s.source}: ${number(s.new_count)} new, ${number(s.updated_count)} updated, ${number(s.duplicate_count)} duplicate, ${number(s.lead_count)} leads. ${s.blocked_reason || (active ? 'Next cycle: '+date(s.due_at) : 'Paid collection is not active.')}`));
+    detail.append(list,link('Open campaign report','/api/campaign/report'));
   }
   function renderSelection() {
     if (!state.audit) return;
@@ -129,6 +146,8 @@
         const list = el('ul', null, 'query-list'); state.audit.scheduler.queries.forEach(query => list.append(el('li', query))); detail.append(list);
       }
       if (source.latest_errors.length) detail.append(el('p', `Latest failure: ${source.latest_errors[0].message}`, 'audit-error'));
+      if (source.campaign?.blocked_reason) detail.append(el('p',source.campaign.blocked_reason,'audit-error'));
+      if (source.campaign) facts(detail,[['Next cycle',date(source.next_check_at)],['Campaign results',`${number(source.campaign.new_count)} new; ${number(source.campaign.updated_count)} updated; ${number(source.campaign.duplicate_count)} duplicate`]]);
       detail.append(el('p', 'Retained record dates can come from the original import. They do not prove that the source was checked successfully.', 'field-help'));
     }
     const bars = (source || state.audit).coverage.map((item, index) => {
@@ -270,6 +289,13 @@
   $('all-sources').addEventListener('click', () => selectSource(''));
   $('refresh-overview').addEventListener('click', () => {loadOverview(); scheduleRecords(0);});
   $('check-source').addEventListener('click', checkSource);
+  $('pause-campaign').addEventListener('click', async () => {
+    $('pause-campaign').disabled = true;
+    $('campaign-feedback').textContent = 'Pausing paid collection…';
+    try {await api('/api/campaign/pause',{method:'POST'}); $('campaign-feedback').textContent = 'Paid collection paused. Active runs are being stopped; obtained results will finish importing.'; await loadOverview();}
+    catch (error) {$('campaign-feedback').textContent = error.message;}
+    finally {$('pause-campaign').disabled = false;}
+  });
   $('record-filters').addEventListener('submit', event => {event.preventDefault(); state.offset = 0; updateURL(); scheduleRecords(0);});
   $('record-query').addEventListener('input', () => {state.offset = 0; updateURL(true); scheduleRecords();});
   $('record-status').addEventListener('change', () => {state.offset = 0; updateURL(); scheduleRecords(0);});

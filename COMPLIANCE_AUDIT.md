@@ -84,3 +84,17 @@ git diff --check
 ```
 
 Use the inspected `test_workspace_journey.py` only with explicit isolated localhost storage and its required CAREER_QA settings. Never use broad unittest discovery. Representative screenshots: `production-find-390.png`, `production-detail-1440.png`, `production-sources-390.png`, `production-source-inspector.png`, `native-200-find.png`, `native-200-sources.png`, `native-200-applications.png`, `journey-final/conflict-1440.png`, `journey-final/application-history-1440.png`, and `editor/import-resolution-outcome-1440.png` beneath `output/playwright/independent-20261023/`.
+
+
+## Authorized campaign phase — 23 October 2026
+
+| Requirement | Implemented evidence | Acceptance limit |
+| --- | --- | --- |
+| Shared budgets and 168-hour stop | Integer-money transactional reservations, account usage checks, pinned native Apify maxTotalChargeUsd/timeouts, stop/abort/import tests | Live pilot/reconciliation and actual seven-day observation still required |
+| Restart and duplicate safety | Durable launch intents, unique run reconciliation, idempotent page checkpoints and atomic imports | Real service restart and two unattended six-hour cycles still required |
+| Source truth and preserved work | Exact payload journal; identity/partial-field regressions; isolated pilot tables | Blocked sources are not claimed as collected |
+| Source access and crawl scope | Robots/DNS/redirect checks; cycles/depth queue; explicit fail-closed remote crawler gate | LinkedIn/Google restricted; career isolation unverified; Cultjobs consent unresolved |
+| Recovery | Fresh production backup: 4,406 jobs, 4,538 evidence rows; all original table digests unchanged after migration; idempotence and restoration verified | Runtime rollout preservation checked separately |
+| UI/authentication | 194 explicit tests passed, including campaign auth/CSRF and responsive 390/768/1440 browser fixtures | Fixture evidence is not live or participant acceptance |
+
+Current artifacts: output/campaign/migration-report.json, full-regression.txt, and output/playwright/campaign/status-fixture-*.png. The earlier 2.2.2 acceptance remains historical; it does not accept this campaign.

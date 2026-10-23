@@ -127,7 +127,7 @@ class Store:
             """)
         with self._connection(write=True) as connection:
             version = connection.execute('PRAGMA user_version').fetchone()[0]
-            if version > 2:
+            if version > 3:
                 raise ValueError('Database schema is newer than this application supports')
             if version < 2:
                 columns = {row['name'] for row in connection.execute('PRAGMA table_info(import_conflicts)')}
@@ -135,6 +135,10 @@ class Store:
                     connection.execute('ALTER TABLE import_conflicts ADD COLUMN resolution_json TEXT')
                 self._backfill_source_fields(connection)
                 connection.execute('PRAGMA user_version = 2')
+            if version < 3:
+                from campaign_store import initialize as initialize_campaign
+                initialize_campaign(connection)
+                connection.execute('PRAGMA user_version = 3')
         return self
 
     @staticmethod
@@ -525,11 +529,13 @@ class Store:
             if integrity != ["ok"]:
                 raise ValueError("SQLite integrity check failed: " + "; ".join(integrity))
             counts, digests = {}, {}
-            for table in _TABLES:
-                # Table names are a fixed internal tuple, never user input.
+            tables = [row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+            for table in tables:
+                # Include future additive tables in full-content restore checks.
+                quoted = table.replace('"', '""')
                 digest = hashlib.sha256()
                 count = 0
-                for row in connection.execute(f'SELECT * FROM "{table}" ORDER BY 1'):
+                for row in connection.execute(f'SELECT * FROM "{quoted}" ORDER BY ' + ','.join(str(i+1) for i in range(len(connection.execute(f'PRAGMA table_info("{quoted}")').fetchall())))):
                     digest.update(_json(tuple(row)).encode("utf-8"))
                     digest.update(b'\n')
                     count += 1

@@ -212,3 +212,16 @@ This verifies the bounded collector and restart recovery, not every retained vac
 During verification, broad unittest discovery imported three ignored historical manual-probe scripts with top-level Apify requests. This violated the no-paid-scraping constraint. Two completed runs reported **US$0.0191** total usage (`RClICWaqFYdhb4GwD`: $0.01005; `FUcStUW1P60VuitYF`: $0.00905). The Indeed probe returned HTTP 400 without starting a run. No active runs remained when checked.
 
 The three local probes now have `__main__` guards, and committed `test_offline_safety.py` verifies that importing them cannot issue GET/POST requests. The final suite used explicit test modules. The credential-bearing historical probes remain excluded from Git. No credentials were rotated, revoked or deleted. This incident was disclosed during the task and is retained in `output/verification-side-effect.json`.
+
+
+## Seven-day campaign phase — 23 October 2026 (operational acceptance pending)
+
+Implemented the native lifespan campaign worker, additive schema-v3 journal, transactional conservative budgets, current actor contracts, account references/usage checks, launch reconciliation, checkpointed imports, isolated pilot tables, stop/abort policy, discovery queue and authenticated status/pause/report controls. The campaign has not yet demonstrated two real unattended six-hour cycles or actual seven-day shutdown.
+
+Fresh verification: 194 explicit tests passed in 36.821 seconds. A first browser pass found a new disclosure before phone record search; that placement was corrected and the full pass includes the keyboard regression. One existing draft-generation timing fixture failed in the initial parallel pass and passed both its focused rerun and the full sequential suite; no editor behavior was changed. New campaign browser fixtures at 390, 768 and 1,440 px passed pause/status/overflow checks.
+
+A fresh production SQLite backup contained 4,406 jobs, 4,538 source-evidence rows, seven sync-history rows and zero server-side applications. Migration and restore preserved the full content digest of every original table; repeated migration was idempotent. Application preservation is additionally covered with nonempty isolated notes/drafts/history fixtures. Artifacts: output/campaign/production-before.sqlite3, migration-report.json and full-regression.txt.
+
+Live preflight verified 33 distinct accounts, zero active runs and zero schedules. Usage limits did not establish promotional balances or expiry; only verified free-plan included capacity is admitted. Current official actor builds/inputs differ from historical scripts. LinkedIn and Google search paths are disallowed by their robots rules. Career crawling is blocked because the official actor's post-load hook cannot establish prevention of private-network/unsafe redirect navigation. Cultjobs consent remains unresolved. Therefore complete multi-source recursive coverage is **not accepted**.
+
+Deployment, isolated paid pilot, cost reconciliation and live status will be recorded below as they occur.

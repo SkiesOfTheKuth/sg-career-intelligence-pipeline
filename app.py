@@ -19,6 +19,8 @@ from storage import Store, Conflict, STAGES
 from exports import safe_cell, JOB_HEADERS, job_row, export_response
 from sync_engine import synchronize_upstream_jobs
 from source_audit import build_audit, audit_records, inspect_record
+from campaign import CampaignWorker, campaign_loop, disk_capacity, owned_operation
+from campaign_store import CampaignStore
 
 BASE = Path(__file__).resolve().parent
 DATA_FILE = BASE / 'processed_master_jobs.json'
@@ -132,9 +134,18 @@ async def lifespan(application):
     if os.environ.get('DISABLE_BACKGROUND_SYNC') != '1':
         task = asyncio.create_task(refresh_loop(application), name='source-refresh')
     application.state.refresh_task = task
+    application.state.campaign_worker = CampaignWorker(store)
+    campaign_task = None
+    if os.environ.get('DISABLE_BACKGROUND_SYNC') != '1':
+        campaign_task = asyncio.create_task(campaign_loop(application), name='paid-campaign')
+    application.state.campaign_task = campaign_task
     try:
         yield
     finally:
+        if campaign_task:
+            campaign_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await campaign_task
         if task:
             task.cancel()
             with suppress(asyncio.CancelledError):
@@ -145,7 +156,7 @@ async def lifespan(application):
         await asyncio.to_thread(verified_backup, store)
 
 
-app = FastAPI(title='SG Career Intelligence', version='2.2.2', lifespan=lifespan)
+app = FastAPI(title='SG Career Intelligence', version='2.3.0', lifespan=lifespan)
 app.state.database_path = DB_PATH
 app.mount('/static', StaticFiles(directory=BASE / 'static', check_dir=False), name='static')
 
@@ -215,14 +226,19 @@ def filter_jobs(jobs, **filters):
     if sort == 'freshness':
         results.sort(key=lambda j: (parse_date(j.get('verification',{}).get('last_success_at')) or datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
     if sort in ('title','company'): results.sort(key=lambda j:j.get(sort,'').lower())
+    if sort == 'discovered':
+        results.sort(key=lambda j: (parse_date(j.get('discovered_at')) or datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
     return results
 
 
 @app.get('/healthz')
 def healthz(request: Request, store=Depends(get_store)):
     task = request.app.state.refresh_task
+    campaign_task = getattr(request.app.state,'campaign_task',None)
     return {'status':'healthy','version':app.version,'total_jobs_indexed':store.count_jobs(),
-            'sync_worker_alive':bool(task and not task.done())}
+            'sync_worker_alive':bool(task and not task.done()),
+            'campaign_worker_alive':bool(campaign_task and not campaign_task.done()),
+            'revision':os.environ.get('RENDER_GIT_COMMIT')}
 
 
 @app.get('/', response_class=HTMLResponse)
@@ -251,6 +267,94 @@ def source_overview(request:Request,user=Depends(verify_credentials),store=Depen
 @app.get('/api/audit/records')
 def source_records(source:str='',q:str='',status:str='',offset:int=Query(0,ge=0),limit:int=Query(25,ge=1,le=100),user=Depends(verify_credentials),store=Depends(get_store)):
     return audit_records(store,source,q,status,offset,limit)
+
+
+@app.get('/api/campaign')
+def campaign_status(user=Depends(verify_credentials),store=Depends(get_store)):
+    return {**CampaignStore(store).status(), 'disk':disk_capacity(store),
+            'accounting_error':store.get_meta('campaign_account_error'),
+            'worker_error':store.get_meta('campaign_worker_error')}
+
+
+@app.post('/api/campaign/pause')
+def pause_campaign(user=Depends(verify_credentials),store=Depends(get_store)):
+    try:
+        CampaignStore(store).state('paused','Paused from the authenticated workspace.')
+        return CampaignStore(store).status()
+    except ValueError as exc:
+        raise HTTPException(409,str(exc))
+
+
+@app.post('/api/campaign/prepare')
+async def prepare_campaign(request:Request,user=Depends(verify_credentials)):
+    worker = request.app.state.campaign_worker
+    try:
+        return await owned_operation(worker,worker.prepare)
+    except ValueError as exc:
+        raise HTTPException(409,str(exc))
+
+
+@app.post('/api/campaign/pilot')
+async def pilot_campaign(request:Request,user=Depends(verify_credentials)):
+    worker = request.app.state.campaign_worker
+    try:
+        return await owned_operation(worker,worker.pilot)
+    except ValueError as exc:
+        raise HTTPException(409,str(exc))
+
+
+@app.get('/api/campaign/pilot-evidence')
+def pilot_evidence(user=Depends(verify_credentials),store=Depends(get_store)):
+    from source_audit import redacted
+    with store._connection() as connection:
+        rows = [{**dict(r),'payload':json.loads(r['payload_json'])} for r in connection.execute('SELECT * FROM campaign_items WHERE batch_id IN (SELECT id FROM campaign_batches WHERE batch_key LIKE ?)',('pilot:%',))]
+        for row in rows:row.pop('payload_json',None)
+    return redacted({'items':rows,'campaign':CampaignStore(store).status()})
+
+
+@app.get('/api/campaign/leads')
+def campaign_leads(offset:int=Query(0,ge=0),limit:int=Query(25,ge=1,le=100),user=Depends(verify_credentials),store=Depends(get_store)):
+    from source_audit import redacted
+    with store._connection() as connection:
+        total=connection.execute('SELECT COUNT(*) FROM campaign_discovery').fetchone()[0]
+        rows=[dict(r) for r in connection.execute('SELECT * FROM campaign_discovery ORDER BY discovered_at,url LIMIT ? OFFSET ?',(limit,offset))]
+        for row in rows:row['evidence']=json.loads(row.pop('evidence_json'))
+    return redacted({'items':rows,'total':total,'offset':offset,'limit':limit})
+
+
+@app.post('/api/campaign/activate')
+async def activate_campaign(payload:dict,request:Request,user=Depends(verify_credentials),store=Depends(get_store)):
+    worker = request.app.state.campaign_worker
+    async with worker.mutation_lock:
+        journal = CampaignStore(store)
+        pilots = [b for b in journal.batches() if b['batch_key'].startswith('pilot:')]
+        if not pilots or any(b['state']!='done' or b['charge_units'] is None or b['new_count']+b['updated_count']+b['duplicate_count']==0 for b in pilots):
+            raise HTTPException(409,'A successful reconciled pilot with supported vacancy evidence is required.')
+        if not store.get_meta('last_backup') or not all(store.get_meta('campaign_contract_'+b['source']) for b in pilots):
+            raise HTTPException(409,'Backup and current actor contract verification are required.')
+        await asyncio.to_thread(worker.refresh_accounts,time.time())
+        current=journal.status()
+        if store.get_meta('campaign_account_error') or current['observed_account_usage_usd'] < current['reported_run_charges_usd']:
+            raise HTTPException(409,'Account usage has not reconciled the pilot charges.')
+        if current['observed_account_usage_usd'] > 3 or any(b['charge_units']>b['reserved_units'] for b in pilots):
+            raise HTTPException(409,'Pilot cost exceeded its expected bound; investigation is required.')
+        if not payload.get('pilot_verified') or not payload.get('evidence_reference'):
+            raise HTTPException(422,'Provide the verified pilot evidence reference.')
+        evidence = {**payload,'backup_verified':True,'contracts_verified':True,'verified_at':datetime.now(timezone.utc).isoformat()}
+        try:
+            store.set_meta('campaign_validated_sources',sorted({b['source'] for b in pilots}))
+            journal.activate(evidence)
+            return journal.status()
+        except ValueError as exc:
+            raise HTTPException(409,str(exc))
+
+
+@app.get('/api/campaign/report')
+def campaign_report(user=Depends(verify_credentials),store=Depends(get_store)):
+    return {**CampaignStore(store).status(), 'activation':store.get_meta('campaign_activation'),
+            'limitations':['Credit expiry is unknown unless verified separately.',
+                          'LinkedIn and Google search obey their current robots restrictions.',
+                          'Career crawling awaits verified redirect/private-network isolation.']}
 
 
 @app.get('/api/audit/records/{job_id}')

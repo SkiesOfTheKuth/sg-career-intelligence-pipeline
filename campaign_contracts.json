@@ -1,0 +1,2913 @@
+{
+  "linkedin": {
+    "actor": "curious_coder~linkedin-jobs-scraper",
+    "actor_id": "hKByXkMQaC5Qt9UMN",
+    "build": "1.7.18",
+    "schema": {
+      "title": "Linkedin job scraper",
+      "type": "object",
+      "schemaVersion": 1,
+      "description": "\u2139\ufe0f This tool scrapes jobs from [public Linkedin jobs search page](https://www.linkedin.com/jobs/search) where available filters and  results can be different compared to search page on a logged in Linkedin account. To avoid confusion, generate search url by opening this url in an incognito window: https://www.linkedin.com/jobs/search \n\n \u2139\ufe0f You can now use the AI search filters directly instead of URLs by leaving urls empty and providing at least one filter\n\n \u2139\ufe0f If you want to scrape jobs using logged in account then use [Advanced Linkedin jobs scraper](https://apify.com/curious_coder/linkedin-jobs-search-scraper). It also gives you more information like Apply URLs, Skills, Applicant insights, etc \n\n\u2139\ufe0f Related actors: [Indeed job scraper](https://apify.com/curious_coder/indeed-scraper)\n",
+      "properties": {
+        "urls": {
+          "title": "Linkedin jobs search URLs",
+          "description": "Go to [public linkedin jobs search page](https://www.linkedin.com/jobs/search/) on incognito window (to access public version), search with required filters and once you are done, copy the full URL from address bar and pass it here. You can pass multiple search URLs.\n\nWhen URLs are provided, the AI search filters below are ignored. Leave this empty to use the filters instead.",
+          "type": "array",
+          "editor": "stringList",
+          "prefill": [
+            "https://www.linkedin.com/jobs/search/?position=1&pageNum=0"
+          ],
+          "default": []
+        },
+        "keywords": {
+          "title": "Keywords",
+          "type": "string",
+          "description": "Job title, skills, or free-text search (e.g. \"software engineer remote\"). Used only when the URLs list above is empty.",
+          "editor": "textfield",
+          "sectionCaption": "AI search filters",
+          "sectionDescription": "Used only when no search URLs are provided. Only filters still supported by LinkedIn AI job search are listed here. Put experience, job type, workplace, salary, etc into Keywords if needed. [Click here](https://www.linkedin.com/help/linkedin/answer/a6889044) to learn more about AI jobs search."
+        },
+        "location": {
+          "title": "Location",
+          "type": "string",
+          "description": "City, region, or country as you would type it on LinkedIn (e.g. \"United States\", \"London, United Kingdom\", \"Remote\").",
+          "editor": "textfield"
+        },
+        "geoId": {
+          "title": "Geo ID",
+          "type": "string",
+          "description": "Optional LinkedIn geoId for precise location targeting (found in a LinkedIn search URL as `geoId=`). Overrides free-text location when LinkedIn resolves it.",
+          "editor": "textfield"
+        },
+        "distance": {
+          "title": "Distance (miles)",
+          "type": "integer",
+          "description": "Search radius in miles around the location. Leave empty for LinkedIn's default.",
+          "editor": "number",
+          "minimum": 0
+        },
+        "datePosted": {
+          "title": "Date posted",
+          "type": "string",
+          "description": "Only return jobs posted within this window.",
+          "editor": "select",
+          "default": "anyTime",
+          "enum": [
+            "anyTime",
+            "past24Hours",
+            "pastWeek",
+            "pastMonth"
+          ],
+          "enumTitles": [
+            "Any time",
+            "Past 24 hours",
+            "Past week",
+            "Past month"
+          ]
+        },
+        "companyIds": {
+          "title": "Company IDs",
+          "type": "array",
+          "description": "LinkedIn numeric company IDs (from a company URL or `f_C=` in a search URL), e.g. \"1441\" for Google.",
+          "editor": "stringList",
+          "default": []
+        },
+        "under10Applicants": {
+          "title": "Under 10 applicants",
+          "type": "boolean",
+          "description": "Only jobs with fewer than 10 applicants.",
+          "editor": "checkbox",
+          "default": false
+        },
+        "autoConvertToAiSearch": {
+          "title": "Auto convert old search URLs to AI search URLs (recommended)",
+          "type": "boolean",
+          "description": "LinkedIn is now forcing AI job search which removed many classic filters (experience, job type, workplace, salary, sort, etc.)\n\nWhen this option is enabled, the filters in old search URLs are converted to natural language and appended to search keywords. Date posted, Company, Easy apply, and Under 10 applicants stay as URL filters on AI search.",
+          "editor": "checkbox",
+          "default": true,
+          "sectionCaption": "Options"
+        },
+        "scrapeCompany": {
+          "title": "Scrape company details",
+          "type": "boolean",
+          "description": "This will require additional scraping requests for each job record and take longer to scrape",
+          "editor": "checkbox",
+          "default": true
+        },
+        "limitPerSource": {
+          "title": "Max jobs per search",
+          "type": "integer",
+          "description": "Maximum number of jobs to scrape from each input URL (or from the AI search filters when no URLs are provided). Leave empty to scrape as many as LinkedIn returns for each search (up to ~1000).",
+          "editor": "number",
+          "minimum": 1,
+          "prefill": 100
+        },
+        "splitByLocation": {
+          "title": "Split search by city locations",
+          "type": "boolean",
+          "description": "Enable this to split your search by cities within a country. This helps bypass LinkedIn's 1000 job limit per search URL by creating separate searches for each city. This will overwrite the location filter in input search URLs.",
+          "editor": "checkbox",
+          "default": false
+        },
+        "splitCountry": {
+          "title": "Country to split by",
+          "type": "string",
+          "description": "Select the country whose cities will be used to split the search. Only used when 'Split search by city locations' is enabled. Required to when 'Split search by city locations' is enabled.",
+          "editor": "select",
+          "enum": [
+            "US",
+            "CA",
+            "MX",
+            "GB",
+            "DE",
+            "FR",
+            "NL",
+            "CH",
+            "SE",
+            "NO",
+            "DK",
+            "FI",
+            "IE",
+            "ES",
+            "IT",
+            "PT",
+            "BE",
+            "AT",
+            "PL",
+            "CZ",
+            "RO",
+            "HU",
+            "GR",
+            "BG",
+            "HR",
+            "RS",
+            "UA",
+            "SK",
+            "LT",
+            "LV",
+            "EE",
+            "SI",
+            "LU",
+            "MT",
+            "IS",
+            "CY",
+            "TR",
+            "RU",
+            "GE",
+            "AM",
+            "AZ",
+            "BY",
+            "BA",
+            "XK",
+            "MD",
+            "ME",
+            "MK",
+            "AL",
+            "MC",
+            "AD",
+            "LI",
+            "SM",
+            "VA",
+            "IN",
+            "CN",
+            "JP",
+            "KR",
+            "SG",
+            "HK",
+            "TW",
+            "TH",
+            "VN",
+            "ID",
+            "MY",
+            "PH",
+            "BD",
+            "PK",
+            "LK",
+            "NP",
+            "MM",
+            "KH",
+            "KZ",
+            "UZ",
+            "KG",
+            "TJ",
+            "TM",
+            "MN",
+            "BN",
+            "MV",
+            "BT",
+            "LA",
+            "TL",
+            "AF",
+            "KP",
+            "AE",
+            "SA",
+            "IL",
+            "QA",
+            "KW",
+            "BH",
+            "OM",
+            "JO",
+            "LB",
+            "IQ",
+            "IR",
+            "PS",
+            "SY",
+            "YE",
+            "AU",
+            "NZ",
+            "FJ",
+            "PG",
+            "WS",
+            "TO",
+            "VU",
+            "SB",
+            "KI",
+            "MH",
+            "FM",
+            "PW",
+            "NR",
+            "TV",
+            "BR",
+            "AR",
+            "CO",
+            "CL",
+            "PE",
+            "EC",
+            "UY",
+            "VE",
+            "BO",
+            "PY",
+            "GY",
+            "SR",
+            "CR",
+            "PA",
+            "GT",
+            "DO",
+            "PR",
+            "JM",
+            "TT",
+            "HN",
+            "SV",
+            "NI",
+            "BS",
+            "BB",
+            "CU",
+            "HT",
+            "BZ",
+            "AG",
+            "DM",
+            "GD",
+            "LC",
+            "KN",
+            "VC",
+            "ZA",
+            "NG",
+            "KE",
+            "EG",
+            "MA",
+            "GH",
+            "ET",
+            "TZ",
+            "RW",
+            "UG",
+            "SN",
+            "TN",
+            "CI",
+            "CM",
+            "DZ",
+            "AO",
+            "MU",
+            "ZM",
+            "ZW",
+            "MZ",
+            "CD",
+            "BW",
+            "NA",
+            "MG",
+            "LY",
+            "SD",
+            "SS",
+            "SO",
+            "ML",
+            "GA",
+            "BJ",
+            "BF",
+            "MW",
+            "NE",
+            "TD",
+            "SL",
+            "LR",
+            "ER",
+            "GM",
+            "GN",
+            "GW",
+            "TG",
+            "MR",
+            "SZ",
+            "LS",
+            "DJ",
+            "CG",
+            "CF",
+            "BI",
+            "CV",
+            "KM",
+            "GQ",
+            "ST",
+            "SC"
+          ],
+          "enumTitles": [
+            "United States",
+            "Canada",
+            "Mexico",
+            "United Kingdom",
+            "Germany",
+            "France",
+            "Netherlands",
+            "Switzerland",
+            "Sweden",
+            "Norway",
+            "Denmark",
+            "Finland",
+            "Ireland",
+            "Spain",
+            "Italy",
+            "Portugal",
+            "Belgium",
+            "Austria",
+            "Poland",
+            "Czech Republic",
+            "Romania",
+            "Hungary",
+            "Greece",
+            "Bulgaria",
+            "Croatia",
+            "Serbia",
+            "Ukraine",
+            "Slovakia",
+            "Lithuania",
+            "Latvia",
+            "Estonia",
+            "Slovenia",
+            "Luxembourg",
+            "Malta",
+            "Iceland",
+            "Cyprus",
+            "Turkey",
+            "Russia",
+            "Georgia",
+            "Armenia",
+            "Azerbaijan",
+            "Belarus",
+            "Bosnia and Herzegovina",
+            "Kosovo",
+            "Moldova",
+            "Montenegro",
+            "North Macedonia",
+            "Albania",
+            "Monaco",
+            "Andorra",
+            "Liechtenstein",
+            "San Marino",
+            "Vatican City",
+            "India",
+            "China",
+            "Japan",
+            "South Korea",
+            "Singapore",
+            "Hong Kong",
+            "Taiwan",
+            "Thailand",
+            "Vietnam",
+            "Indonesia",
+            "Malaysia",
+            "Philippines",
+            "Bangladesh",
+            "Pakistan",
+            "Sri Lanka",
+            "Nepal",
+            "Myanmar",
+            "Cambodia",
+            "Kazakhstan",
+            "Uzbekistan",
+            "Kyrgyzstan",
+            "Tajikistan",
+            "Turkmenistan",
+            "Mongolia",
+            "Brunei",
+            "Maldives",
+            "Bhutan",
+            "Laos",
+            "Timor-Leste",
+            "Afghanistan",
+            "North Korea",
+            "United Arab Emirates",
+            "Saudi Arabia",
+            "Israel",
+            "Qatar",
+            "Kuwait",
+            "Bahrain",
+            "Oman",
+            "Jordan",
+            "Lebanon",
+            "Iraq",
+            "Iran",
+            "Palestine",
+            "Syria",
+            "Yemen",
+            "Australia",
+            "New Zealand",
+            "Fiji",
+            "Papua New Guinea",
+            "Samoa",
+            "Tonga",
+            "Vanuatu",
+            "Solomon Islands",
+            "Kiribati",
+            "Marshall Islands",
+            "Micronesia",
+            "Palau",
+            "Nauru",
+            "Tuvalu",
+            "Brazil",
+            "Argentina",
+            "Colombia",
+            "Chile",
+            "Peru",
+            "Ecuador",
+            "Uruguay",
+            "Venezuela",
+            "Bolivia",
+            "Paraguay",
+            "Guyana",
+            "Suriname",
+            "Costa Rica",
+            "Panama",
+            "Guatemala",
+            "Dominican Republic",
+            "Puerto Rico",
+            "Jamaica",
+            "Trinidad and Tobago",
+            "Honduras",
+            "El Salvador",
+            "Nicaragua",
+            "Bahamas",
+            "Barbados",
+            "Cuba",
+            "Haiti",
+            "Belize",
+            "Antigua and Barbuda",
+            "Dominica",
+            "Grenada",
+            "Saint Lucia",
+            "Saint Kitts and Nevis",
+            "Saint Vincent and the Grenadines",
+            "South Africa",
+            "Nigeria",
+            "Kenya",
+            "Egypt",
+            "Morocco",
+            "Ghana",
+            "Ethiopia",
+            "Tanzania",
+            "Rwanda",
+            "Uganda",
+            "Senegal",
+            "Tunisia",
+            "Ivory Coast",
+            "Cameroon",
+            "Algeria",
+            "Angola",
+            "Mauritius",
+            "Zambia",
+            "Zimbabwe",
+            "Mozambique",
+            "Democratic Republic of Congo",
+            "Botswana",
+            "Namibia",
+            "Madagascar",
+            "Libya",
+            "Sudan",
+            "South Sudan",
+            "Somalia",
+            "Mali",
+            "Gabon",
+            "Benin",
+            "Burkina Faso",
+            "Malawi",
+            "Niger",
+            "Chad",
+            "Sierra Leone",
+            "Liberia",
+            "Eritrea",
+            "Gambia",
+            "Guinea",
+            "Guinea-Bissau",
+            "Togo",
+            "Mauritania",
+            "Eswatini",
+            "Lesotho",
+            "Djibouti",
+            "Congo (Republic)",
+            "Central African Republic",
+            "Burundi",
+            "Cabo Verde",
+            "Comoros",
+            "Equatorial Guinea",
+            "Sao Tome and Principe",
+            "Seychelles"
+          ]
+        }
+      },
+      "required": []
+    },
+    "pricing": [
+      {
+        "minimalMaxTotalChargeUsd": 0.001,
+        "pricingModel": "PAY_PER_EVENT",
+        "isPriceChangeNotificationSuppressed": false,
+        "reasonForChange": "This price change only affects users on Apify free plan. Paying users are not affected. \n\nAn additional negligible cost per actor start is added which is just $0.05 per 1000 actor starts.",
+        "pricingPerEvent": {
+          "actorChargeEvents": {
+            "apify-default-dataset-item": {
+              "eventTitle": "result",
+              "eventDescription": "Single result in the default dataset.",
+              "isOneTimeEvent": false,
+              "eventTieredPricingUsd": {
+                "FREE": {
+                  "tieredEventPriceUsd": 0.002
+                },
+                "BRONZE": {
+                  "tieredEventPriceUsd": 0.001
+                },
+                "SILVER": {
+                  "tieredEventPriceUsd": 0.001
+                },
+                "GOLD": {
+                  "tieredEventPriceUsd": 0.001
+                },
+                "PLATINUM": {
+                  "tieredEventPriceUsd": 0.001
+                },
+                "DIAMOND": {
+                  "tieredEventPriceUsd": 0.001
+                }
+              },
+              "isPrimaryEvent": true
+            },
+            "apify-actor-start": {
+              "eventTitle": "Actor Start",
+              "eventDescription": "Charged when the Actor starts running. Number of events charged depends on Actor memory (one event per GB, minimum one event).",
+              "isOneTimeEvent": true,
+              "eventPriceUsd": 5e-05
+            }
+          }
+        },
+        "startedAt": "2026-08-14T03:25:44.416Z",
+        "createdAt": "2026-07-31T03:25:46.142Z",
+        "apifyMarginPercentage": 0.2,
+        "notifiedAboutFutureChangeAt": "2026-07-31T03:32:09.207Z",
+        "notifiedAboutChangeAt": "2026-08-19T08:06:18.517Z"
+      }
+    ],
+    "verified_at": "2026-10-23",
+    "documentation": "https://apify.com/curious_coder/linkedin-jobs-scraper/input-schema",
+    "build_id": "cyeFbgtjjz0fqI55Q"
+  },
+  "indeed": {
+    "actor": "misceres~indeed-scraper",
+    "actor_id": "hMvNSpz3JnHgl5jkh",
+    "build": "0.0.117",
+    "schema": {
+      "title": "Indeed.com jobs scraper",
+      "type": "object",
+      "schemaVersion": 1,
+      "properties": {
+        "position": {
+          "title": "Positions/keywords for search",
+          "type": "string",
+          "description": "Any combination of positions or keywords for search. Can be used together with Start URLs - both will be scraped independently, each limited by Max job listings per search.",
+          "editor": "textfield",
+          "prefill": "web developer",
+          "example": "web developer"
+        },
+        "maxItemsPerSearch": {
+          "title": "Max job listings per search",
+          "type": "integer",
+          "minimum": 1,
+          "prefill": 100,
+          "description": "Maximum number of job listings to scrape for each keyword search and each Start URL. When both are used together, each is limited independently by this value.",
+          "example": 100
+        },
+        "country": {
+          "title": "Country for search",
+          "type": "string",
+          "description": "Country for job search.",
+          "editor": "select",
+          "default": "US",
+          "prefill": "US",
+          "example": "US",
+          "enum": [
+            "AQ",
+            "AR",
+            "AU",
+            "AT",
+            "BH",
+            "BE",
+            "BR",
+            "CA",
+            "CL",
+            "CN",
+            "CO",
+            "CR",
+            "CZ",
+            "DK",
+            "EC",
+            "EG",
+            "FI",
+            "FR",
+            "DE",
+            "GR",
+            "HK",
+            "HU",
+            "IN",
+            "ID",
+            "IE",
+            "IL",
+            "IT",
+            "JP",
+            "KW",
+            "LU",
+            "MX",
+            "MA",
+            "NL",
+            "NZ",
+            "NG",
+            "NO",
+            "OM",
+            "PK",
+            "PA",
+            "PE",
+            "PH",
+            "PL",
+            "PT",
+            "QA",
+            "RO",
+            "SA",
+            "SG",
+            "ZA",
+            "KR",
+            "ES",
+            "SE",
+            "CH",
+            "TW",
+            "TH",
+            "TR",
+            "UA",
+            "AE",
+            "GB",
+            "US",
+            "UY",
+            "VE",
+            "VN"
+          ],
+          "enumTitles": [
+            "Antarctica",
+            "Argentina",
+            "Australia",
+            "Austria",
+            "Bahrain",
+            "Belgium",
+            "Brazil",
+            "Canada",
+            "Chile",
+            "China",
+            "Colombia",
+            "Costa Rica",
+            "Czech Republic",
+            "Denmark",
+            "Ecuador",
+            "Egypt",
+            "Finland",
+            "France",
+            "Germany",
+            "Greece",
+            "Hong Kong",
+            "Hungary",
+            "India",
+            "Indonesia",
+            "Ireland",
+            "Israel",
+            "Italy",
+            "Japan",
+            "Kuwait",
+            "Luxembourg",
+            "Mexico",
+            "Morocco",
+            "Netherlands",
+            "New Zealand",
+            "Nigeria",
+            "Norway",
+            "Oman",
+            "Pakistan",
+            "Panama",
+            "Peru",
+            "Philippines",
+            "Poland",
+            "Portugal",
+            "Qatar",
+            "Romania",
+            "Saudi Arabia",
+            "Singapore",
+            "South Africa",
+            "South Korea",
+            "Spain",
+            "Sweden",
+            "Switzerland",
+            "Taiwan",
+            "Thailand",
+            "Turkey",
+            "Ukraine",
+            "United Arab Emirates",
+            "United Kingdom",
+            "United States",
+            "Uruguay",
+            "Venezuela",
+            "Vietnam"
+          ]
+        },
+        "location": {
+          "title": "Location for search",
+          "type": "string",
+          "description": "Any combination of city, zip code or locality for search. Used together with position/keywords.",
+          "editor": "textfield",
+          "prefill": "San Francisco",
+          "example": "San Francisco"
+        },
+        "parseCompanyDetails": {
+          "title": "Scrape company details",
+          "type": "boolean",
+          "description": "If true, each job also includes company details: description, website URL, logo, company size and rating. These come from the same API response as the job itself, so turning this on costs no extra requests.",
+          "default": false,
+          "example": false,
+          "editor": "checkbox"
+        },
+        "saveOnlyUniqueItems": {
+          "title": "Save only unique job listings",
+          "type": "boolean",
+          "description": "If true, only unique job listings will be scraped.",
+          "default": true,
+          "example": true,
+          "editor": "checkbox"
+        },
+        "followApplyRedirects": {
+          "title": "Follow redirects for apply link (no longer needed)",
+          "type": "boolean",
+          "description": "Has no effect. `externalApplyLink` is now always the employer's own apply URL, because it comes resolved from Indeed's API instead of being followed by the scraper. Left in place so existing runs keep working.",
+          "default": false,
+          "example": false,
+          "editor": "checkbox"
+        },
+        "startUrls": {
+          "title": "Start URLs",
+          "type": "array",
+          "editor": "requestListSources",
+          "description": "List of URLs that will be scraped. Can be main website URL, category/search URLs, company jobs URL (in the format of `https://www.indeed.com/cmp/Google/jobs`) or detail/product URLs. Can be combined with keyword search - both will execute independently.",
+          "sectionCaption": "Also get results from custom URLs",
+          "example": [
+            {
+              "url": "https://www.indeed.com/jobs?q=software+engineer&l=New+York"
+            }
+          ]
+        }
+      }
+    },
+    "pricing": [
+      {
+        "minimalMaxTotalChargeUsd": null,
+        "pricingModel": "PAY_PER_EVENT",
+        "isPriceChangeNotificationSuppressed": false,
+        "pricingPerEvent": {
+          "actorChargeEvents": {
+            "result": {
+              "eventTitle": "Job listing",
+              "eventDescription": "Cost per every job listing returned.",
+              "isOneTimeEvent": false,
+              "eventTieredPricingUsd": {
+                "FREE": {
+                  "tieredEventPriceUsd": 0.006
+                },
+                "BRONZE": {
+                  "tieredEventPriceUsd": 0.005
+                },
+                "SILVER": {
+                  "tieredEventPriceUsd": 0.004
+                },
+                "GOLD": {
+                  "tieredEventPriceUsd": 0.003
+                },
+                "PLATINUM": {
+                  "tieredEventPriceUsd": 0.002
+                },
+                "DIAMOND": {
+                  "tieredEventPriceUsd": 0.001
+                }
+              },
+              "isPrimaryEvent": true
+            }
+          }
+        },
+        "createdAt": "2026-03-26T11:34:26.075Z",
+        "startedAt": "2026-03-26T11:34:26.075Z",
+        "apifyMarginPercentage": 0.2
+      }
+    ],
+    "verified_at": "2026-10-23",
+    "documentation": "https://apify.com/misceres/indeed-scraper/input-schema",
+    "build_id": "DVFgqZUHjRhgcqliu"
+  },
+  "google": {
+    "actor": "apify~google-search-scraper",
+    "actor_id": "nFJndFXA5zjCTuudP",
+    "build": "0.0.468",
+    "schema": {
+      "title": "Google Search Results Scraper input",
+      "description": "Use this to search Google the same way you normally would - for example, look for <code>cute cats</code>. Use a new line for each query. \n Click &#9655; <strong>Start</strong> to begin the scrape. If you need guidance, follow <a href='https://blog.apify.com/unofficial-google-search-api-from-apify-22a20537a951/#how-to-scrape-google-search-pages' target='_blank' rel='noopener'>this tutorial</a>.<br><br><i>Note: usage and costs are calculated based on the number of pages scraped.</i>",
+      "type": "object",
+      "schemaVersion": 1,
+      "properties": {
+        "queries": {
+          "title": "Search term(s)",
+          "type": "string",
+          "description": "Use regular search words or enter Google Search URLs. You can also apply [advanced Google search techniques](https://blog.apify.com/how-to-scrape-google-like-a-pro/), such as <code>AI site:twitter.com</code> or <code>javascript OR python</code>. You can also define selected search filters as separate fields below (in the <code>Advanced search filters</code> section). Just ensure that your queries do not exceed 32 words to comply with Google Search limits.",
+          "prefill": "What are the top 5 CRM tools",
+          "example": "best SEO tools\napify web scraping",
+          "editor": "textarea",
+          "pattern": "[^\\s]+"
+        },
+        "maxPagesPerQuery": {
+          "title": "Max pages per search",
+          "type": "integer",
+          "description": "Maximum number of pages to scrape per search query. Each page contains approximately 10 results.",
+          "prefill": 1,
+          "example": 5,
+          "minimum": 1
+        },
+        "aiOverview": {
+          "title": "\u23e9 Add-on: Google AI Overview ($)",
+          "description": "Get the complete AI Overview whenever Google shows one for your query - handy when the short snippet isn't enough. May take slightly longer than a standard run, and works best on queries likely to trigger an AI Overview. Costs extra per captured AI Overview - see the <a href='https://console.apify.com/actors/nFJndFXA5zjCTuudP/info/pricing?build=latest' target='_blank'>Pricing tab</a> for your rate.",
+          "type": "object",
+          "editor": "schemaBased",
+          "default": {
+            "scrapeFullAiOverview": false
+          },
+          "example": {
+            "scrapeFullAiOverview": true
+          },
+          "properties": {
+            "scrapeFullAiOverview": {
+              "title": "\u23e9 Add-on: Google AI Overview ($)",
+              "description": "Turn on to capture the full AI Overview whenever one appears.",
+              "type": "boolean"
+            }
+          },
+          "sectionCaption": "\ud83e\udd16 Add-on: AI search visibility ($)",
+          "sectionDescription": "Track how your brand shows up in AI answers, not just classic search results. Turn on the engines you care about and compare their responses side by side to do an AI visibility audit.<br><br><b>Available features:</b><ul><li>Google AI Overviews</li><li>Google AI Mode</li><li>Gemini search</li><li>Perplexity AI search, including recency, related questions, and images</li><li>ChatGPT search</li></ul><b>Pricing:</b> you pay a small fee per successful result while these features are on, with bigger discounts on higher-tier plans. See the <a href='https://console.apify.com/actors/nFJndFXA5zjCTuudP/info/pricing?build=latest' target='_blank'>Pricing tab</a> for your exact rate."
+        },
+        "aiModeSearch": {
+          "title": "\u23e9 Add-on: Google AI Mode ($)",
+          "description": "See how your brand appears in Google AI Mode, Google's dedicated AI search interface on google.com (distinct from the AI Overview snippets in regular results). Great for AEO and GEO tracking. Costs extra per result - see the <a href='https://console.apify.com/actors/nFJndFXA5zjCTuudP/info/pricing?build=latest' target='_blank'>Pricing tab</a> for your rate.",
+          "type": "object",
+          "editor": "schemaBased",
+          "default": {
+            "enableAiMode": false
+          },
+          "example": {
+            "enableAiMode": true
+          },
+          "properties": {
+            "enableAiMode": {
+              "title": "\u23e9 Add-on: Google AI Mode ($)",
+              "description": "Turn on to fetch Google AI Mode results for every query.",
+              "type": "boolean"
+            }
+          }
+        },
+        "geminiSearch": {
+          "title": "\u23e9 Add-on: Gemini search ($)",
+          "description": "Get an AI answer from Google Gemini (gemini.google.com), Google's standalone assistant, separate from Google Search.<br><br>Costs extra per result - see the <a href='https://console.apify.com/actors/nFJndFXA5zjCTuudP/info/pricing?build=latest' target='_blank'>Pricing tab</a> for your rate.",
+          "type": "object",
+          "editor": "schemaBased",
+          "default": {
+            "enableGemini": false
+          },
+          "prefill": {
+            "enableGemini": false
+          },
+          "example": {
+            "enableGemini": true
+          },
+          "properties": {
+            "enableGemini": {
+              "title": "\u23e9 Add-on: Gemini search ($)",
+              "description": "Turn on to fetch a Gemini answer for every query.",
+              "type": "boolean"
+            }
+          }
+        },
+        "perplexitySearch": {
+          "title": "\u23e9 Add-on: Perplexity AI search ($)",
+          "description": "Get AI answers and citations from Perplexity's Sonar model.<br><br>Costs extra per result - see the <a href='https://console.apify.com/actors/nFJndFXA5zjCTuudP/info/pricing?build=latest' target='_blank'>Pricing tab</a> for your rate.",
+          "type": "object",
+          "editor": "schemaBased",
+          "default": {
+            "enablePerplexity": false,
+            "returnImages": false,
+            "returnRelatedQuestions": false
+          },
+          "prefill": {
+            "enablePerplexity": false,
+            "returnImages": false,
+            "returnRelatedQuestions": false
+          },
+          "example": {
+            "enablePerplexity": true,
+            "returnImages": false,
+            "returnRelatedQuestions": true
+          },
+          "properties": {
+            "enablePerplexity": {
+              "title": "\u23e9 Add-on: Perplexity AI search ($)",
+              "description": "Turn on to fetch a Perplexity answer for every query.",
+              "type": "boolean"
+            },
+            "searchRecency": {
+              "title": "Search recency",
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month",
+                "year"
+              ],
+              "description": "Filter search results based on their recency."
+            },
+            "returnImages": {
+              "title": "Include images in Perplexity AI answers",
+              "description": "Include relevant images in Perplexity's answer.",
+              "type": "boolean"
+            },
+            "returnRelatedQuestions": {
+              "title": "Include related questions in Perplexity AI answers",
+              "description": "Include follow-up questions related to your query.",
+              "type": "boolean"
+            }
+          }
+        },
+        "chatGptSearch": {
+          "title": "\u23e9 Add-on: ChatGPT search ($)",
+          "description": "Get AI answers from OpenAI's search model.<br><br>Costs extra per result - see the <a href='https://console.apify.com/actors/nFJndFXA5zjCTuudP/info/pricing?build=latest' target='_blank'>Pricing tab</a> for your rate.",
+          "type": "object",
+          "editor": "schemaBased",
+          "default": {
+            "enableChatGpt": false
+          },
+          "prefill": {
+            "enableChatGpt": false
+          },
+          "example": {
+            "enableChatGpt": true
+          },
+          "properties": {
+            "enableChatGpt": {
+              "title": "\u23e9 Add-on: ChatGPT search ($)",
+              "description": "Turn on to fetch a ChatGPT answer for every query.",
+              "type": "boolean"
+            }
+          }
+        },
+        "copilotSearch": {
+          "title": "\u23e9 Add-on: Microsoft Copilot search ($)",
+          "description": "Get AI answers from Microsoft Copilot.",
+          "type": "object",
+          "editor": "schemaBased",
+          "default": {
+            "enableCopilot": false
+          },
+          "prefill": {
+            "enableCopilot": false
+          },
+          "example": {
+            "enableCopilot": true
+          },
+          "properties": {
+            "enableCopilot": {
+              "title": "\u23e9 Add-on: Microsoft Copilot search ($)",
+              "description": "Turn on to fetch a Microsoft Copilot answer for every query.",
+              "type": "boolean"
+            },
+            "copilotSearchMode": {
+              "title": "Microsoft Copilot search mode",
+              "type": "string",
+              "enum": [
+                "chat",
+                "reasoning",
+                "smart",
+                "study"
+              ],
+              "description": "Select which Microsoft Copilot chat mode to use for the request:<br><br>\u2022 <b>chat</b> - Standard conversational mode. Best for general queries and quick answers.<br>\u2022 <b>reasoning</b> - Deep analytical mode. Best for complex questions requiring logical depth.<br>\u2022 <b>smart</b> - Balanced mode combining speed and reasoning for most use cases.<br>\u2022 <b>study</b> - Detailed explanatory mode. Best for educational and research-oriented prompts."
+            }
+          }
+        },
+        "maximumLeadsEnrichmentRecords": {
+          "title": "\u23e9 Add-on: Extract business leads information: max leads per domain ($)",
+          "description": "Maximum number of lead records to scrape per domain found. Set to 0 (the default) to disable leads enrichment.<br><br>\u26a0\ufe0f This returns personal data. You're responsible for having a legal basis to collect and use it under privacy laws.<br><br>\u26a0\ufe0f <b>This value is a multiplier</b> - see the section description above for how costs are calculated.",
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "prefill": 0,
+          "example": 5,
+          "sectionCaption": "\ud83d\udc65 Add-on: Business leads enrichment ($)",
+          "sectionDescription": "Add contact and company details for the people behind each domain you find.<br><br><b>What you get:</b> name, work email, phone number, job title, and LinkedIn profile, plus company data like industry and size.<br><br>Find the leads tied to each search result in the <b>'Organic results'</b> tab.<br><br>\u26a0\ufe0f <b>How costs work:</b> the number you request is <b>per domain found</b>. Requesting 10 leads across 1,000 domains attempts 10,000 leads. You only pay for leads actually found. Higher-tier plans mean bigger discounts - see the <a href='https://console.apify.com/actors/nFJndFXA5zjCTuudP/info/pricing?build=latest' target='_blank'>Pricing tab</a> for your exact rate.<br><br><b>Please be aware:</b> enrichment runs on every domain in your results - news sites, directories, and comparison sites included, not just company websites."
+        },
+        "leadsEnrichmentDepartments": {
+          "title": "Lead departments",
+          "description": "Include only leads from specific departments, such as Sales, Marketing, or C-suite. Only applies when business leads enrichment (<code>maximumLeadsEnrichmentRecords</code>) is enabled. Note that some job titles may be miscategorized.",
+          "type": "array",
+          "editor": "select",
+          "example": [
+            "marketing",
+            "sales"
+          ],
+          "items": {
+            "type": "string",
+            "enum": [
+              "c_suite",
+              "product",
+              "engineering_technical",
+              "design",
+              "education",
+              "finance",
+              "human_resources",
+              "information_technology",
+              "legal",
+              "marketing",
+              "medical_health",
+              "operations",
+              "sales",
+              "consulting"
+            ],
+            "enumTitles": [
+              "C-Suite",
+              "Product",
+              "Engineering & Technical",
+              "Design",
+              "Education",
+              "Finance",
+              "Human Resources",
+              "Information Technology",
+              "Legal",
+              "Marketing",
+              "Medical & Health",
+              "Operations",
+              "Sales",
+              "Consulting"
+            ]
+          }
+        },
+        "verifyLeadsEnrichmentEmails": {
+          "title": "\u23e9 Add-on: Email verification ($)",
+          "type": "boolean",
+          "description": "Check whether each lead's email is actually deliverable before you reach out. Adds an <code>emailVerification</code> object to every lead with the result and a quality score.<br><br><b>Charged (decisive results):</b> valid (<code>ok</code>), invalid, and disposable addresses.<br><b>Not charged:</b> catch-all, unknown, and error results.<br><br>\u26a0\ufe0f Requires business leads enrichment to be enabled.",
+          "default": false,
+          "example": true
+        },
+        "linkProspecting": {
+          "title": "\ud83d\udd17 Add-on: Link prospecting tool ($)",
+          "description": "<b>Charged events:</b> <code>search-page-scraped</code> (base, per Google SERP page), <code>website-content-scraped</code>, <code>lead-scraped</code> (up to 5 contacts per domain, marketing and C-suite roles only), and one event per enabled AI engine query. See the <a href='https://console.apify.com/actors/nFJndFXA5zjCTuudP/info/pricing?build=latest' target='_blank'>Pricing tab</a> for rates.<br><br>\u26a0\ufe0f If business leads enrichment is also active, domains that appear in both organic results and AI citations may be enriched by both features and charged for leads separately.<br><br>\u26a0\ufe0f If the Full website content add-on is also active, pages shared between the two add-ons are scraped and charged only once.",
+          "type": "object",
+          "editor": "schemaBased",
+          "sectionCaption": "\ud83d\udd17 Add-on: Link prospecting tool ($)",
+          "sectionDescription": "Find websites that cover your topic but don't yet mention your brand, then get outreach contacts for link building.<br><br><b>How it works:</b> checks every URL cited in Google Search results, and any other AI engines enabled in the AI search visibility section above.<br><br><b>To enable:</b> set <b>Brand name</b> below. Leave it empty to skip this add-on.<br><br><b>Where to find results:</b> in a separate <b>Link prospecting tool</b> dataset.",
+          "properties": {
+            "brandName": {
+              "title": "Brand name",
+              "type": "string",
+              "editor": "textfield",
+              "description": "Your brand name to search for on every cited page. Setting this field enables the Link prospecting tool add-on. Pages where this name is found are saved with <code>isBrandMentionedInSource: true</code>. Pages where it is absent are saved with <code>isBrandMentionedInSource: false</code> and enriched with outreach contacts. Leave empty to disable this add-on.",
+              "example": "Apify"
+            },
+            "ownDomains": {
+              "title": "Own domains",
+              "type": "array",
+              "description": "List of domains belonging to your brand. These are excluded from Link prospecting tool results - you don't need to find outreach contacts on your own site. Subdomains are also excluded when their root domain matches.",
+              "example": [
+                "mycompany.com",
+                "blog.mycompany.com"
+              ],
+              "editor": "stringList",
+              "items": {
+                "type": "string"
+              }
+            },
+            "ignoredDomains": {
+              "title": "Ignored domains",
+              "type": "array",
+              "description": "List of domains to exclude from Link prospecting tool (e.g. competitor sites or well-known directories). Subdomains are also excluded when their root domain matches.",
+              "example": [
+                "competitor.com",
+                "wikipedia.org"
+              ],
+              "editor": "stringList",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "websiteContentScraper": {
+          "title": "\ud83d\udd0d Add-on: Full website content ($)",
+          "description": "Get the full page content of every organic result as <code>websiteContent.text</code>, plus <code>websiteContent.markdown</code> when the page converts cleanly (<code>null</code> otherwise). Uses the Website Content Crawler. Charged event: <code>website-content-scraped</code>, per successfully scraped page. See the <a href='https://console.apify.com/actors/nFJndFXA5zjCTuudP/info/pricing?build=latest' target='_blank'>Pricing tab</a> for rates.<br><br>\u26a0\ufe0f If the Link prospecting tool add-on is also active, pages shared between the two add-ons are scraped and charged only once.",
+          "type": "object",
+          "editor": "schemaBased",
+          "default": {
+            "enable": false
+          },
+          "example": {
+            "enable": true
+          },
+          "properties": {
+            "enable": {
+              "title": "\ud83d\udd0d Add-on: Full website content ($)",
+              "description": "Turn on to scrape each organic result page and attach its content to the result item.",
+              "type": "boolean"
+            }
+          },
+          "sectionCaption": "\ud83d\udd0d Add-on: Full website content ($)",
+          "sectionDescription": "Pull the full page content behind your organic results so you can run content gap analysis, competitive audits, and SERP benchmarking."
+        },
+        "focusOnPaidAds": {
+          "title": "\ud83d\udce2 Add-on: Paid results (ads) extraction ($)",
+          "type": "boolean",
+          "description": "Turn on to capture the Google Ads shown for each query.",
+          "default": false,
+          "example": true,
+          "sectionCaption": "\ud83d\udce2 Add-on: Paid results (ads) extraction ($)",
+          "sectionDescription": "Capture the Google Ads running for your keywords to benchmark competitor messaging and spot new campaigns.<br><br><b>How it works:</b> uses an ad-specialized proxy with up to 3 retries per query to detect ads reliably. Best for queries likely to show ads, skip it for general scraping.<br><br><b>Pricing:</b> costs extra per search page even if no ads are found. The value is in the complete check. See the <a href='https://console.apify.com/actors/nFJndFXA5zjCTuudP/info/pricing?build=latest' target='_blank'>Pricing tab</a> for your rate."
+        },
+        "countryCode": {
+          "sectionCaption": "Location and language",
+          "title": "Country",
+          "type": "string",
+          "description": "Country of the Google results, passed to Google Search as the <code>gl</code> URL query parameter. By default, the Actor uses United States. Google Search URLs are used as they are. The country is also sent to the LLM search engines. ChatGPT, Gemini, Copilot and AI Mode do not support every country; if the selected one is not available, that engine returns no result.",
+          "editor": "select",
+          "example": "us",
+          "enum": [
+            "",
+            "af",
+            "al",
+            "dz",
+            "as",
+            "ad",
+            "ao",
+            "ai",
+            "aq",
+            "ag",
+            "ar",
+            "am",
+            "aw",
+            "au",
+            "at",
+            "az",
+            "bs",
+            "bh",
+            "bd",
+            "bb",
+            "by",
+            "be",
+            "bz",
+            "bj",
+            "bm",
+            "bt",
+            "bo",
+            "ba",
+            "bw",
+            "bv",
+            "br",
+            "io",
+            "bn",
+            "bg",
+            "bf",
+            "bi",
+            "kh",
+            "cm",
+            "ca",
+            "cv",
+            "ky",
+            "cf",
+            "td",
+            "cl",
+            "cn",
+            "cx",
+            "cc",
+            "co",
+            "km",
+            "cg",
+            "cd",
+            "ck",
+            "cr",
+            "ci",
+            "hr",
+            "cu",
+            "cy",
+            "cz",
+            "dk",
+            "dj",
+            "dm",
+            "do",
+            "ec",
+            "eg",
+            "sv",
+            "gq",
+            "er",
+            "ee",
+            "et",
+            "fk",
+            "fo",
+            "fj",
+            "fi",
+            "fr",
+            "gf",
+            "pf",
+            "tf",
+            "ga",
+            "gm",
+            "ge",
+            "de",
+            "gh",
+            "gi",
+            "gr",
+            "gl",
+            "gd",
+            "gp",
+            "gu",
+            "gt",
+            "gn",
+            "gw",
+            "gy",
+            "ht",
+            "hm",
+            "va",
+            "hn",
+            "hk",
+            "hu",
+            "is",
+            "in",
+            "id",
+            "ir",
+            "iq",
+            "ie",
+            "il",
+            "it",
+            "jm",
+            "jp",
+            "jo",
+            "kz",
+            "ke",
+            "ki",
+            "kp",
+            "kr",
+            "kw",
+            "kg",
+            "la",
+            "lv",
+            "lb",
+            "ls",
+            "lr",
+            "ly",
+            "li",
+            "lt",
+            "lu",
+            "mo",
+            "mk",
+            "mg",
+            "mw",
+            "my",
+            "mv",
+            "ml",
+            "mt",
+            "mh",
+            "mq",
+            "mr",
+            "mu",
+            "yt",
+            "mx",
+            "fm",
+            "md",
+            "mc",
+            "mn",
+            "me",
+            "ms",
+            "ma",
+            "mz",
+            "mm",
+            "na",
+            "nr",
+            "np",
+            "nl",
+            "an",
+            "nc",
+            "nz",
+            "ni",
+            "ne",
+            "ng",
+            "nu",
+            "nf",
+            "mp",
+            "no",
+            "om",
+            "pk",
+            "pw",
+            "ps",
+            "pa",
+            "pg",
+            "py",
+            "pe",
+            "ph",
+            "pn",
+            "pl",
+            "pt",
+            "pr",
+            "qa",
+            "re",
+            "ro",
+            "ru",
+            "rw",
+            "sh",
+            "kn",
+            "lc",
+            "pm",
+            "vc",
+            "ws",
+            "sm",
+            "st",
+            "sa",
+            "sn",
+            "rs",
+            "sc",
+            "sl",
+            "sg",
+            "sk",
+            "si",
+            "sb",
+            "so",
+            "za",
+            "gs",
+            "es",
+            "lk",
+            "sd",
+            "sr",
+            "sj",
+            "sz",
+            "se",
+            "ch",
+            "sy",
+            "tw",
+            "tj",
+            "tz",
+            "th",
+            "tl",
+            "tg",
+            "tk",
+            "to",
+            "tt",
+            "tn",
+            "tr",
+            "tm",
+            "tc",
+            "tv",
+            "ug",
+            "ua",
+            "ae",
+            "gb",
+            "us",
+            "um",
+            "uy",
+            "uz",
+            "vu",
+            "ve",
+            "vn",
+            "vg",
+            "vi",
+            "wf",
+            "eh",
+            "ye",
+            "zm",
+            "zw"
+          ],
+          "enumTitles": [
+            "Default (United States)",
+            "Afghanistan",
+            "Albania",
+            "Algeria",
+            "American Samoa",
+            "Andorra",
+            "Angola",
+            "Anguilla",
+            "Antarctica",
+            "Antigua and Barbuda",
+            "Argentina",
+            "Armenia",
+            "Aruba",
+            "Australia",
+            "Austria",
+            "Azerbaijan",
+            "Bahamas",
+            "Bahrain",
+            "Bangladesh",
+            "Barbados",
+            "Belarus",
+            "Belgium",
+            "Belize",
+            "Benin",
+            "Bermuda",
+            "Bhutan",
+            "Bolivia",
+            "Bosnia and Herzegovina",
+            "Botswana",
+            "Bouvet Island",
+            "Brazil",
+            "British Indian Ocean Territory",
+            "Brunei Darussalam",
+            "Bulgaria",
+            "Burkina Faso",
+            "Burundi",
+            "Cambodia",
+            "Cameroon",
+            "Canada",
+            "Cape Verde",
+            "Cayman Islands",
+            "Central African Republic",
+            "Chad",
+            "Chile",
+            "China",
+            "Christmas Island",
+            "Cocos (Keeling) Islands",
+            "Colombia",
+            "Comoros",
+            "Congo",
+            "Congo, the Democratic Republic of the",
+            "Cook Islands",
+            "Costa Rica",
+            "Cote D'ivoire",
+            "Croatia",
+            "Cuba",
+            "Cyprus",
+            "Czech Republic",
+            "Denmark",
+            "Djibouti",
+            "Dominica",
+            "Dominican Republic",
+            "Ecuador",
+            "Egypt",
+            "El Salvador",
+            "Equatorial Guinea",
+            "Eritrea",
+            "Estonia",
+            "Ethiopia",
+            "Falkland Islands (Malvinas)",
+            "Faroe Islands",
+            "Fiji",
+            "Finland",
+            "France",
+            "French Guiana",
+            "French Polynesia",
+            "French Southern Territories",
+            "Gabon",
+            "Gambia",
+            "Georgia",
+            "Germany",
+            "Ghana",
+            "Gibraltar",
+            "Greece",
+            "Greenland",
+            "Grenada",
+            "Guadeloupe",
+            "Guam",
+            "Guatemala",
+            "Guinea",
+            "Guinea-Bissau",
+            "Guyana",
+            "Haiti",
+            "Heard Island and Mcdonald Islands",
+            "Holy See (Vatican City State)",
+            "Honduras",
+            "Hong Kong",
+            "Hungary",
+            "Iceland",
+            "India",
+            "Indonesia",
+            "Iran, Islamic Republic of",
+            "Iraq",
+            "Ireland",
+            "Israel",
+            "Italy",
+            "Jamaica",
+            "Japan",
+            "Jordan",
+            "Kazakhstan",
+            "Kenya",
+            "Kiribati",
+            "Korea, Democratic People's Republic of",
+            "Korea, Republic of",
+            "Kuwait",
+            "Kyrgyzstan",
+            "Lao People's Democratic Republic",
+            "Latvia",
+            "Lebanon",
+            "Lesotho",
+            "Liberia",
+            "Libyan Arab Jamahiriya",
+            "Liechtenstein",
+            "Lithuania",
+            "Luxembourg",
+            "Macao",
+            "Macedonia, the Former Yugoslav Republic of",
+            "Madagascar",
+            "Malawi",
+            "Malaysia",
+            "Maldives",
+            "Mali",
+            "Malta",
+            "Marshall Islands",
+            "Martinique",
+            "Mauritania",
+            "Mauritius",
+            "Mayotte",
+            "Mexico",
+            "Micronesia, Federated States of",
+            "Moldova, Republic of",
+            "Monaco",
+            "Mongolia",
+            "Montenegro",
+            "Montserrat",
+            "Morocco",
+            "Mozambique",
+            "Myanmar",
+            "Namibia",
+            "Nauru",
+            "Nepal",
+            "Netherlands",
+            "Netherlands Antilles",
+            "New Caledonia",
+            "New Zealand",
+            "Nicaragua",
+            "Niger",
+            "Nigeria",
+            "Niue",
+            "Norfolk Island",
+            "Northern Mariana Islands",
+            "Norway",
+            "Oman",
+            "Pakistan",
+            "Palau",
+            "Palestinian Territory, Occupied",
+            "Panama",
+            "Papua New Guinea",
+            "Paraguay",
+            "Peru",
+            "Philippines",
+            "Pitcairn",
+            "Poland",
+            "Portugal",
+            "Puerto Rico",
+            "Qatar",
+            "Reunion",
+            "Romania",
+            "Russian Federation",
+            "Rwanda",
+            "Saint Helena",
+            "Saint Kitts and Nevis",
+            "Saint Lucia",
+            "Saint Pierre and Miquelon",
+            "Saint Vincent and the Grenadines",
+            "Samoa",
+            "San Marino",
+            "Sao Tome and Principe",
+            "Saudi Arabia",
+            "Senegal",
+            "Serbia",
+            "Seychelles",
+            "Sierra Leone",
+            "Singapore",
+            "Slovakia",
+            "Slovenia",
+            "Solomon Islands",
+            "Somalia",
+            "South Africa",
+            "South Georgia and the South Sandwich Islands",
+            "Spain",
+            "Sri Lanka",
+            "Sudan",
+            "Suriname",
+            "Svalbard and Jan Mayen",
+            "Swaziland",
+            "Sweden",
+            "Switzerland",
+            "Syrian Arab Republic",
+            "Taiwan, Province of China",
+            "Tajikistan",
+            "Tanzania, United Republic of",
+            "Thailand",
+            "Timor-Leste",
+            "Togo",
+            "Tokelau",
+            "Tonga",
+            "Trinidad and Tobago",
+            "Tunisia",
+            "Turkey",
+            "Turkmenistan",
+            "Turks and Caicos Islands",
+            "Tuvalu",
+            "Uganda",
+            "Ukraine",
+            "United Arab Emirates",
+            "United Kingdom",
+            "United States",
+            "United States Minor Outlying Islands",
+            "Uruguay",
+            "Uzbekistan",
+            "Vanuatu",
+            "Venezuela",
+            "Viet Nam",
+            "Virgin Islands, British",
+            "Virgin Islands, U.S.",
+            "Wallis and Futuna",
+            "Western Sahara",
+            "Yemen",
+            "Zambia",
+            "Zimbabwe"
+          ]
+        },
+        "searchLanguage": {
+          "title": "Search language",
+          "type": "string",
+          "description": "Restricts search results to pages in a specific language. For example, choosing 'German' results in pages only in German. Passed to Google Search as the <code>lr</code> URL query parameter. <a href='https://developers.google.com/custom-search/v1/reference/rest/v1/cse/list' target='_blank'>Read more here</a>.",
+          "default": "",
+          "example": "en",
+          "editor": "select",
+          "enum": [
+            "",
+            "ar",
+            "bg",
+            "ca",
+            "cs",
+            "da",
+            "de",
+            "el",
+            "en",
+            "es",
+            "et",
+            "fi",
+            "fr",
+            "hr",
+            "hu",
+            "id",
+            "is",
+            "it",
+            "iw",
+            "ja",
+            "ko",
+            "lt",
+            "lv",
+            "nl",
+            "no",
+            "pl",
+            "pt",
+            "ro",
+            "ru",
+            "sk",
+            "sl",
+            "sr",
+            "sv",
+            "th",
+            "tr",
+            "uk",
+            "zh-CN",
+            "zh-TW"
+          ],
+          "enumTitles": [
+            "Default",
+            "Arabic",
+            "Bulgarian",
+            "Catalan",
+            "Czech",
+            "Danish",
+            "German",
+            "Greek",
+            "English",
+            "Spanish",
+            "Estonian",
+            "Finnish",
+            "French",
+            "Croatian",
+            "Hungarian",
+            "Indonesian",
+            "Icelandic",
+            "Italian",
+            "Hebrew",
+            "Japanese",
+            "Korean",
+            "Lithuanian",
+            "Latvian",
+            "Dutch",
+            "Norwegian",
+            "Polish",
+            "Portuguese",
+            "Romanian",
+            "Russian",
+            "Slovak",
+            "Slovenian",
+            "Serbian",
+            "Swedish",
+            "Thai",
+            "Turkish",
+            "Ukrainian",
+            "Chinese (Simplified)",
+            "Chinese (Traditional)"
+          ]
+        },
+        "languageCode": {
+          "title": "Interface language",
+          "type": "string",
+          "description": "Language of the Google Search interface (menus, buttons, etc. - not the search results themselves). Passed to Google Search as the <code>hl</code> URL query parameter. It can still affect results on international queries when no search-language restriction (the <code>lr</code> parameter) is set. <a href='https://developers.google.com/custom-search/v1/reference/rest/v1/cse/list' target='_blank'>Read more here</a>.",
+          "default": "",
+          "example": "en",
+          "editor": "select",
+          "enum": [
+            "",
+            "af",
+            "sq",
+            "sm",
+            "ar",
+            "az",
+            "eu",
+            "be",
+            "bn",
+            "bh",
+            "bs",
+            "bg",
+            "ca",
+            "zh-CN",
+            "zh-TW",
+            "hr",
+            "cs",
+            "da",
+            "nl",
+            "en",
+            "eo",
+            "et",
+            "fo",
+            "fi",
+            "fr",
+            "fy",
+            "gl",
+            "ka",
+            "de",
+            "el",
+            "gu",
+            "iw",
+            "hi",
+            "hu",
+            "is",
+            "id",
+            "ia",
+            "ga",
+            "it",
+            "ja",
+            "jw",
+            "kn",
+            "ko",
+            "la",
+            "lv",
+            "lt",
+            "mk",
+            "ms",
+            "ml",
+            "mt",
+            "mr",
+            "ne",
+            "no",
+            "nn",
+            "oc",
+            "fa",
+            "pl",
+            "pt-BR",
+            "pt-PT",
+            "pa",
+            "ro",
+            "ru",
+            "gd",
+            "sr",
+            "si",
+            "sk",
+            "sl",
+            "es",
+            "su",
+            "sw",
+            "sv",
+            "tl",
+            "ta",
+            "te",
+            "th",
+            "ti",
+            "tr",
+            "uk",
+            "ur",
+            "uz",
+            "vi",
+            "cy",
+            "xh",
+            "zu"
+          ],
+          "enumTitles": [
+            "Same as country",
+            "Afrikaans",
+            "Albanian",
+            "Amharic",
+            "Arabic",
+            "Azerbaijani",
+            "Basque",
+            "Belarusian",
+            "Bengali",
+            "Bihari",
+            "Bosnian",
+            "Bulgarian",
+            "Catalan",
+            "Chinese (Simplified)",
+            "Chinese (Traditional)",
+            "Croatian",
+            "Czech",
+            "Danish",
+            "Dutch",
+            "English",
+            "Esperanto",
+            "Estonian",
+            "Faroese",
+            "Finnish",
+            "French",
+            "Frisian",
+            "Galician",
+            "Georgian",
+            "German",
+            "Greek",
+            "Gujarati",
+            "Hebrew",
+            "Hindi",
+            "Hungarian",
+            "Icelandic",
+            "Indonesian",
+            "Interlingua",
+            "Irish",
+            "Italian",
+            "Japanese",
+            "Javanese",
+            "Kannada",
+            "Korean",
+            "Latin",
+            "Latvian",
+            "Lithuanian",
+            "Macedonian",
+            "Malay",
+            "Malayam",
+            "Maltese",
+            "Marathi",
+            "Nepali",
+            "Norwegian",
+            "Norwegian (Nynorsk)",
+            "Occitan",
+            "Persian",
+            "Polish",
+            "Portuguese (Brazil)",
+            "Portuguese (Portugal)",
+            "Punjabi",
+            "Romanian",
+            "Russian",
+            "Scots Gaelic",
+            "Serbian",
+            "Sinhalese",
+            "Slovak",
+            "Slovenian",
+            "Spanish",
+            "Sudanese",
+            "Swahili",
+            "Swedish",
+            "Tagalog",
+            "Tamil",
+            "Telugu",
+            "Thai",
+            "Tigrinya",
+            "Turkish",
+            "Ukrainian",
+            "Urdu",
+            "Uzbek",
+            "Vietnamese",
+            "Welsh",
+            "Xhosa",
+            "Zulu"
+          ]
+        },
+        "locationUule": {
+          "title": "Exact location (Google UULE parameter)",
+          "type": "string",
+          "description": "The code for the exact location for the Google search. It's passed to Google Search as the <code>uule</code> URL query parameter. You can use the <a href='https://padavvan.github.io/' target='_blank'>UULE code generator</a>. Learn more about <a href='https://moz.com/ugc/geolocation-the-ultimate-tip-to-emulate-local-search' target='_blank'>emulating local search</a>.",
+          "editor": "textfield",
+          "example": "w+CAIQICIhVW5pdGVkIFN0YXRlcyx1c2E="
+        },
+        "forceExactMatch": {
+          "title": "Force exact match",
+          "type": "boolean",
+          "description": "If checked, the scraper will search for the exact phrase in the query. This is done by wrapping the query in quotes. Note that this may return fewer results. Also note that if you're using operators such as OR or AND, the whole query will be wrapped in quotes, such as <code>\"Windows AND macOS\"</code>. If you want to search for queries such as <code>\"Windows\" AND \"macOS\"</code>, you need to specify them directly in the <code>queries</code> field.",
+          "default": false,
+          "example": true,
+          "sectionCaption": "Advanced search filters",
+          "sectionDescription": "Use these filters to narrow down your search results. You can use them in combination with your search terms above. Each filter will be applied to all queries except for the ones that already contain the given filter. For example, if you have a query <code>literature site:example.com</code>, the <code>site</code> filter will not be applied to it."
+        },
+        "site": {
+          "title": "Site",
+          "type": "string",
+          "description": "Limits the search to a specific site, such as: <code>site:example.com</code>. Note that the <code>site</code> filter takes precedence over the <code>relatedToSite</code> filter. If both filters are set, the <code>relatedToSite</code> filter will be ignored and not added to the search queries.",
+          "editor": "textfield",
+          "pattern": "^([\\w-]+\\.)+\\w+$",
+          "example": "example.com"
+        },
+        "relatedToSite": {
+          "title": "Related to site",
+          "type": "string",
+          "description": "Filters pages related to a specific site, such as: <code>related:example.com</code>. Note that the <code>site</code> filter takes precedence over the <code>relatedToSite</code> filter. If both filters are set, the <code>relatedToSite</code> filter will be ignored and not added to the search queries.",
+          "editor": "textfield",
+          "pattern": "^([\\w-]+\\.)+\\w+$",
+          "example": "example.com"
+        },
+        "wordsInTitle": {
+          "title": "Words in title",
+          "type": "array",
+          "description": "Filters pages with specific words in the title. The scraper uses the <code>intitle:</code> operator, even for multiple words (e.g. <code>recipe site:allrecipes.com intitle:\"easy apple\" intitle:pie</code>). There's also a <code>allintitle:</code> operator available, but it's problematic when combined with other search filters, so the scraper avoids using it. If you need to use the <code>allintitle:</code> operator specifically, you can include it in your custom queries from the <code>queries</code> field.",
+          "editor": "stringList",
+          "items": {
+            "type": "string",
+            "pattern": "^[^\\s](.+[^\\s])*$"
+          },
+          "maxItems": 32,
+          "default": [],
+          "example": [
+            "easy",
+            "tutorial"
+          ]
+        },
+        "wordsInText": {
+          "title": "Words in text",
+          "type": "array",
+          "description": "Filters pages with specific words in the text. The scraper uses the <code>intext:</code> operator, even for multiple words (e.g. <code>cartoon site:wikipedia.com intext:cat intext:mouse</code>). There's also a <code>allintext:</code> operator available, but it's problematic when combined with other search filters, so the scraper avoids using it. If you need to use the <code>allintext:</code> operator specifically, you can include it in your custom queries from the <code>queries</code> field.",
+          "editor": "stringList",
+          "items": {
+            "type": "string",
+            "pattern": "^[^\\s](.+[^\\s])*$"
+          },
+          "maxItems": 32,
+          "default": [],
+          "example": [
+            "artificial intelligence"
+          ]
+        },
+        "wordsInUrl": {
+          "title": "Words in URL",
+          "type": "array",
+          "description": "Filters pages with specific words in the URL. The scraper uses the <code>inurl:</code> operator, even for multiple words (e.g. <code>recipe site:allrecipes.com inurl:apple inurl:pie</code>). There's also a <code>allinurl:</code> operator available, but it's problematic when combined with other search filters, so the scraper avoids using it. If you need to use the <code>allinurl:</code> operator specifically, you can include it in your custom queries from the <code>queries</code> field.",
+          "editor": "stringList",
+          "items": {
+            "type": "string",
+            "pattern": "^[^\\s](.+[^\\s])*$"
+          },
+          "maxItems": 32,
+          "default": [],
+          "example": [
+            "blog"
+          ]
+        },
+        "quickDateRange": {
+          "title": "Quick date range",
+          "type": "string",
+          "description": "Filters results from a specific date range. d[number] specifies the number of past days (e.g. the past 10 days can be written as d10). The same applies to hours, weeks, months, and years: h[number], w[number], m[number], y[number]. Example for the past year: 'y1' or even 'y'. The value is passed to Google Search using the <code>tbs</code> URL query parameter, prefixed with <code>qdr:</code>. You should avoid combining this filter with the <code>beforeDate</code> and <code>afterDate</code> filters to prevent conflicts.",
+          "editor": "textfield",
+          "pattern": "^[hdwmy]\\d*$",
+          "example": "m6"
+        },
+        "beforeDate": {
+          "title": "Before date",
+          "type": "string",
+          "description": "Filters results from before the specified date. Either absolute date (e.g. `2024-05-03`) or relative date from now into the past (e.g. `8 days`, `3 months`). Absolute time is always interpreted in the UTC timezone, not your local timezone - please convert accordingly. Supported relative date & time units: `days`, `weeks`, `months`, `years`. You should avoid combining this filter with the `quickDateRange` filter to prevent conflicts.",
+          "editor": "datepicker",
+          "dateType": "absoluteOrRelative",
+          "pattern": "^(\\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])(T[0-2]\\d:[0-5]\\d(:[0-5]\\d)?(\\.\\d+)?Z?)?$|^(\\d+)\\s*(minute|hour|day|week|month|year)s?$",
+          "example": "2024-12-31"
+        },
+        "afterDate": {
+          "title": "After date",
+          "type": "string",
+          "description": "Filters results from after the specified date. Either absolute date (e.g. `2024-05-03`) or relative date from now into the past (e.g. `8 days`, `3 months`). Absolute time is always interpreted in the UTC timezone, not your local timezone - please convert accordingly. Supported relative date & time units: `days`, `weeks`, `months`, `years`. You should avoid combining this filter with the `quickDateRange` filter to prevent conflicts.",
+          "editor": "datepicker",
+          "dateType": "absoluteOrRelative",
+          "pattern": "^(\\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])(T[0-2]\\d:[0-5]\\d(:[0-5]\\d)?(\\.\\d+)?Z?)?$|^(\\d+)\\s*(minute|hour|day|week|month|year)s?$",
+          "example": "2024-01-01"
+        },
+        "fileTypes": {
+          "title": "File types",
+          "description": "Filters results of specific file types using the <code>filetype:</code> operator, such as <code>filetype:pdf</code>. You can select multiple file types as well. They will be combined with the <code>OR</code> operator, for example: <code>filetype:doc OR filetype:txt</code>. If you need to use a file type that is not in the list (such as a source code file type), you can include it in your custom queries from the <code>queries</code> field, using the <code>filetype:</code> operator.",
+          "type": "array",
+          "editor": "select",
+          "maxItems": 10,
+          "example": [
+            "pdf",
+            "doc"
+          ],
+          "items": {
+            "type": "string",
+            "enum": [
+              "pdf",
+              "csv",
+              "epub",
+              "ps",
+              "htm",
+              "html",
+              "xls",
+              "xlsx",
+              "ppt",
+              "pptx",
+              "doc",
+              "docx",
+              "odp",
+              "ods",
+              "odt",
+              "rtf",
+              "svg",
+              "tex",
+              "txt",
+              "wml",
+              "wap",
+              "xml",
+              "xps",
+              "md",
+              "readme",
+              "log",
+              "yml",
+              "yaml",
+              "toml",
+              "ipynb",
+              "sas",
+              "sql",
+              "rdf",
+              "avif",
+              "avi",
+              "mkv",
+              "mov",
+              "flv",
+              "asf",
+              "ogv"
+            ],
+            "enumTitles": [
+              "Adobe Portable Document Format (pdf)",
+              "Comma-Separated Values (csv)",
+              "Electronic Publication (epub)",
+              "Adobe PostScript (ps)",
+              "HTML (htm)",
+              "HTML (html)",
+              "Microsoft Excel (xls)",
+              "Microsoft Excel (xlsx)",
+              "Microsoft PowerPoint (ppt)",
+              "Microsoft PowerPoint (pptx)",
+              "Microsoft Word (doc)",
+              "Microsoft Word (docx)",
+              "OpenOffice presentation (odp)",
+              "OpenOffice spreadsheet (ods)",
+              "OpenOffice text (odt)",
+              "Rich Text Format (rtf)",
+              "Scalable Vector Graphics (svg)",
+              "TeX/LaTeX (tex)",
+              "Text (txt)",
+              "Wireless Markup Language (wml)",
+              "Wireless Markup Language (wap)",
+              "XML (xml)",
+              "XML Paper Specification (xps)",
+              "Markdown (md)",
+              "Readme (readme)",
+              "Log file (log)",
+              "YAML (yml)",
+              "YAML (yaml)",
+              "TOML (toml)",
+              "Jupyter Notebook (ipynb)",
+              "SAS (sas)",
+              "SQL (sql)",
+              "Resource Description Framework (rdf)",
+              "AV1 Image File Format (avif)",
+              "Audio Video Interleave (avi)",
+              "Matroska Multimedia Container (mkv)",
+              "QuickTime Movie (mov)",
+              "Flash Video (flv)",
+              "Advanced Systems Format (asf)",
+              "Ogg Video (ogv)"
+            ]
+          }
+        },
+        "mobileResults": {
+          "title": "Mobile results",
+          "type": "boolean",
+          "description": "If checked, the scraper returns results from the mobile version of Google Search. Otherwise, desktop results are returned.",
+          "default": false,
+          "example": true,
+          "sectionCaption": "Additional settings"
+        },
+        "includeUnfilteredResults": {
+          "title": "Unfiltered results",
+          "type": "boolean",
+          "description": "If checked, the lower-quality results that Google normally filters out are included.",
+          "default": false,
+          "example": true
+        },
+        "saveHtml": {
+          "title": "Save HTML to dataset",
+          "type": "boolean",
+          "description": "If checked, the HTML of the Google Search results pages is stored in the default dataset, under the <code>html</code> property. This is useful if you need to process the HTML, but it makes the dataset large.",
+          "default": false,
+          "example": true
+        },
+        "saveHtmlToKeyValueStore": {
+          "title": "Save HTML to key-value store",
+          "type": "boolean",
+          "description": "If checked, the HTML of the Google Search results pages is stored in the default key-value store, and links to the files are stored in the dataset under the <code>htmlSnapshotUrl</code> property. This is useful for debugging, since you can easily view the pages in the browser. Note that this feature may slow down the Actor.",
+          "default": true,
+          "example": false
+        },
+        "includeIcons": {
+          "title": "Include icon image data (base64)",
+          "type": "boolean",
+          "description": "If checked, all of the results (organicResults, paidResults, suggestedResults) will contain Base64-encoded icon image data if found.",
+          "default": false,
+          "example": true
+        }
+      },
+      "required": [
+        "queries"
+      ]
+    },
+    "pricing": [
+      {
+        "minimalMaxTotalChargeUsd": 0.5,
+        "pricingModel": "PAY_PER_EVENT",
+        "isPriceChangeNotificationSuppressed": true,
+        "apifyMarginPercentage": 0.2,
+        "pricingPerEvent": {
+          "actorChargeEvents": {
+            "search-page-scraped": {
+              "eventTitle": "Scraped search result page",
+              "eventDescription": "Cost per page of Google Search results successfully scraped.",
+              "isOneTimeEvent": false,
+              "eventTieredPricingUsd": {
+                "FREE": {
+                  "tieredEventPriceUsd": 0.0045
+                },
+                "BRONZE": {
+                  "tieredEventPriceUsd": 0.0025
+                },
+                "SILVER": {
+                  "tieredEventPriceUsd": 0.00195
+                },
+                "GOLD": {
+                  "tieredEventPriceUsd": 0.0018
+                },
+                "PLATINUM": {
+                  "tieredEventPriceUsd": 0.0015
+                },
+                "DIAMOND": {
+                  "tieredEventPriceUsd": 0.0012
+                }
+              },
+              "isPrimaryEvent": true
+            },
+            "ai-overview-scraped": {
+              "eventTitle": "Add-on: Google AI Overview",
+              "eventDescription": "Extra cost per query when an AI Overview is successfully captured. Uses a specialized proxy to increase the probability of getting one.",
+              "isOneTimeEvent": false,
+              "eventTieredPricingUsd": {
+                "FREE": {
+                  "tieredEventPriceUsd": 0.003
+                },
+                "BRONZE": {
+                  "tieredEventPriceUsd": 0.002
+                },
+                "SILVER": {
+                  "tieredEventPriceUsd": 0.0015
+                },
+                "GOLD": {
+                  "tieredEventPriceUsd": 0.001
+                },
+                "PLATINUM": {
+                  "tieredEventPriceUsd": 0.0007
+                },
+                "DIAMOND": {
+                  "tieredEventPriceUsd": 0.0005
+                }
+              }
+            },
+            "ai-mode-result-scraped": {
+              "eventTitle": "Add-on: Google AI Mode",
+              "eventDescription": "Extra cost for using Google AI Mode per search query. This cost is applied when a successful Google AI Mode request is returned.",
+              "isOneTimeEvent": false,
+              "eventTieredPricingUsd": {
+                "FREE": {
+                  "tieredEventPriceUsd": 0.2
+                },
+                "BRONZE": {
+                  "tieredEventPriceUsd": 0.005
+                },
+                "SILVER": {
+                  "tieredEventPriceUsd": 0.003
+                },
+                "GOLD": {
+                  "tieredEventPriceUsd": 0.002
+                },
+                "PLATINUM": {
+                  "tieredEventPriceUsd": 0.0015
+                },
+                "DIAMOND": {
+                  "tieredEventPriceUsd": 0.001
+                }
+              }
+            },
+            "perplexity-ai-result-scraped": {
+              "eventTitle": "Add-on: Perplexity AI search",
+              "eventDescription": "Extra cost for using Perplexity AI search per search query. This cost is applied when a successful Perplexity AI search request is returned.",
+              "isOneTimeEvent": false,
+              "eventTieredPricingUsd": {
+                "FREE": {
+                  "tieredEventPriceUsd": 0.2
+                },
+                "BRONZE": {
+                  "tieredEventPriceUsd": 0.013
+                },
+                "SILVER": {
+                  "tieredEventPriceUsd": 0.01
+                },
+                "GOLD": {
+                  "tieredEventPriceUsd": 0.009
+                },
+                "PLATINUM": {
+                  "tieredEventPriceUsd": 0.008
+                },
+                "DIAMOND": {
+                  "tieredEventPriceUsd": 0.007
+                }
+              }
+            },
+            "chatgpt-result-scraped": {
+              "eventTitle": "Add-on: ChatGPT search",
+              "eventDescription": "Extra cost for using ChatGPT search per search query. This cost is applied when a successful ChatGPT search request is returned.",
+              "isOneTimeEvent": false,
+              "eventTieredPricingUsd": {
+                "FREE": {
+                  "tieredEventPriceUsd": 0.2
+                },
+                "BRONZE": {
+                  "tieredEventPriceUsd": 0.005
+                },
+                "SILVER": {
+                  "tieredEventPriceUsd": 0.004
+                },
+                "GOLD": {
+                  "tieredEventPriceUsd": 0.003
+                },
+                "PLATINUM": {
+                  "tieredEventPriceUsd": 0.0025
+                },
+                "DIAMOND": {
+                  "tieredEventPriceUsd": 0.002
+                }
+              }
+            },
+            "copilot-result-scraped": {
+              "eventTitle": "Add-on: Copilot search",
+              "eventDescription": "Extra cost for using Copilot search per search query. This cost is applied when a successful Copilot search request is returned.",
+              "isOneTimeEvent": false,
+              "eventTieredPricingUsd": {
+                "FREE": {
+                  "tieredEventPriceUsd": 0.2
+                },
+                "BRONZE": {
+                  "tieredEventPriceUsd": 0.005
+                },
+                "SILVER": {
+                  "tieredEventPriceUsd": 0.004
+                },
+                "GOLD": {
+                  "tieredEventPriceUsd": 0.003
+                },
+                "PLATINUM": {
+                  "tieredEventPriceUsd": 0.0025
+                },
+                "DIAMOND": {
+                  "tieredEventPriceUsd": 0.002
+                }
+              }
+            },
+            "gemini-result-scraped": {
+              "eventTitle": "Add-on: Gemini search",
+              "eventDescription": "Extra cost for using Gemini search per search query. This cost is applied when a successful Gemini search request is returned.",
+              "isOneTimeEvent": false,
+              "eventTieredPricingUsd": {
+                "FREE": {
+                  "tieredEventPriceUsd": 0.2
+                },
+                "BRONZE": {
+                  "tieredEventPriceUsd": 0.005
+                },
+                "SILVER": {
+                  "tieredEventPriceUsd": 0.004
+                },
+                "GOLD": {
+                  "tieredEventPriceUsd": 0.003
+                },
+                "PLATINUM": {
+                  "tieredEventPriceUsd": 0.0025
+                },
+                "DIAMOND": {
+                  "tieredEventPriceUsd": 0.002
+                }
+              }
+            },
+            "lead-scraped": {
+              "eventTitle": "Add-on: Business leads enrichment",
+              "eventDescription": "Cost per successfully extracted business lead. Get key prospect details: full name, work email, phone number, job title, and LinkedIn profile. Business leads are extracted based on the found web domains.",
+              "isOneTimeEvent": false,
+              "eventTieredPricingUsd": {
+                "FREE": {
+                  "tieredEventPriceUsd": 0.1
+                },
+                "BRONZE": {
+                  "tieredEventPriceUsd": 0.005
+                },
+                "SILVER": {
+                  "tieredEventPriceUsd": 0.005
+                },
+                "GOLD": {
+                  "tieredEventPriceUsd": 0.004
+                },
+                "PLATINUM": {
+                  "tieredEventPriceUsd": 0.003
+                },
+                "DIAMOND": {
+                  "tieredEventPriceUsd": 0.003
+                }
+              }
+            },
+            "lead-email-verified": {
+              "eventTitle": "Add-on: Email verification",
+              "eventDescription": "Cost per decisive email verification (valid, invalid, or disposable). You are not charged for catch-all, unknown, or error results.",
+              "isOneTimeEvent": false,
+              "eventTieredPricingUsd": {
+                "FREE": {
+                  "tieredEventPriceUsd": 0.1
+                },
+                "BRONZE": {
+                  "tieredEventPriceUsd": 0.004
+                },
+                "SILVER": {
+                  "tieredEventPriceUsd": 0.003
+                },
+                "GOLD": {
+                  "tieredEventPriceUsd": 0.002
+                },
+                "PLATINUM": {
+                  "tieredEventPriceUsd": 0.0015
+                },
+                "DIAMOND": {
+                  "tieredEventPriceUsd": 0.0012
+                }
+              }
+            },
+            "ads-scraped": {
+              "eventTitle": "Add-on: Paid results (ads) extraction",
+              "eventDescription": "Extra cost per page for attempting to extract paid results (ads) from Google Search. This applies when the ads extraction feature is enabled, regardless of whether ads are found on the specific page.",
+              "isOneTimeEvent": false,
+              "eventTieredPricingUsd": {
+                "FREE": {
+                  "tieredEventPriceUsd": 0.0065
+                },
+                "BRONZE": {
+                  "tieredEventPriceUsd": 0.005
+                },
+                "SILVER": {
+                  "tieredEventPriceUsd": 0.004
+                },
+                "GOLD": {
+                  "tieredEventPriceUsd": 0.0035
+                },
+                "PLATINUM": {
+                  "tieredEventPriceUsd": 0.0025025
+                },
+                "DIAMOND": {
+                  "tieredEventPriceUsd": 0.002002
+                }
+              }
+            },
+            "website-content-scraped": {
+              "eventTitle": "Add-on: Full website page scraped",
+              "eventDescription": "Cost per website page successfully scraped.",
+              "isOneTimeEvent": false,
+              "eventTieredPricingUsd": {
+                "FREE": {
+                  "tieredEventPriceUsd": 0.008
+                },
+                "BRONZE": {
+                  "tieredEventPriceUsd": 0.005
+                },
+                "SILVER": {
+                  "tieredEventPriceUsd": 0.004
+                },
+                "GOLD": {
+                  "tieredEventPriceUsd": 0.003
+                },
+                "PLATINUM": {
+                  "tieredEventPriceUsd": 0.0025
+                },
+                "DIAMOND": {
+                  "tieredEventPriceUsd": 0.002
+                }
+              }
+            },
+            "apify-actor-start": {
+              "eventTitle": "Actor Start",
+              "eventDescription": "Charged when the Actor starts running. Number of events charged depends on Actor memory (one event per GB, minimum one event).",
+              "isOneTimeEvent": true,
+              "eventPriceUsd": 5e-05
+            }
+          }
+        },
+        "createdAt": "2026-10-07T10:39:55.497Z",
+        "startedAt": "2026-10-07T10:39:55.497Z"
+      }
+    ],
+    "verified_at": "2026-10-23",
+    "documentation": "https://apify.com/apify/google-search-scraper/input-schema",
+    "build_id": "G3YvRcwtJopIgVcSA"
+  },
+  "careers": {
+    "actor": "apify~website-content-crawler",
+    "actor_id": "aYG0l9s7dbB7j3gbS",
+    "build": "0.3.101",
+    "schema": {
+      "$schema": "https://apify-projects.github.io/actor-json-schemas/input.json?v=0.3",
+      "title": "Input schema for Website Content Crawler",
+      "description": "Enter **Start URLs** of websites to crawl, ensure you are using the right **Crawler type**, check the other optional settings, and click **Start** to run the crawler.",
+      "type": "object",
+      "schemaVersion": 1,
+      "properties": {
+        "startUrls": {
+          "title": "Start URLs",
+          "type": "array",
+          "description": "One or more URLs where the crawler will start. By default, it crawls only these URLs and their sub-pages (same URL path); use **Include URL patterns (globs)** to override this behavior.\n\nFor example, for start URL `https://example.com/blog`, it will crawl also `https://example.com/blog/post` or `https://example.com/blog/article`.",
+          "editor": "requestListSources",
+          "prefill": [
+            {
+              "url": "https://docs.apify.com/academy/scraping-basics-javascript"
+            }
+          ]
+        },
+        "crawlerType": {
+          "title": "Crawler type",
+          "type": "string",
+          "enum": [
+            "playwright:adaptive",
+            "playwright:firefox",
+            "cheerio",
+            "jsdom",
+            "playwright:chrome"
+          ],
+          "enumTitles": [
+            "Adaptive switching between browser and raw HTTP. Recommended.",
+            "Headless browser (Firefox+Playwright)",
+            "Raw HTTP client (Cheerio)",
+            "[DEPRECATED] Raw HTTP client with JavaScript (JSDOM) - This crawler will use Cheerio instead.",
+            "[DEPRECATED] Headless browser (Chrome+Playwright) - The crawler will use Firefox+Playwright instead."
+          ],
+          "description": "Select the crawling engine:\n- **Adaptive switching** between browser and raw HTTP: Fast and renders JavaScript content if present. Default and recommended option.\n- **Headless browser** (Firefox+Playwright): Reliable, renders JavaScript content, best in avoiding blocking, but might be slow.\n- **Raw HTTP client** (Cheerio): Fastest, but doesn't render JavaScript content.\n- **Raw HTTP client with JavaScript** (JSDOM): Deprecated, use Cheerio instead.\n- **Headless browser** (Chrome+Playwright): Deprecated, use Firefox+Playwright instead.\n\nMore details about Crawler types are in [readme](https://console.apify.com/actors/aYG0l9s7dbB7j3gbS/information/version-0/readme#crawler-types).",
+          "default": "playwright:firefox",
+          "prefill": "playwright:adaptive"
+        },
+        "includeUrlGlobs": {
+          "sectionCaption": "Pages to include",
+          "sectionDescription": "Configure which pages to crawl or skip, how deep to crawl, and how to discover more pages.",
+          "title": "Include URL patterns (globs)",
+          "type": "array",
+          "description": "Define URL patterns (globs) to extend crawling beyond **Start URLs** and their subpages.\n\nExample: `https://www.example.com/blog/**` matches any blog page \u2014 `https://www.example.com/blog/post-title` or `https://www.example.com/blog/category/post` \u2014 even if the Start URL is `https://www.example.com/product/some-product`.\n\nIt affects only links found on pages, but not **Start URLs** - if you want to crawl a page, make sure to specify its URL in the **Start URLs** field.\n\nCombined with **Exclude URL patterns**, you can precisely control which pages are crawled.\n\nLearn more about globs [here](https://www.digitalocean.com/community/tools/glob?comments=true&glob=https%3A%2F%2Fexample.com%2Fscrape_this%2F%2A%2A&matches=false&tests=https%3A%2F%2Fexample.com%2Ftools%2F&tests=https%3A%2F%2Fexample.com%2Fscrape_this%2F&tests=https%3A%2F%2Fexample.com%2Fscrape_this%2F123%3Ftest%3Dabc&tests=https%3A%2F%2Fexample.com%2Fdont_scrape_this) and test them with our **Glob tester** under this input.",
+          "editor": "globs",
+          "prefill": [],
+          "default": []
+        },
+        "excludeUrlGlobs": {
+          "title": "Exclude URL patterns (globs)",
+          "type": "array",
+          "description": "Glob patterns matching URLs of pages that will be excluded from crawling. Note that this affects only links found on pages, but not **Start URLs**, which are always crawled. \n\nFor example `https://{store,docs}.example.com/**` excludes all URLs starting with `https://store.example.com/` or `https://docs.example.com/`, and `https://example.com/**/*\\?*foo=*` excludes all URLs that contain `foo` query parameter with any value.\n\nLearn more about globs [here](https://www.digitalocean.com/community/tools/glob?comments=true&glob=https%3A%2F%2Fexample.com%2Fscrape_this%2F%2A%2A&matches=false&tests=https%3A%2F%2Fexample.com%2Ftools%2F&tests=https%3A%2F%2Fexample.com%2Fscrape_this%2F&tests=https%3A%2F%2Fexample.com%2Fscrape_this%2F123%3Ftest%3Dabc&tests=https%3A%2F%2Fexample.com%2Fdont_scrape_this) and test them with our **Glob tester** under this input.",
+          "editor": "globs",
+          "prefill": [],
+          "default": []
+        },
+        "maxCrawlDepth": {
+          "title": "Max crawling depth",
+          "type": "integer",
+          "description": "The maximum number of links starting from the start URL that the crawler will recursively follow. The start URLs have depth `0`, the pages linked directly from the start URLs have depth `1`, and so on.\n\nUseful to prevent accidental crawler runaway. By setting it to `0`, the Actor will only crawl the Start URLs.",
+          "minimum": 0,
+          "default": 20
+        },
+        "maxCrawlPages": {
+          "title": "Max pages",
+          "type": "integer",
+          "description": "The maximum number of pages to crawl: defaults to 9999999, which is effectively unlimited; set it to cap the number of pages to prevent accidental crawler runaway.\n\nIt includes the start URLs, pagination pages, pages with no content, etc. The crawler will automatically finish after reaching this number.",
+          "minimum": 0,
+          "default": 9999999
+        },
+        "useSitemaps": {
+          "title": "Load URLs from Sitemaps",
+          "type": "boolean",
+          "description": "If enabled, the crawler will look for [Sitemaps](https://en.wikipedia.org/wiki/Sitemaps) at the domains of the provided *Start URLs* and enqueue matching URLs similarly as the links found on crawled pages.\n\nYou can also reference a `sitemap.xml` file directly by adding it as another Start URL (e.g. `https://www.example.com/sitemap.xml`)\n\nThe crawling could be more robust with Sitemaps, as it includes pages that might be not reachable from Start URLs. However, **loading and processing Sitemaps can take a lot of time, especially for large sites**.\n\nNote that if a page is found via Sitemaps, it will have `depth` of `1`.",
+          "default": false,
+          "prefill": false
+        },
+        "onlyCrawlPagesModifiedSince": {
+          "title": "Crawl only pages changed since (experimental)",
+          "type": "string",
+          "description": "If set, the crawler will only crawl URLs of pages that may have changed since the provided date. You can enter a date in ISO format YYYY-MM-DD or YYYY-MM-DDTHH:mm:ssZ. On navigation, a page that returns a `304 Not Modified` response will be considered unchanged and skipped. **Start URL** is always crawled.\n\nWorks even better with `useSitemaps` enabled - a sitemap that contains `<lastmod>` tags will be used to determine if pages have changed and filter them out to save crawling resources. Pages without a `<lastmod>` tag will be enqueued regardless of this setting. ",
+          "default": "",
+          "editor": "textfield",
+          "pattern": "^((\\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])(T[0-2]\\d:[0-5]\\d(:[0-5]\\d(\\.\\d+)?)?Z)?)?$"
+        },
+        "useLlmsTxt": {
+          "title": "Crawl /llms.txt and Markdown files",
+          "type": "boolean",
+          "description": "If enabled, the crawler will look for `/llms.txt` files at the root of the domains of the provided Start URLs (e.g., `https://example.com/llms.txt`) and enqueue them for crawling. Note that this also enables crawling other Markdown files and enqueueing links from them.",
+          "default": false,
+          "prefill": false
+        },
+        "respectRobotsTxtFile": {
+          "title": "Respect the robots.txt file",
+          "type": "boolean",
+          "description": "If enabled, the crawler will consult the robots.txt file for the target website before crawling each page. At the moment, the crawler does not use any specific user agent identifier. The crawl-delay directive is also not supported yet.",
+          "default": false,
+          "prefill": true
+        },
+        "keepUrlFragments": {
+          "title": "URL #fragments identify unique pages",
+          "type": "boolean",
+          "description": "Indicates that URL fragments (e.g. <code>http://example.com<b>#fragment</b></code>) should be included when checking whether a URL has already been visited or not. Typically, URL fragments are used for page navigation only and therefore they should be ignored, as they don't identify separate pages. However, some single-page websites use URL fragments to display different pages; in such a case, this option should be enabled.",
+          "default": false
+        },
+        "ignoreCanonicalUrl": {
+          "title": "Ignore canonical URLs",
+          "type": "boolean",
+          "description": "If enabled, the Actor will ignore the canonical URL or the `ETag` header reported by the page, and use the actual URL instead. You can use this feature for websites that report invalid canonical URLs, which causes the Actor to skip those pages in results.",
+          "default": false
+        },
+        "proxyConfiguration": {
+          "sectionCaption": "Crawler identification",
+          "sectionDescription": "Customize location and identity settings of the crawler.",
+          "title": "Proxy configuration",
+          "type": "object",
+          "description": "Enables loading the websites from IP addresses in specific geographies and to circumvent blocking.",
+          "default": {
+            "useApifyProxy": true
+          },
+          "prefill": {
+            "useApifyProxy": true
+          },
+          "editor": "proxy"
+        },
+        "initialCookies": {
+          "title": "Custom cookies",
+          "type": "array",
+          "description": "Cookies that will be pre-set to all pages the scraper opens. This is useful for pages that require login. The value is expected to be a JSON array of objects with `name` and `value` properties. For example: \n\n```json\n[\n  {\n    \"name\": \"cookieName\",\n    \"value\": \"cookieValue\",\n    \"path\": \"/\",\n    \"domain\": \".apify.com\"\n  }\n]\n```\n\nYou can use the [EditThisCookie](https://docs.apify.com/academy/tools/edit-this-cookie) browser extension to copy browser cookies in this format, and paste it here.\n\nNote that the value is secret and encrypted to protect your login cookies.",
+          "prefill": [],
+          "editor": "json",
+          "isSecret": true
+        },
+        "customHttpHeaders": {
+          "title": "Custom HTTP headers",
+          "type": "object",
+          "description": "HTTP headers that will be added to all requests made by the crawler. This is useful for setting custom authentication headers or other headers required by the target website. The value is expected to be a JSON object with `name` and `value` properties pairs. For example: `{ \"name1\": \"value1\", \"Authorization\": \"Basic a1b2c3d4...\" }`.",
+          "default": {},
+          "prefill": {},
+          "editor": "json"
+        },
+        "signHttpRequests": {
+          "title": "Sign HTTP requests (experimental)",
+          "type": "boolean",
+          "description": "If enabled, the crawler will sign all HTTP requests using its Web Bot Auth private key. This is necessary if you want to use Website Content Crawler as a Cloudflare Signed Agent.",
+          "default": false,
+          "prefill": false
+        },
+        "initialConcurrency": {
+          "sectionCaption": "Performance and limits",
+          "sectionDescription": "Adjust how fast or slow the crawler will operate.",
+          "title": "Initial concurrency",
+          "type": "integer",
+          "description": "The initial number of web browsers or HTTP clients running in parallel. The system scales the concurrency up and down based on the current CPU and memory load. If the value is set to 0 (default), the Actor uses the default setting for the specific crawler type.\n\nNote that if you set this value too high, the Actor will run out of memory and crash. If too low, it will be slow at start before it scales the concurrency up.",
+          "minimum": 0,
+          "maximum": 999,
+          "default": 0
+        },
+        "maxConcurrency": {
+          "title": "Max concurrency",
+          "type": "integer",
+          "description": "The maximum number of web browsers or HTTP clients running in parallel. This setting is useful to avoid overloading the target websites and to avoid getting blocked.",
+          "minimum": 1,
+          "maximum": 999,
+          "default": 200
+        },
+        "requestTimeoutSecs": {
+          "title": "Page request timeout",
+          "type": "integer",
+          "description": "Timeout in seconds for making the request and processing its response. Defaults to 60s.",
+          "minimum": 1,
+          "maximum": 600,
+          "default": 60,
+          "unit": "seconds"
+        },
+        "minFileDownloadSpeedKBps": {
+          "title": "Minimum file download speed",
+          "type": "integer",
+          "description": "The minimum viable file download speed in kilobytes per seconds. If the file download speed is lower than this value for a prolonged duration, the crawler will consider the file download as failing, abort it, and retry it again (up to \"Maximum number of retries\" times). This is useful to avoid your crawls being stuck on slow file downloads.",
+          "default": 128,
+          "unit": "kilobytes per second"
+        },
+        "maxRequestRetries": {
+          "title": "Maximum number of retries on network / server errors",
+          "type": "integer",
+          "description": "The maximum number of times the crawler will retry the request on network, proxy or server errors. If the (n+1)-th request still fails, the crawler will mark this request as failed.",
+          "minimum": 0,
+          "maximum": 20,
+          "default": 3
+        },
+        "maxSessionRotations": {
+          "title": "Maximum number of session rotations",
+          "type": "integer",
+          "description": "The maximum number of times the crawler will rotate the session (IP address + browser configuration) on anti-scraping measures like CAPTCHAs. If the crawler rotates the session more than this number and the page is still blocked, it will finish with an error.",
+          "minimum": 0,
+          "maximum": 20,
+          "default": 10
+        },
+        "ignoreHttpsErrors": {
+          "title": "Ignore HTTPS errors",
+          "type": "boolean",
+          "description": "If enabled, the scraper will ignore HTTPS certificate errors. Use at your own risk.",
+          "default": false
+        },
+        "dynamicContentWaitSecs": {
+          "sectionCaption": "Browser behavior",
+          "sectionDescription": "Simulate user interactions, fetch dynamic or hidden content.",
+          "title": "Wait for dynamic content",
+          "type": "integer",
+          "description": "The maximum time in seconds to wait for dynamic page content to load. By default, it is 10 seconds. The crawler will continue processing the page either if this time elapses, or if it detects the network became idle as there are no more requests for additional resources.\n\nWhen using the **Wait for selector** option, the crawler will wait for the selector to appear for this amount of time. If the selector doesn't appear within this period, the request will fail and will be retried.\n\nNote that this setting is ignored for the raw HTTP client, because it doesn't execute JavaScript or loads any dynamic resources. Similarly, if the value is set to `0`, the crawler doesn't wait for any dynamic to load and processes the HTML as provided on load.",
+          "default": 10,
+          "unit": "seconds"
+        },
+        "waitForSelector": {
+          "title": "Wait for selector",
+          "type": "string",
+          "description": "Specify a **CSS selector** to tell the crawler to wait for a specific element to appear before it starts extracting content. This is helpful for pages where the content loads dynamically.\n\nExamples: `div`, `#id-of-an-element`, `.class-name`\n\nThis setting disables the default content-load detection. If the element doesn't appear within the **Wait for dynamic content** timeout, the request will fail and be retried.\n\nIf **Wait for dynamic content** is set to `0`, the crawler does not wait for late elements. Instead, it checks the selector only against the current page state / HTML snapshot, and fails the request immediately if the selector is not found.\n\nWith the raw HTTP client, this option checks for the presence of the selector in the HTML content and throws an error if it's not found.",
+          "default": "",
+          "editor": "textfield"
+        },
+        "softWaitForSelector": {
+          "title": "Soft wait for selector",
+          "type": "string",
+          "description": "If set, the crawler will wait for the specified CSS selector to appear in the page before proceeding with the content extraction. Unlike the `waitForSelector` option, this option doesn't fail the request if the selector doesn't appear within the timeout (the request processing will continue).",
+          "default": "",
+          "editor": "textfield"
+        },
+        "maxScrollHeightPixels": {
+          "title": "Maximum scroll height",
+          "type": "integer",
+          "minimum": 0,
+          "description": "The crawler will scroll down the page until all content is loaded (and network becomes idle), or until this maximum scrolling height is reached. Setting this value to `0` disables scrolling altogether.\n\nNote that this setting is ignored for the raw HTTP client, because it doesn't execute JavaScript or loads any dynamic resources.",
+          "default": 5000,
+          "unit": "pixels"
+        },
+        "removeCookieWarnings": {
+          "title": "Remove cookie warnings",
+          "type": "boolean",
+          "description": "If enabled, the Actor will try to remove cookies consent dialogs or modals, using the [I don't care about cookies](https://addons.mozilla.org/en-US/firefox/addon/i-dont-care-about-cookies/) browser extension, to improve the accuracy of the extracted text. Note that there is a small performance penalty if this feature is enabled.\n\nThis setting is ignored when using the raw HTTP crawler type.",
+          "default": true
+        },
+        "blockMedia": {
+          "title": "Block loading of images and videos",
+          "type": "boolean",
+          "description": "If the flag is enabled and the Actor is using a headless browser, it will not load images, fonts, stylesheets and videos to improve performance. It will load scripts as usual - that is after all the point of using a headless browser.",
+          "default": false,
+          "prefill": true
+        },
+        "expandIframes": {
+          "title": "Expand iframe elements",
+          "type": "boolean",
+          "description": "By default, the Actor will extract content from `iframe` elements. If you want to specifically skip `iframe` processing, disable this option. Works only for the `playwright:firefox` crawler type.",
+          "default": true
+        },
+        "clickElementsCssSelector": {
+          "title": "Expand clickable elements",
+          "type": "string",
+          "editor": "textfield",
+          "description": "A CSS selector matching DOM elements that will be clicked. This is useful for expanding collapsed sections, in order to capture their text content. The value must be a valid CSS selector as accepted by the `document.querySelectorAll()` function. ",
+          "default": "[aria-expanded=\"false\"]",
+          "prefill": "[aria-expanded=\"false\"]"
+        },
+        "stickyContainerCssSelector": {
+          "title": "Make containers sticky",
+          "type": "string",
+          "editor": "textfield",
+          "description": "This is an **experimental** feature. A CSS selector matching DOM elements that will be prevented from deleting any of their children. This is useful in conjunction with the \"Expand clickable elements\" option on pages where hidden content is actually removed from the DOM (i.e., some variants of the accordion pattern). Enabling this might corrupt the extracted content, which is why it is disabled by default. It is possible to enable the feature for the whole page with the `*` selector, or you can target specific elements if the former has unwanted side effects."
+        },
+        "pageFunction": {
+          "title": "Page function",
+          "type": "string",
+          "description": "A declaration of an asynchronous JS function (e.g. `async function pageFunction({ page }) { await page.click('.submit-button') }`).\n\nThe function receives `context` as the only argument. Context is a JavaScript object containing the following properties:\n- `page`: Currently loaded Playwright `Page` instance.\n- `request`: The request object that triggered the page load.\n\nThe function will be executed in the browser context for each crawled page, after the page is loaded (included all dynamic content) and before the content is extracted and cleaned.",
+          "nullable": true,
+          "default": "",
+          "editor": "hidden"
+        },
+        "keepElementsCssSelector": {
+          "sectionCaption": "HTML extraction",
+          "sectionDescription": "Set which HTML elements to scrape or ignore. By default, the crawler removes common clutter, but here you can fine-tune the settings.",
+          "title": "Keep HTML elements (CSS selector)",
+          "type": "string",
+          "description": "Extract only relevant page content by specifying CSS selectors (e.g. `div`, `#element-id`, `.class-name`). [Learn more about CSS selectors](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Styling_basics/Basic_selectors).\n\nIf any selectors are defined, everything else will be removed from the page.\n\nThis option runs before the `HTML transformer` option. If you are missing content in the output despite using this option, try disabling the `HTML transformer`.",
+          "editor": "textarea",
+          "default": "",
+          "prefill": ""
+        },
+        "removeElementsCssSelector": {
+          "title": "Remove HTML elements (CSS selector)",
+          "type": "string",
+          "description": "Specify which HTML elements should be removed from the page before text extraction. This is useful to skip irrelevant page content.\n\nBy default, the Actor removes common navigation elements, headers, footers, modals, scripts, and inline image. You can disable the removal by setting this value to some non-existent CSS selector like `dummy_keep_everything`.",
+          "editor": "textarea",
+          "default": "nav, footer, script, style, noscript, svg, img[src^='data:'],\n[role=\"alert\"],\n[role=\"banner\"],\n[role=\"dialog\"],\n[role=\"alertdialog\"],\n[role=\"region\"][aria-label*=\"skip\" i],\n[aria-modal=\"true\"]",
+          "prefill": "nav, footer, script, style, noscript, svg, img[src^='data:'],\n[role=\"alert\"],\n[role=\"banner\"],\n[role=\"dialog\"],\n[role=\"alertdialog\"],\n[role=\"region\"][aria-label*=\"skip\" i],\n[aria-modal=\"true\"]"
+        },
+        "htmlTransformer": {
+          "title": "HTML transformer",
+          "type": "string",
+          "enum": [
+            "readableTextIfPossible",
+            "readableText",
+            "extractus",
+            "defuddle",
+            "none"
+          ],
+          "enumTitles": [
+            "Mozilla Readability with fallback",
+            "Mozilla Readability",
+            "Extractus",
+            "Defuddle",
+            "None"
+          ],
+          "description": "Specify how to transform HTML to get meaningful content, removing extra fluff like navigation or pop-ups. This is applied after any HTML elements are removed or clicked.\n\n- **Readable text with fallback**: Uses Mozilla's Readability to extract content, but keeps the original HTML if it's not a clear article. Great for sites with mixed content like articles and product pages.\n\n- **Readable text** (Default): Also uses Mozilla's Readability but is more aggressive, removing headers, footers, and navigation. Best for blogs and article-heavy sites.\n\n- **Extractus**: An alternative content extraction algorithm that might work better for certain news sites or blogs with unique layouts.\n\n- **Defuddle**: More forgiving than Readability, better preserving elements like math and footnotes, code. It also extracts metadata and uses mobile styles for clean-up.\n\n- **None**: Only performs basic cleaning and removes elements specified by you. This option is best when you need to preserve most of the page's original HTML.",
+          "default": "readableText"
+        },
+        "readableTextCharThreshold": {
+          "title": "Readable text extractor character threshold",
+          "type": "integer",
+          "description": "A configuration options for the \"Readable text\" HTML transformer. It contains the minimum number of characters an article must have in order to be considered relevant.",
+          "default": 100,
+          "editor": "hidden"
+        },
+        "aggressivePrune": {
+          "title": "Remove duplicate text lines",
+          "type": "boolean",
+          "description": "This is an **experimental feature**. If enabled, the crawler will prune content lines that are very similar to the ones already crawled on other pages, using the Count-Min Sketch algorithm. This is useful to strip repeating content in the scraped data like menus, headers, footers, etc. In some (not very likely) cases, it might remove relevant content from some pages.",
+          "default": false
+        },
+        "debugMode": {
+          "title": "Debug mode (stores output of all HTML transformers)",
+          "type": "boolean",
+          "description": "If enabled, the Actor will store the output of all types of HTML transformers, including the ones that are not used by default, and it will also store the HTML to Key-value Store with a link. All this data is stored under the `debug` field in the resulting Dataset.",
+          "default": false
+        },
+        "debugLog": {
+          "title": "Debug log",
+          "type": "boolean",
+          "description": "If enabled, the actor log will include debug messages. Beware that this can be quite verbose.",
+          "default": false
+        },
+        "storeSkippedUrls": {
+          "title": "Store skipped URLs",
+          "type": "boolean",
+          "description": "If enabled, the crawler will store all URLs that were skipped during the crawl in a Key-Value Store record named `SKIPPED_URLS`. The record will contain a JSON object with reasons for skipping and the URLs that were skipped for each reason. This is useful for debugging and understanding why certain pages were not crawled.",
+          "default": false,
+          "prefill": false,
+          "editor": "hidden"
+        },
+        "saveHtml": {
+          "sectionCaption": "Output and results",
+          "title": "Save HTML to dataset (deprecated)",
+          "type": "boolean",
+          "description": "If enabled, the crawler stores full transformed HTML of all pages found to the output dataset under the `html` field. **This option has been deprecated** in favor of the `saveHtmlAsFile` option, because the dataset records have a size of approximately 10MB and it's harder to review the HTML for debugging.",
+          "default": false
+        },
+        "saveHtmlAsFile": {
+          "title": "Save HTML to key-value store",
+          "type": "boolean",
+          "description": "If enabled, the crawler stores full transformed HTML of all pages found to the default key-value store and saves links to the files as `htmlUrl` field in the output dataset. Storing HTML in key-value store is preferred to storing it into the dataset with the `saveHtml` option, because there's no size limit and it's easier for debugging as you can easily view the HTML.",
+          "default": false
+        },
+        "saveMarkdown": {
+          "title": "Save Markdown",
+          "type": "boolean",
+          "description": "If enabled, the crawler converts the transformed HTML of all pages found to Markdown, and stores it under the `markdown` field in the output dataset.",
+          "default": true
+        },
+        "summarize": {
+          "title": "Summarize pages with AI (experimental) ($)",
+          "type": "boolean",
+          "description": "If enabled, the crawler generates a one-sentence AI summary of each crawled web page and stores it under the `summary` field in the output dataset. This helps downstream LLM processing by describing what each page is about without reading the full content. Only web pages that have headings or extracted Markdown are summarized (files such as PDFs or images are not).\n\n**This is a paid feature.** Summaries are generated through the OpenRouter Actor, which starts additional Actor runs and incurs extra cost on top of the crawl (billed to your account).",
+          "default": false,
+          "prefill": false
+        },
+        "saveFiles": {
+          "title": "Save files",
+          "type": "boolean",
+          "description": "Deprecated in favor of the `saveContentTypes` option. Will be removed soon. If enabled, the crawler downloads files linked from the web pages, as long as their URL has one of the following file extensions: PDF, DOC, DOCX, XLS, XLSX, and CSV. Note that unlike web pages, the files are downloaded regardless if they are under **Start URLs** or not. The files are stored to the default key-value store, and metadata about them to the output dataset, similarly as for web pages.",
+          "default": false
+        },
+        "saveContentTypes": {
+          "title": "Save linked files with Content-Type",
+          "description": "The crawler downloads files linked from the web pages, as long as their content type matches the provided value. Select predefined <a href=\"https://www.iana.org/assignments/media-types/media-types.xhtml\">Content-type</a> groups to download common file types, or enter custom HTTP Content-type strings, including wildcards (e.g., application/pdf, text/\\*, image/\\*) for specific downloads. Note that unlike web pages, the files are downloaded regardless if they are under **Start URLs** or not. The files are stored to the default key-value store, and metadata about them to the output dataset, similarly as for web pages.",
+          "type": "string",
+          "editor": "select",
+          "enumSuggestedValues": [
+            "image/*",
+            "application/*, text/csv"
+          ],
+          "enumTitles": [
+            "Images: image/*",
+            "Documents: application/*, text/csv"
+          ]
+        },
+        "saveScreenshots": {
+          "title": "Save screenshots (headless browser only)",
+          "type": "boolean",
+          "description": "If enabled, the crawler stores a screenshot for each article page to the default key-value store. The link to the screenshot is stored under the `screenshotUrl` field in the output dataset. It is useful for debugging, but reduces performance and increases storage costs.\n\nNote that this feature only works with the `playwright:firefox` crawler type.",
+          "default": false
+        },
+        "maxResults": {
+          "title": "Max results",
+          "type": "integer",
+          "description": "The maximum number of web pages and files to store. This setting helps prevent an accidental crawler runaway by automatically stopping the crawl once this limit is reached. Note that the crawler skips pages whose canonical URL matches a page that has already been crawled, so it may crawl more pages than the number of stored results. Similarly, there may be more stored results than crawled web pages because downloaded files also count toward results.",
+          "minimum": 0,
+          "default": 9999999
+        },
+        "clientSideMinChangePercentage": {
+          "title": "(Adaptive crawling only) Minimum client-side content change percentage",
+          "description": "The least amount of content (as a percentage) change after the initial load required to consider the pages client-side rendered",
+          "type": "integer",
+          "minimum": 1,
+          "editor": "hidden",
+          "default": 15
+        },
+        "renderingTypeDetectionPercentage": {
+          "title": "(Adaptive crawling only) How often should the crawler attempt to detect page rendering type",
+          "description": "How often should the adaptive attempt to detect page rendering type",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "editor": "hidden",
+          "default": 10
+        },
+        "reuseStoredDetectionResults": {
+          "title": "Reuse stored detections results (experimental)",
+          "type": "boolean",
+          "description": "If enabled, the crawler (if using playwright:adaptive) will reuse results of rendering type detections done in previous runs to speed up crawling of statically rendered pages",
+          "nullable": false,
+          "default": false,
+          "editor": "hidden"
+        }
+      },
+      "required": [
+        "startUrls",
+        "proxyConfiguration"
+      ]
+    },
+    "pricing": [
+      {
+        "pricingModel": "PAY_PER_USAGE"
+      }
+    ],
+    "verified_at": "2026-10-23",
+    "documentation": "https://apify.com/apify/website-content-crawler/input-schema",
+    "build_id": "bsZdc9Cal4wAwV0VW"
+  }
+}

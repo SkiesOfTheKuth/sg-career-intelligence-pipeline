@@ -5,6 +5,7 @@ import re
 from evidence import present_job, parse_date, safe_url
 from collector_mycareersfuture import API_URL
 from sync_engine import DEFAULT_QUERIES, DEFAULT_LIMIT
+from campaign_store import CampaignStore
 
 SOURCE_CATALOG = [
     {'id':'mycareersfuture','name':'MyCareersFuture','match':'mycareersfuture','method':'Public API search','mode':'scheduled','endpoint':API_URL,'home':'https://www.mycareersfuture.gov.sg/','retained_file':'mcf_jobs_raw.json',
@@ -51,6 +52,7 @@ def build_audit(store, *, scheduler_enabled, running, interval_seconds):
     now=datetime.now(timezone.utc)
     jobs=[present_job(j,now,with_assessment=False) for j in store.list_jobs()]
     history=store.get_sync_history(100)
+    campaign=CampaignStore(store).status()
     sources=[]
     catalog=SOURCE_CATALOG+([{'id':'other','name':'Other retained sources','method':'Retained records','mode':'retained','scope':'Source provenance is shown per record.'}] if any(source_id(j)=='other' for j in jobs) else [])
     for config in catalog:
@@ -73,7 +75,17 @@ def build_audit(store, *, scheduler_enabled, running, interval_seconds):
                         'latest_record_date':_latest(v.get('checked_at') for v in verifications),
                         'latest_errors':latest.get('errors',[]) if latest else [],
                         'next_check_at':store.get_meta('next_sync_at') if automated and scheduler_enabled else None})
-    return {'generated_at':now.isoformat(),'total':len(jobs),'sources':sources,'coverage':coverage(jobs),
+    for source in sources:
+        paid = next((s for s in campaign.get('sources',[]) if s['source']==source['id']),None)
+        if paid:
+            source.update(campaign=paid, next_check_at=paid['due_at'],last_attempt=paid['last_attempt'] or source['last_attempt'],
+                          last_success=datetime.fromtimestamp(paid['last_success'],timezone.utc).isoformat() if paid['last_success'] else source['last_success'])
+            source['state'] = 'blocked' if paid['blocked_reason'] else campaign['state']
+            source['method'] = 'Bounded Apify campaign with persisted run and import checkpoints'
+            source['scope'] = {'linkedin':'Eight Singapore queries every six hours, up to 100 results each, subject to access and budget checks.',
+                               'indeed':'Eight Singapore queries every six hours, up to 100 results each, subject to access and budget checks.',
+                               'google':'Up to 40 distinct discovery queries daily, three result pages each. Results remain leads.'}.get(source['id'],source['scope'])
+    return {'generated_at':now.isoformat(),'total':len(jobs),'sources':sources,'coverage':coverage(jobs),'campaign':campaign,
             'discovery_count':sum(j['status'] not in ('expired','closed','unavailable') for j in jobs),
             'excluded_count':sum(j['status'] in ('expired','closed','unavailable') for j in jobs),
             'applications_count':len(store.list_applications()),

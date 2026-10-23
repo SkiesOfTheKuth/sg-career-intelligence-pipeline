@@ -140,3 +140,8 @@ body.inspector-open { overflow: hidden; }
   .audit-heading > div > p { display: none; }
   .audit-heading button { font-size: .8rem; }
 }
+
+.campaign-options { flex-basis: 100%; min-width: 0; }
+.campaign-options li { margin-block: .6rem; overflow-wrap: anywhere; }
+.campaign-options .inspector-facts { max-width: 75ch; }
+.campaign-options a { display: inline-flex; min-height: 44px; align-items: center; }
