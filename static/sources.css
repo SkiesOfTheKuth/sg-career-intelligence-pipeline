@@ -39,7 +39,7 @@
 .source-detail dt, .inspector-facts dt { color: var(--secondary); }
 .source-detail dd, .inspector-facts dd { margin: 0; overflow-wrap: anywhere; }
 .source-detail a { overflow-wrap: anywhere; }
-#selected-detail > a { display: inline-flex; align-items: center; min-height: 44px; }
+#selected-detail a { display: inline-flex; align-items: center; min-height: 44px; }
 .source-detail .query-list { padding-left: 1.2rem; }
 .coverage-section > p { font-size: .85rem; }
 .coverage-row { padding: .65rem 0; }

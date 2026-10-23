@@ -10,7 +10,7 @@ def source_audit_fixture():
     """A complete retained-source response exercises the production renderer."""
     source = {'id': 'mcf', 'name': 'MyCareersFuture', 'state': 'scheduled',
               'count': 2, 'scope': 'Four bounded searches.', 'method': 'Free API',
-              'mode': 'scheduled', 'home': 'https://example.test/source',
+              'mode': 'scheduled', 'home': 'https://example.test/source', 'endpoint': 'https://example.test/api',
               'needs_recheck': 2, 'latest_errors': [], 'coverage': []}
     return {'sources': [source], 'total': 2, 'discovery_count': 2,
             'applications_count': 0, 'excluded_count': 0, 'coverage': [],
@@ -69,8 +69,8 @@ class AccessibilityContracts(unittest.TestCase):
     def test_source_standalone_links_have_touch_sized_targets(self):
         self.page.goto('https://workspace.test/sources')
         self.page.locator('#record-source').select_option('mcf')
-        box = self.page.locator('#selected-detail > a').bounding_box()
-        self.assertGreaterEqual(box['height'], 44)
+        for link in self.page.locator('#selected-detail a').all():
+            self.assertGreaterEqual(link.bounding_box()['height'], 44)
 
     def test_mobile_sources_keyboard_order_matches_health_then_search(self):
         self.page.set_viewport_size({'width': 390, 'height': 844})
