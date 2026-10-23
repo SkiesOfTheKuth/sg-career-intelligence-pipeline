@@ -145,7 +145,7 @@ async def lifespan(application):
         await asyncio.to_thread(verified_backup, store)
 
 
-app = FastAPI(title='SG Career Intelligence', version='2.2.1', lifespan=lifespan)
+app = FastAPI(title='SG Career Intelligence', version='2.2.2', lifespan=lifespan)
 app.state.database_path = DB_PATH
 app.mount('/static', StaticFiles(directory=BASE / 'static', check_dir=False), name='static')
 

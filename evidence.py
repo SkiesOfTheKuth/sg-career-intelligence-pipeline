@@ -168,8 +168,8 @@ def salary_presentation(raw):
                 monthly_maximum=round(maximum / divisor, 2) if divisor and maximum is not None else None)
 
 
-_REQ_HEADING = re.compile(r"^(?:(?:job|key|minimum|essential|basic|candidate)\s+)?(?:requirements|qualifications|skills)(?:\s*(?:and|&)\s*(?:experience|qualifications|skills))?\s*:?$|^what (?:we are|we're|you are) looking for\s*:?$|^about you\s*:?$|^who you are\s*:?$", re.I)
-_PREFERRED = re.compile(r"\b(?:preferred|preferably|desirable|advantage|a plus|nice to have|bonus)\b", re.I)
+_REQ_HEADING = re.compile(r"^(?:(?:job|key|minimum|essential|basic|candidate)\s+)?(?:requirements|qualifications|skills)(?:\s*(?:and|&)\s*(?:experience|qualifications|skills))?(?:\s+(?:we're|we are) looking for)?\s*:?$|^what (?:we are|we're|you are) looking for\s*:?$|^about you\s*:?$|^who you are\s*:?$", re.I)
+_PREFERRED = re.compile(r"\b(?:preferred|preferably|ideally|desirable|advantage|a plus|nice to have|bonus)\b", re.I)
 _END_HEADING = re.compile(r"^(?:job responsibilities|responsibilities|benefits|what we offer|why join us|our commitment to you|about us|about the company|how to apply|equal opportunity|apply now|selling pts|disclaimer)\s*[:?]?$|^(?:to apply|we regret to inform|posted by|date posted)\b", re.I)
 
 
@@ -184,10 +184,13 @@ def _requirements_cached(description, explicit_json):
     explicit = json.loads(explicit_json)
     mandatory, preferred = [], []
     section = None
-    # Explicit requirements retain all original wording, splitting only source lines.
+    # Derived requirements use literal source spans; original explicit fields
+    # and their evidence references remain intact in source_requirements.
     if isinstance(explicit, dict):
-        mandatory.extend(plain_text(explicit.get("mandatory")).splitlines())
-        preferred.extend(plain_text(explicit.get("preferred")).splitlines())
+        for section_name in ('mandatory', 'preferred'):
+            for line in plain_text(explicit.get(section_name)).splitlines():
+                for part in requirement_parts(line):
+                    (preferred if section_name == 'preferred' or _PREFERRED.search(part) or requirement_not_required(part) else mandatory).append(part)
     elif explicit:
         for line in plain_text(explicit).splitlines():
             for part in requirement_parts(line):
@@ -197,7 +200,7 @@ def _requirements_cached(description, explicit_json):
         if is_boilerplate(clean):
             section = None
             continue
-        if re.fullmatch(r"(?:preferred|desired|additional)\s+(?:qualifications|requirements|skills)\s*:?", clean, re.I):
+        if re.fullmatch(r"(?:preferred|desired|additional)\s+(?:qualifications|requirements|skills)\s*:?|what sets you apart\s*:?", clean, re.I):
             section = "preferred"
             continue
         if _REQ_HEADING.search(clean.replace('’', "'")):

@@ -1,6 +1,18 @@
 # Workspace decisions and interaction contracts
 
-This record describes implementation and design rationale for release **2.2.1**, deployed commit **`3b8664de31376ef9c35ecd6412107697a8b9d5b0`** on 23 October 2026. [The execution brief](EXECUTION_BRIEF.md) remains canonical. [The compliance audit](COMPLIANCE_AUDIT.md) maps all twelve sections to current evidence; [the acceptance report](ACCEPTANCE_REPORT.md) records results, deployment and external limitations. Earlier acceptance is labelled historical.
+This record describes implementation and design rationale for release **2.2.2**. The independent 23 October audit supplements the previous release; current deployment evidence is in the acceptance report. [The execution brief](EXECUTION_BRIEF.md) remains canonical. [The compliance audit](COMPLIANCE_AUDIT.md) maps all twelve sections to current evidence; [the acceptance report](ACCEPTANCE_REPORT.md) records results, deployment and external limitations. Earlier acceptance is labelled historical.
+
+
+## Independent audit corrections — 23 October 2026
+
+| Reproduced problem | Alternatives and selected behavior | Validation |
+| --- | --- | --- |
+| Concurrent import resolution left a stale editor unable to save after explicit rebase. | Retrying the consumed command cannot work; weakening server validation would damage history. On explicit user rebase, preserve chosen fields and retain only import IDs still unresolved on the current server version. No automatic rebase. | Actual temporary SQLite plus two-version browser regression retains first resolution snapshot and saves chosen notes/stage. |
+| Acknowledgements left first-save history absent, import review saying Saving, Closed outcome hidden, or open history stale. | Full detail rerender risks caret/scroll changes. Update only dependent history/import/outcome controls in place; refresh open history on revision changes and ignore detached responses. | Four new editor regressions fail baseline and pass current; focused notes remain unchanged. |
+| Optional industry qualifiers waived required duration; compound degree/graphic-design claims and plural channels overstated support; repeated domain combinations added credit. | Preserve deterministic rubric; split literal independent requirement spans, recognize action inflections/headings consistently, withhold unsupported scope and count each supported domain once. No score target or new CV facts. | Actual CV, exact retained quotations, synthetic equivalence/ranking cases and expanded real-source corpus. |
+| Accepted pasted controls made XLSX export fail. | Removing characters would lose data; rejecting valid stored notes would impair editing. Use the existing full-text sheet with labelled JSON encoding for XML-unrepresentable values and ordered, formula-protected chunks. Main sheet stays one row per record. | Reconstruct original multilingual/control/literal-escape text exactly; CSV and persisted data equal. No schema change. |
+
+These changes reuse existing components and screen/state contracts. Application history stays a native keyboard disclosure; import feedback changes only after acknowledgement; failed writes retain fields/recovery. Export selection and the current database remain unchanged on failure. The XLSX limitation is the file format's character repertoire; labelled JSON is the reversible representation. Current evidence and independent final review are linked from the compliance audit. Participant validation remains unperformed.
 
 ## Consequential choices and alternatives
 

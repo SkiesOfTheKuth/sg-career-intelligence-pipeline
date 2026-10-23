@@ -7,6 +7,101 @@ from fit_score import requirement, language_gaps, _duty
 
 
 class FitV2Tests(unittest.TestCase):
+    def test_preferred_industry_does_not_waive_required_experience(self):
+        for wording in (
+            '3+ years of experience in social media account management and content creation, preferably in an agency environment',
+            'At least 5 years of marketing experience, ideally within hospitality',
+        ):
+            job = build_job({'title': 'Marketing Executive', 'description':
+                'Responsibilities\nManage social media accounts.\nRequirements\n' + wording}, 'optional-scope')
+            self.assertTrue(any(gate['kind'] == 'experience' for gate in job['assessment']['score']['gates']), wording)
+            self.assertLessEqual(job['assessment']['score']['value'], 39)
+            self.assertTrue(job['requirements']['preferred'])
+        for wording in ('3 years of marketing experience preferred', 'Preferably 3 years of marketing experience'):
+            job = build_job({'title': 'Marketing Executive', 'description':
+                'Responsibilities\nManage social media accounts.\nRequirements\n' + wording}, 'optional-duration')
+            self.assertFalse(job['assessment']['score']['gates'])
+            self.assertEqual(job['requirements']['mandatory'], [])
+
+    def test_retained_candidate_headings_are_not_requirements(self):
+        rows = json.loads(Path(__file__).with_name('fit_review_real_sources.json').read_text(encoding='utf-8'))
+        raw = next(row for row in rows if row['legacy_id'] == 'SG-OPP-0111')
+        job = build_job(raw, raw['legacy_id'])
+        score = job['assessment']['score']
+        self.assertTrue(any(gate['kind'] == 'experience' for gate in score['gates']))
+        self.assertFalse(any('not clearly separate responsibilities' in limit['reason'] for limit in score['limits']))
+        for heading in ("Skills & Experience We're Looking For", 'What Sets You Apart'):
+            self.assertNotIn(heading, job['requirements']['mandatory'])
+            self.assertNotIn(heading, job['requirements']['preferred'])
+        self.assertIn('Background in influencer marketing campaigns', job['requirements']['preferred'])
+
+    def test_alternative_candidate_headings_do_not_add_unknown_duties(self):
+        for original, alternative in [('Requirements', "Skills & Experience We're Looking For"),
+                                      ('Preferred qualifications', 'What Sets You Apart')]:
+            scores = [build_job({'title': 'Marketing Executive', 'description':
+                'Responsibilities\nManage social media accounts.\n' + heading + '\nDegree in Marketing'}, heading)['assessment']['score']
+                for heading in (original, alternative)]
+            self.assertEqual(scores[0]['duties'], scores[1]['duties'])
+            self.assertEqual(scores[0]['value'], scores[1]['value'])
+
+    def test_combined_supported_domains_do_not_repeat_existing_credit(self):
+        description = 'Responsibilities\nManage social media accounts.\nCreate social media content.\nEdit video.\nRequirements\nDegree in Marketing'
+        original = build_job({'title': 'Marketing Executive', 'description': description}, 'base')
+        repeated = build_job({'title': 'Marketing Executive', 'description': description.replace(
+            'Edit video.', 'Schedule social media content.\nEdit video.')}, 'repeated')
+        self.assertEqual(original['assessment']['score']['components'][1], repeated['assessment']['score']['components'][1])
+
+    def test_plural_email_channels_and_nonsocial_content_stay_unproven(self):
+        for quote in (
+            'Develop marketing content for social media, EDMs, event collaterals and presentations.',
+            'Plan, create and adapt content for social media, eDMs, and other digital channels.',
+            'Manage social media platforms, job portals and online marketing channels.',
+            'Develop lead-generation content such as e-books, reports and short courses.',
+        ):
+            row = _duty(quote)
+            self.assertFalse(row['candidate_evidence'], quote)
+            self.assertEqual(row['quote'], quote)
+        self.assertTrue(_duty('Create content for social media.')['candidate_evidence'])
+
+    def test_degree_alternative_does_not_prove_additional_skill(self):
+        quote = 'Minimum Diploma or Degree in Communications/Marketing, working knowledge in Graphic Design or other related fields'
+        self.assertNotEqual(requirement(quote)['status'], 'supported')
+        job = build_job({'title': 'Marketing Executive', 'description':
+            'Responsibilities\nManage social media.\nRequirements\n' + quote}, 'degree-skill')
+        rows = job['assessment']['score']['requirements']
+        self.assertTrue(any(row['status'] == 'supported' and 'Degree' in row['quote'] for row in rows))
+        self.assertTrue(any(row['status'] == 'check' and 'Graphic Design' in row['quote'] for row in rows))
+        self.assertTrue(all(row['quote'] in quote for row in rows))
+
+    def test_unheaded_gerund_duties_are_retained_in_denominator(self):
+        duties = ['Managing social media accounts and website content and enquiries.',
+                  'Answering enquiries via emails and social media platforms.',
+                  'Creating content by working closely with other departments and partners.',
+                  'Managing communications volunteers.', 'Perform ad-hoc duties as assigned.']
+        job = build_job({'title': 'Marketing Executive', 'description':
+            '\n'.join(duties) + '\nRequirements\nDegree in Marketing'}, 'gerunds')
+        rows = job['assessment']['score']['duties']
+        self.assertEqual([row['quote'] for row in rows], duties)
+        self.assertFalse(rows[0]['candidate_evidence'])
+        self.assertFalse(rows[1]['candidate_evidence'])
+        self.assertTrue(rows[2]['candidate_evidence'])
+
+    def test_comma_actions_separate_leadership_from_research(self):
+        quote = 'Lead the marketing team, conduct market research'
+        row = _duty(quote)
+        self.assertEqual(row['status'], 'partial')
+        self.assertFalse(row['clauses'][0]['candidate_evidence'])
+        self.assertTrue(row['clauses'][1]['candidate_evidence'])
+        self.assertTrue(all(clause['source_quote'] == quote for clause in row['clauses']))
+        # Coordinated verbs with one shared object must not create empty duties.
+        self.assertEqual(len(_duty('Create, curate, and schedule content aligned with brand voice.')['clauses']), 1)
+
+    def test_content_object_does_not_establish_interview_method(self):
+        self.assertFalse(_duty('Conduct interviews with members and staff to create engaging content.')['candidate_evidence'])
+
+    def test_campaign_metrics_do_not_establish_spend_optimisation(self):
+        self.assertFalse(_duty('Track, analyze, and report on campaign performance metrics and ROI to optimize marketing spend.')['candidate_evidence'])
+
     def test_real_content_scope_does_not_expand_cv_channels_or_visual_skills(self):
         for quote in ('Plan and implement multi-channel content strategy (social, email, digital).',
                       'Assist in developing engaging visual and written content aligned with brand guidelines',
@@ -144,12 +239,14 @@ class FitV2Tests(unittest.TestCase):
             self.assertFalse(any('Disclaimer:' == line or 'Why Join Us?' == line for line in job['requirements']['mandatory']))
             for duty in job['assessment']['score']['duties']:
                 for clause in duty['clauses']:
-                    if any(term in clause['quote'].lower() for term in ['revenue performance', 'edit photos', 'adobe', 'graphic design', 'video production', 'media invites', 'customer cases']):
+                    if any(term in clause['quote'].lower() for term in ['revenue performance', 'edit photos', 'adobe', 'graphic design', 'video production', 'media invites', 'customer cases', 'edms', 'job portals', 'e-books', 'lead the marketing team', 'conduct interviews', 'marketing spend']):
                         self.assertEqual(clause['candidate_evidence'], [], clause['quote'])
                     if clause['candidate_evidence']:
                         self.assertEqual(clause['status'], 'overlap')
                         self.assertEqual(clause['source_quote'], duty['quote'])
         self.assertGreater(jobs['SG-OPP-2507']['assessment']['score']['value'], revenue['assessment']['score']['value'])
+        self.assertGreater(jobs['SG-OPP-2507']['assessment']['score']['value'], jobs['SG-OPP-2842']['assessment']['score']['value'])
+        self.assertGreater(jobs['SG-OPP-2507']['assessment']['score']['value'], jobs['SG-OPP-0124']['assessment']['score']['value'])
 
 
 if __name__ == '__main__':

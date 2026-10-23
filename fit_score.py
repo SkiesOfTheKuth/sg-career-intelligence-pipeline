@@ -22,10 +22,23 @@ RULES = (
 )
 # A general overlap cannot establish proficiency in a specialist method or tool.
 SPECIALIST = re.compile(r'\b(?:sql|python|seo|sem|ppc|paid (?:media|search|social|ads?)|google (?:ads|analytics)|meta (?:ads|insights)|roas|crm|salesforce|hubspot|adobe|photoshop|illustrator|canva|capcut|premiere|after effects|film(?:ing)?|shoots?|camera|lighting|videograph\w*|video (?:production|editing)|edit(?:ing)? videos?|animation|motion graphics|memoq|cat tools|lqa|translation memor\w*|game localization|payroll|accounting|bookkeeping|reconciliations?|financial (?:reports?|reporting)|audit\w*|tax|budget\w*|forecast\w*|crisis|spokesperson|media (?:relations|enquiries)|manage (?:a |the )?team|team leadership|direct reports|p&l)\b', re.I)
-ACTION = re.compile(r'^(?:(?:you (?:will|would)|the role (?:will|involves)|responsible for)\s+)?(?:plan|manage|create|curate|develop|coordinate|support|assist|conduct|research|monitor|analyse|analyze|track|prepare|produce|deliver|lead|own|oversee|drive|ensure|handle|maintain|build|execute|implement|engage|write|edit|film|design|identify|review|work|provide|liaise|facilitate|translate|interpret|brainstorm|suggest|participate|schedule|publish|report)\w*\b', re.I)
-DUTY_HEADING = re.compile(r'^(?:(?:key|main|core|job|your|primary)\s+)?(?:duties(?:\s*(?:&|and)\s*responsibilities)?|responsibilities)(?:\s*(?:&|and)\s*duties)?\s*:?$|^(?:what you(?:\'ll| will) do|your role|you will be responsible for|as a .+ you will be accountable for)\s*:?$', re.I)
-STOP_HEADING = re.compile(r'^(?:(?:job|key|minimum|essential|preferred|basic|candidate)\s+)?(?:requirements|qualifications|skills|benefits|experience)(?:\s*(?:&|and)\s*(?:experience|skills|qualifications))?\s*:?$|^(?:what (?:we are|we\'re) looking for|about you|who you are|what we offer|about us|our commitment to you|how to apply|apply now|selling pts)\s*:?$', re.I)
-PREFERRED = re.compile(r'\b(?:preferred|preferably|desirable|advantage|a plus|nice to have|bonus|not (?:a )?(?:must|required))\b', re.I)
+def _action_forms(verb):
+    """Recognize verb inflections without treating nouns like engagement as verbs."""
+    if verb == 'plan': return ('plan', 'plans', 'planned', 'planning')
+    if verb.endswith('y'): return (verb, verb[:-1] + 'ies', verb[:-1] + 'ied', verb + 'ing')
+    stem = verb[:-1] if verb.endswith('e') and not verb.endswith('ee') else verb
+    return (verb, verb + 's', verb + 'd' if verb.endswith('e') else verb + 'ed', stem + 'ing')
+
+
+ACTION_WORDS = ('plan manage create curate develop coordinate support assist conduct research monitor analyse analyze '
+                'track prepare produce deliver lead own oversee drive ensure handle maintain build execute implement '
+                'engage write edit film design identify review work provide liaise facilitate translate interpret '
+                'brainstorm suggest participate schedule publish report respond optimise optimize generate perform answer').split()
+ACTION_VERBS = '(?:' + '|'.join(sorted({form for verb in ACTION_WORDS for form in _action_forms(verb)}, key=len, reverse=True)) + ')'
+ACTION = re.compile(r'^(?:(?:you (?:will|would)|the role (?:will|involves)|responsible for)\s+)?' + ACTION_VERBS + r'\b', re.I)
+DUTY_HEADING = re.compile(r'^(?:(?:key|main|core|job|your|primary)\s+)?(?:duties(?:\s*(?:&|and)\s*responsibilities)?|responsibilities)(?:\s*(?:&|and)\s*duties)?\s*:?$|^(?:what you(?:\'ll| will) (?:do|be doing)|your role|you will be responsible for|as a .+ you will be accountable for)\s*:?$', re.I)
+STOP_HEADING = re.compile(r'^(?:(?:job|key|minimum|essential|preferred|desired|additional|basic|candidate)\s+)?(?:requirements|qualifications|skills|benefits|experience)(?:\s*(?:&|and)\s*(?:experience|skills|qualifications))?(?:\s+(?:we\'re|we are) looking for)?\s*:?$|^(?:what (?:we are|we\'re|you are) looking for|what sets you apart|about you|who you are|what we offer|about us|our commitment to you|how to apply|apply now|selling pts)\s*:?$', re.I)
+PREFERRED = re.compile(r'\b(?:preferred|preferably|ideally|desirable|advantage|a plus|nice to have|bonus|not (?:a )?(?:must|required))\b', re.I)
 LANGUAGES = ('English','Thai','Japanese','Vietnamese','Mandarin','Chinese','Korean','Tamil','Malay','Indonesian','French','German')
 
 
@@ -49,7 +62,12 @@ def requirement_parts(line):
     Return literal source spans; don't split bare language/degree alternatives.
     """
     names = '|'.join(LANGUAGES)
-    pattern = r'\s*;\s*|\s*,?\s+but\s+|(?:\s+and\s+|,\s*)(?=(?:' + names + r')\b[^;]{0,45}\b(?:preferred|required|optional)\b)'
+    # A preferred industry qualifies only the industry, not the preceding
+    # required duration/activity ("3 years ..., preferably in an agency").
+    # Whole-requirement preferences such as "3 years preferred" stay whole.
+    pattern = (r'\s*;\s*|\s*,?\s+but\s+|,?\s+(?=(?:preferably|ideally)\s+(?:in|within|with|from)\b)'
+               r'|,\s*(?=(?:(?:working|basic|strong|good|advanced)\s+)?(?:knowledge|experience|proficiency|skills?|ability|portfolio)\b)'
+               r'|(?:\s+and\s+|,\s*)(?=(?:' + names + r')\b[^;]{0,45}\b(?:preferred|required|optional)\b)')
     return [part.strip() for part in re.split(pattern, line, flags=re.I) if part.strip()]
 
 
@@ -120,9 +138,9 @@ def _clause(quote):
     if not specialist:
         # CV content work is explicitly social-media content. It does not name
         # email publishing, website maintenance, visual design or asset systems.
-        specialist = re.search(r'\b(?:e-?mail|edm|website|blog posts?|newsletters?|visual(?:s)?|digital assets)\b', specialist_text, re.I)
+        specialist = re.search(r'\b(?:e-?mails?|edms?|websites?|blog posts?|newsletters?|visual(?:s)?|digital assets|job portals?|(?:event |marketing )?collaterals?|e-?books?|short courses?|lead[- ]generation content|(?:marketing|advertising|ad|media) spend)\b', specialist_text, re.I)
     if not specialist:
-        specialist = re.search(r'\b(?:customer cases|case management|complaint resolution|hootsuite|sprout social|buffer|mailchimp|wordpress|figma|software|programming|algorithms?|automation|photography|photos?|graphic(?:s| design)?|visual assets|key visuals|artwork|video\w*|AI tools?|revenue|sales performance|cold calling|sales prospects?|sales opportunities|sales targets?|prospecting|media pitching|media invites|product launches)\b', specialist_text, re.I)
+        specialist = re.search(r'\b(?:customer cases|case management|complaint resolution|hootsuite|sprout social|buffer|mailchimp|wordpress|figma|software|programming|algorithms?|automation|photography|photos?|graphic(?:s| design)?|visual assets|key visuals|artwork|video\w*|AI tools?|revenue|sales performance|cold calling|sales prospects?|sales opportunities|sales targets?|prospecting|media pitching|media invites|product launches|(?:conduct|conducting|carry out|carrying out) interviews?)\b', specialist_text, re.I)
     if not specialist:
         tool = re.search(r'\b(?:using|via|with)\s+([A-Z][A-Za-z0-9]*(?:\s+[A-Z][A-Za-z0-9]*)*)', text)
         if tool: specialist = tool
@@ -136,14 +154,14 @@ def _clause(quote):
 def _duty(quote):
     # Split only when a conjunction introduces an independent action. A noun
     # phrase such as "graphics and animation" stays together with its action.
-    verbs = r'(?:plan|manage|create|curate|develop|coordinate|support|assist|conduct|research|monitor|analyse|analyze|track|prepare|produce|deliver|lead|own|oversee|drive|ensure|handle|maintain|build|execute|implement|engage|write|edit|film|design|identify|review|work|provide|liaise|facilitate|translate|interpret|schedule|publish|respond|optimise|optimize|generate)'
+    verbs = ACTION_VERBS
     # Exact action forms prevent "engagement" from being mistaken for "engage".
-    boundary = r'(?=' + verbs + r'(?:s|d|ed|ing)?\b)'
-    pieces = re.split(r'(?<=[.!?])\s*' + boundary + r'|\s*;\s*|\s*(?:,?\s+and|,?\s+as well as|,?\s+while)\s+' + boundary, quote, flags=re.I)
+    boundary = r'(?=' + verbs + r'\b)'
+    pieces = re.split(r'(?<=[.!?])\s*' + boundary + r'|\s*;\s*|\s*,\s*' + boundary + r'|\s*(?:,?\s+and|,?\s+as well as|,?\s+while)\s+' + boundary, quote, flags=re.I)
     if re.search(r'\b(?:do not|does not|not responsible for|no need to|never)\b', normalized(quote), re.I):
         pieces = [quote]
     # Coordinated verbs before a shared object are one assessable scope.
-    if len(pieces) > 1 and all(re.fullmatch(verbs + r'(?:s|d|ed|ing)?(?:\s*,\s*\w+)*', piece.strip(), re.I) for piece in pieces[:-1]):
+    if len(pieces) > 1 and all(re.fullmatch(verbs + r'(?:\s*,\s*\w+)*', piece.strip(), re.I) for piece in pieces[:-1]):
         pieces = [quote]
     # An inherited action can still have distinct supported/unsupported objects.
     if len(pieces) == 1 and not re.search(r'\b(?:not|never)\b', quote, re.I):
@@ -162,7 +180,7 @@ def _duty(quote):
 def requirement(line):
     text = normalized(line).strip(' .').lower()
     result = {'quote': line, 'status': 'check', 'evidence_state':'missing_candidate_evidence', 'candidate_evidence': [], 'reason': 'Not established by the verified CV; this is not a claim that you lack it.'}
-    if re.search(r'\bdegree\b', text) and re.search(r'\band\b', text):
+    if re.search(r'\bdegree\b', text) and re.search(r'\band\b|\b(?:knowledge|proficiency|skills?|ability|portfolio)\b', text):
         return result  # Compound degree requirements need human subject/scope review.
     if re.search(r'\b(?:years?|native|fluent|fluency|certifi\w*|advanced|extensive|proven|excellent|strong|expert|leadership)\b', text) or SPECIALIST.search(text):
         return result
@@ -221,7 +239,7 @@ def evaluate(title, description, mandatory, preferred, complete, family):
     matched = sum(row['status'] == 'overlap' for row in clause_rows)
     supported = sum(row['status'] == 'supported' for row in req_rows)
     # Collapse repeated supported domains so repeating the same duty cannot boost fit.
-    domain_groups = {tuple(row['domains']) for row in clause_rows if row['status'] == 'overlap'}
+    domain_groups = {domain for row in clause_rows if row['status'] == 'overlap' for domain in row['domains']}
     unknown_duties = len(clause_rows) - matched
     duty_denominator = len(domain_groups) + unknown_duties
     duty_points = round(50 * len(domain_groups) / duty_denominator) if duty_denominator else 0

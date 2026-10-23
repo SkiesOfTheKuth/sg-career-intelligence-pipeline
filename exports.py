@@ -2,7 +2,13 @@
 import csv
 import io
 import json
+import re
 from fastapi.responses import Response
+
+# XML 1.0 cannot represent these code points, although SQLite/JSON can retain
+# them in pasted notes or source text. Encode the complete affected value rather
+# than silently removing characters or letting openpyxl reject the export.
+_XML_UNREPRESENTABLE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]')
 
 def safe_cell(value):
     text='' if value is None else str(value)
@@ -26,28 +32,48 @@ def job_row(j):
 def export_response(headers,rows,name,format='csv'):
     if format=='xlsx':
         from openpyxl import Workbook
+        from openpyxl.comments import Comment
         from openpyxl.styles import Font, Alignment
         book=Workbook();sheet=book.active;sheet.title='Roles'
         sheet.append(headers)
         full_text = None
-        for row in rows:
+        for sheet_row, row in enumerate(rows, 2):
             cells = []
             for index, value in enumerate(row):
                 original = '' if value is None else str(value)
-                safe = safe_cell(original)
-                if len(safe) > 32767:
+                encoded = bool(_XML_UNREPRESENTABLE.search(original))
+                text = json.dumps(original, ensure_ascii=True) if encoded else original
+                safe = safe_cell(text)
+                if encoded or len(safe) > 32767:
                     # Excel's native cell limit is 32,767 characters. openpyxl
                     # silently truncates longer values, so retain full content
                     # in ordered, identified parts on a separate worksheet.
                     if full_text is None:
                         full_text = book.create_sheet('Full text')
-                        full_text.append(['Record ID', 'Field', 'Part', 'Text', 'Formula prefix added'])
+                        full_text.append(['Record ID', 'Field', 'Part', 'Text', 'Formula prefix added',
+                                          'Encoding', 'Main sheet row'])
+                        full_text['F1'].comment = Comment(
+                            'Group by Main sheet row and Field, order by Part, remove the first apostrophe '
+                            'only when Formula prefix added is Yes, and join Text parts. For JSON string '
+                            'encoding, decode that complete JSON string to recover every original character. '
+                            'Plain text parts need no decoding.', 'SG Career Intelligence')
                         full_text.freeze_panes = 'A2'
-                    chunks = [original[start:start + 30000] for start in range(0, len(original), 30000)]
+                    # Split after JSON encoding: escaping can expand a short
+                    # original beyond Excel's cell limit. Rejoin parts before
+                    # decoding JSON, removing only labelled formula prefixes.
+                    chunks = [text[start:start + 30000] for start in range(0, len(text), 30000)]
+                    record_id = str(row[0])
+                    if _XML_UNREPRESENTABLE.search(record_id):
+                        record_id = json.dumps(record_id, ensure_ascii=True)
+                    if len(record_id) > 32767:
+                        record_id = record_id[:120] + f'… [ID in main sheet row {sheet_row}]'
                     for part, chunk in enumerate(chunks, 1):
                         escaped = safe_cell(chunk)
-                        full_text.append([safe_cell(row[0]), headers[index], part, escaped, 'Yes' if escaped != chunk else 'No'])
-                    safe = safe_cell(original[:120] + f'… [Complete text: Full text worksheet; {len(chunks)} parts; field: {headers[index]}]')
+                        full_text.append([safe_cell(record_id), headers[index], part, escaped,
+                                          'Yes' if escaped != chunk else 'No',
+                                          'JSON string' if encoded else 'Plain text', sheet_row])
+                    encoding_label = '; JSON string encoding' if encoded else ''
+                    safe = safe_cell(text[:120] + f'… [Complete text: Full text worksheet; {len(chunks)} parts; field: {headers[index]}{encoding_label}]')
                 cells.append(safe)
             sheet.append(cells)
         sheet.freeze_panes='A2';sheet.auto_filter.ref=sheet.dimensions

@@ -115,6 +115,32 @@ class WorkspaceV2API(unittest.TestCase):
         self.assertIn('Japanese proficiency is required', changed['requirements']['mandatory'])
         self.assertLessEqual(changed['assessment']['score']['value'],39)
 
+    def test_xlsx_retains_accepted_control_characters_in_labelled_json_parts(self):
+        from openpyxl import load_workbook
+        notes = '=HYPERLINK("bad")\x0b' + 'ภาษาไทย\x00' * 6000
+        draft = 'Copied text\x0cwith a separator\ufffe and literal \\u0000'
+        saved = self.put('monthly', {'expected_revision': 0, 'notes': notes,
+                                    'drafts': {'cover_letter': draft}}).json()
+        self.put('annual', {'expected_revision': 0, 'notes': 'Not selected'})
+        response = self.get('/api/export/applications?ids=monthly&format=xlsx')
+        self.assertEqual(response.status_code, 200)
+        book = load_workbook(io.BytesIO(response.content))
+        self.assertEqual(book.active.max_row, 2)
+        self.assertIn('JSON', book.active.cell(2, 5).value)
+        for field, expected in [('Notes', notes), ('Cover letter', draft)]:
+            parts = [row for row in book['Full text'].iter_rows(min_row=2, values_only=True)
+                     if row[1] == field]
+            self.assertTrue(parts)
+            self.assertTrue(all(row[5] == 'JSON string' and row[6] == 2 for row in parts))
+            encoded = ''.join(row[3][1:] if row[4] == 'Yes' else row[3] for row in parts)
+            self.assertEqual(json.loads(encoded), expected)
+        self.assertTrue(all(cell.data_type != 'f' for sheet in book for row in sheet for cell in row))
+        self.assertEqual(self.store.get_application('monthly'), saved)
+        csv_rows = list(csv.DictReader(io.StringIO(
+            self.get('/api/export/applications?ids=monthly').content.decode('utf-8-sig'))))
+        self.assertEqual(csv_rows[0]['Notes'], "'" + notes)
+        self.assertEqual(csv_rows[0]['Cover letter'], draft)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -399,7 +399,12 @@
     try {
       const saved = await api(`/api/applications/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ ...session.inFlight, expected_revision: session.revision }) });
       const acknowledgedPatch = session.inFlight;
-      const matches = Object.entries(acknowledgedPatch).every(([key, value]) => key === 'resolve_import_conflicts' || (key === 'drafts' ? Object.entries(value).every(([name, text]) => saved?.drafts?.[name] === text) : saved?.[key] === value));
+      const matches = Object.entries(acknowledgedPatch).every(([key, value]) => {
+        if (key === 'resolve_import_conflicts') return Array.isArray(saved?.import_conflicts)
+          && saved.import_conflicts.every(conflict => Number.isInteger(conflict?.id) && !value.includes(conflict.id));
+        if (key === 'drafts') return Object.entries(value).every(([name, text]) => saved?.drafts?.[name] === text);
+        return saved?.[key] === value;
+      });
       if (String(saved?.job_id) !== id || !Number.isInteger(saved?.revision) || saved.revision <= session.revision || !STAGES.includes(saved.stage) || typeof saved.notes !== 'string' || !matches) throw new Error('The server did not confirm these edits. Your pending text is preserved; retry saving.');
       const observed = state.applications.get(id);
       const latest = Number(observed?.revision || 0) > saved.revision ? observed : saved;
@@ -420,6 +425,7 @@
       updateImportNotice();
       updateSaveFeedback(id);
       updateDetailActions(id);
+      updateAcknowledgedDetail(id, acknowledgedPatch);
       if (state.view === 'applications') renderApplications();
       else refreshRowStage(id);
       if (hasKeys(session.pending)) flushWrite(id);
@@ -484,6 +490,40 @@
   function printableApplication(application) {
     return [`Stage: ${application?.stage || 'Saved'}`, `Next action: ${application?.next_action || ''}`, `Follow-up: ${application?.follow_up_date || ''}`, `Outcome: ${application?.outcome || ''}`, `Notes:\n${application?.notes || ''}`, `Recruiter message:\n${application?.drafts?.recruiter_message || ''}`, `Cover letter:\n${application?.drafts?.cover_letter || ''}`].join('\n\n');
   }
+  function updateAcknowledgedDetail(id, patch) {
+    if (state.activeId !== id) return;
+    const application = effectiveApplication(id);
+    const outcome = $('application-outcome')?.closest('label');
+    if (outcome) outcome.hidden = application?.stage !== 'Closed';
+    for (const conflictId of patch.resolve_import_conflicts || []) {
+      const review = [...$('role-detail').querySelectorAll('[data-import-conflict]')].find(node => node.dataset.importConflict === String(conflictId));
+      if (review) review.replaceChildren(paragraph('Review saved. The original entry and chosen version are retained in application history.'));
+    }
+    updateApplicationHistory(id);
+  }
+  function updateApplicationHistory(id) {
+    if (state.activeId !== id || !effectiveApplication(id)?.revision) return;
+    let section = $('application-history');
+    if (!section) {
+      section = el('details', 'detail-section'); section.id = 'application-history';
+      section.append(el('summary', '', 'Application history'));
+      section.addEventListener('toggle', () => {
+        if (section.open && !section.querySelector('.history-content')) updateApplicationHistory(id);
+      });
+      $('role-detail').append(section);
+    }
+    const revision = String(effectiveApplication(id).revision);
+    if (section.dataset.revision === revision && section.querySelector('.history-content')) return;
+    const previous = section.querySelector('.history-content');
+    const focusInside = previous?.contains(document.activeElement);
+    previous?.remove(); // Detached containers also invalidate any older history response.
+    section.dataset.revision = revision;
+    if (section.open) {
+      const content = el('div', 'history-content'); section.append(content);
+      if (focusInside) section.querySelector('summary').focus({preventScroll: true});
+      loadApplicationHistory(id, content);
+    }
+  }
   function resolveConflict(id, keepEdits) {
     const session = sessionFor(id);
     const current = session.conflict;
@@ -494,6 +534,13 @@
     session.conflict = null;
     session.error = null;
     if (!keepEdits) { session.pending = {}; session.inFlight = {}; }
+    else if (Array.isArray(current.import_conflicts) && session.pending.resolve_import_conflicts) {
+      // Resolution commands are one-time events. Another accepted write may have
+      // resolved them already; the user's explicitly rebased field edits remain.
+      const unresolved = new Set(current.import_conflicts.map(conflict => conflict.id));
+      session.pending.resolve_import_conflicts = session.pending.resolve_import_conflicts.filter(conflictId => unresolved.has(conflictId));
+      if (!session.pending.resolve_import_conflicts.length) delete session.pending.resolve_import_conflicts;
+    }
     persistRecovery(id);
     renderNotices();
     renderDetail(getJob(id), false);
@@ -793,6 +840,7 @@
       for (const conflict of application.import_conflicts) {
         const incoming = conflict.incoming?.application || conflict.incoming || {};
         const review = el('div', 'notice warning');
+        review.dataset.importConflict = String(conflict.id);
         review.append(paragraph('A previous browser shortlist contains different notes or a different stage. The original entry is retained for review.'));
         const versions = el('details'); versions.append(el('summary', '', 'Review previous shortlist entry'), el('pre', 'conflict-copy', printableApplication(incoming)));
         review.append(versions);
@@ -810,6 +858,7 @@
           queueWrite(id, patch, true);
           $('application-notes').value = patch.notes;
           if (patch.stage) $('application-stage').value = patch.stage;
+          $('application-outcome').closest('label').hidden = effectiveApplication(id)?.stage !== 'Closed';
           updateDetailActions(id); renderPreparation(id);
           review.replaceChildren(paragraph('Previous notes and stage selected. Saving…'));
         }));
@@ -824,20 +873,12 @@
     fragment.append(tracking);
     renderRecovery(id, fragment);
     const preparation = el('div'); preparation.id = 'preparation'; fragment.append(preparation);
-    if (application?.revision) {
-      const historySection = el('details', 'detail-section'); historySection.id = 'application-history';
-      historySection.append(el('summary', '', 'Application history'));
-      const historyContent = el('div'); historySection.append(historyContent);
-      historySection.addEventListener('toggle', () => {
-        if (historySection.open && !historyContent.childNodes.length) loadApplicationHistory(id, historyContent);
-      });
-      fragment.append(historySection);
-    }
     pane.replaceChildren(fragment);
     updateDetailEvidence(job);
     updateDetailActions(id);
     updateSaveFeedback(id);
     renderPreparation(id);
+    updateApplicationHistory(id);
     pane.scrollTop = previousScroll;
     if (focus) title.focus({ preventScroll: true });
     else if (previousFocusId) {
@@ -869,6 +910,7 @@
       const next = offset + (data.items || []).length;
       if (next < data.total) container.append(button('Load older application history', event => { event.currentTarget.remove(); loadApplicationHistory(id, container, next); }));
     } catch (error) {
+      if (!container.isConnected) return;
       progress.remove(); const retry = el('div', 'notice warning');
       retry.append(paragraph(error.message), button('Retry application history', () => {retry.remove(); loadApplicationHistory(id, container, offset);})); container.append(retry);
     }

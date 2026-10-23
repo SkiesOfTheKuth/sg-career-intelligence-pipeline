@@ -89,6 +89,8 @@ def main():
         page.locator('#application-notes').fill('First context competing notes.')
         page.get_by_role('button', name='Save my edits over this version', exact=True).wait_for()
         assert current(role)['notes'] == 'Other authenticated context notes.'
+        page.locator('#save-feedback summary').click()
+        page.locator('#save-feedback').scroll_into_view_if_needed()
         page.screenshot(path=str(out / 'conflict-1440.png'))
         page.get_by_role('button', name='Save my edits over this version', exact=True).click()
         saved(page, role, {'notes':'First context competing notes.'}, 'explicit concurrency resolution')

@@ -1,9 +1,11 @@
 """Browser regressions; API fixtures mutate only isolated in-memory records."""
 import copy
 import json
+import tempfile
 import unittest
 from pathlib import Path
 from playwright.sync_api import sync_playwright
+from storage import Conflict, Store
 
 ROOT = Path(__file__).parent
 JOB = {'id':'role-1','title':'Marketing Executive','company':'Example','description':'Manage social media campaigns.', 'employment_types':['Full Time'], 'salary':{'display':'S$3,000 / month'}, 'assessment':{'fit':'Relevant','reasons':['Supported campaign work.']}, 'verification':{}}
@@ -51,6 +53,113 @@ class EditorRegression(unittest.TestCase):
         self.assertEqual(page.locator('#draft-cover_letter').count(),1)
         page.get_by_text('Application preparation',exact=True).click()
         self.assertEqual(page.locator('#draft-cover_letter').input_value(),'Retained user draft')
+    def test_first_save_exposes_history_without_reopening_role(self):
+        self.app.update(notes='', revision=0)
+        page = self.context.new_page()
+        page.route('**/api/applications', lambda route: route.fulfill(json={'items':[]}))
+        page.goto('https://workspace.test/?role=role-1')
+        page.locator('#application-notes').fill('First saved note')
+        page.wait_for_timeout(450)
+        self.assertEqual(self.app['notes'], 'First saved note')
+        self.assertEqual(page.locator('#application-history > summary').count(), 1)
+
+    def test_successful_import_resolution_updates_feedback_and_closed_outcome(self):
+        self.app['import_conflicts'] = [{'id':7,'incoming':{'application':{'notes':'imported notes','stage':'Closed'}}}]
+        page = self.page()
+        def resolve(route):
+            patch = route.request.post_data_json
+            self.assertEqual(patch.pop('expected_revision'), self.app['revision'])
+            self.assertEqual(patch.pop('resolve_import_conflicts'), [7])
+            self.app.update(patch, import_conflicts=[], revision=self.app['revision'] + 1)
+            route.fulfill(json=copy.deepcopy(self.app))
+        page.route('**/api/applications/role-1', resolve)
+        page.get_by_role('button', name='Use previous notes and stage', exact=True).click()
+        page.wait_for_timeout(150)
+        self.assertEqual(page.locator('#save-feedback > .save-status').inner_text(), 'Saved')
+        self.assertNotIn('Saving…', page.locator('#role-detail').inner_text())
+        self.assertTrue(page.locator('#application-outcome').is_visible())
+    def test_import_resolution_acknowledgement_must_confirm_resolved_ids(self):
+        for index, conflicts in enumerate(([{'id':7}], None, [None], {'id':7})):
+            with self.subTest(import_conflicts=conflicts):
+                notes = f'Keep import choice {index}'
+                self.app.update(notes='original', stage='Saved', revision=1,
+                                import_conflicts=[{'id':7,'incoming':{'application':{'notes':notes,'stage':'Closed'}}}])
+                page = self.page(); requests = []
+                def invalid_ack(route):
+                    requests.append(route.request.post_data_json)
+                    acknowledgement = {**copy.deepcopy(self.app),'notes':notes,'stage':'Closed','revision':2}
+                    if conflicts is None: acknowledgement.pop('import_conflicts')
+                    else: acknowledgement['import_conflicts'] = conflicts
+                    route.fulfill(json=acknowledgement)
+                page.route('**/api/applications/role-1', invalid_ack)
+                page.get_by_role('button', name='Use previous notes and stage', exact=True).click()
+                page.wait_for_timeout(100)
+                self.assertTrue(page.get_by_role('button', name='Retry save', exact=True).is_visible())
+                self.assertNotIn('Review saved.', page.locator('#role-detail').inner_text())
+                self.assertEqual(page.locator('#application-notes').input_value(), notes)
+                records = page.evaluate("Object.keys(localStorage).filter(key=>key.startsWith('sg_career_recovery_v2:')).map(key=>JSON.parse(localStorage.getItem(key)))")
+                retained = [record for record in records if record['patch'].get('notes') == notes]
+                self.assertEqual(len(retained), 1)
+                self.assertEqual(retained[0]['expected_revision'], 1)
+                self.assertEqual(retained[0]['patch']['resolve_import_conflicts'], [7])
+                def valid_ack(route):
+                    patch = route.request.post_data_json
+                    self.assertEqual(patch.pop('expected_revision'), 1)
+                    self.assertEqual(patch.pop('resolve_import_conflicts'), [7])
+                    self.app.update(patch, import_conflicts=[], revision=2)
+                    route.fulfill(json=copy.deepcopy(self.app))
+                page.route('**/api/applications/role-1', valid_ack)
+                page.get_by_role('button', name='Retry save', exact=True).click()
+                page.wait_for_timeout(100)
+                self.assertEqual(page.locator('#save-feedback > .save-status').inner_text(), 'Saved')
+                self.assertIn('Review saved.', page.locator('#role-detail').inner_text())
+                self.assertEqual(len(requests), 1)
+                page.close()
+    def test_save_refreshes_open_history_and_ignores_older_history_response(self):
+        page = self.page(); held = []
+        page.route('**/api/applications/role-1/history?*', lambda route: held.append(route))
+        page.locator('#application-history > summary').click()
+        page.wait_for_timeout(50)
+        page.locator('#application-notes').fill('Update while history loads')
+        page.wait_for_timeout(450)
+        self.assertEqual(len(held), 2)
+        held[1].fulfill(json={'items':[{'type':'updated','stage':'Preparing'}], 'total':1})
+        held[0].fulfill(json={'items':[{'type':'created','stage':'Saved'}], 'total':1})
+        page.wait_for_timeout(100)
+        self.assertIn('Preparing', page.locator('#application-history').inner_text())
+        self.assertNotIn('created', page.locator('#application-history').inner_text())
+        self.assertTrue(page.locator('#application-notes').evaluate('(node) => node === document.activeElement'))
+        self.assertEqual(page.locator('#application-notes').input_value(), 'Update while history loads')
+    def test_import_resolution_rebase_does_not_resubmit_already_resolved_ids(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(Path(directory) / 'isolated.sqlite3').initialize()
+            store.seed_jobs([JOB])
+            store.put_application('role-1', {'expected_revision':0,'notes':'original'})
+            store.import_applications({'role-1':{'notes':'Retain my import choice','stage':'Preparing'}})
+            self.app = store.get_application('role-1')
+            page = self.page()
+            # A different editor has already resolved this import before this editor saves.
+            conflict_id = self.app['import_conflicts'][0]['id']
+            store.put_application('role-1', {'expected_revision':self.app['revision'],'resolve_import_conflicts':[conflict_id]})
+            def save(route):
+                try:
+                    route.fulfill(json=store.put_application('role-1', route.request.post_data_json))
+                except Conflict as error:
+                    route.fulfill(status=409, json={'detail':{'current':error.current}})
+                except ValueError as error:
+                    route.fulfill(status=400, json={'detail':str(error)})
+            page.route('**/api/applications/role-1', save)
+            page.get_by_role('button', name='Use previous notes and stage', exact=True).click()
+            page.get_by_role('button', name='Save my edits over this version', exact=True).click()
+            page.wait_for_timeout(150)
+            self.assertEqual(page.locator('#save-feedback > .save-status').inner_text(), 'Saved')
+            actual = store.get_application('role-1')
+            self.assertEqual(actual['notes'], 'Retain my import choice')
+            self.assertEqual(actual['stage'], 'Preparing')
+            retained = [event for event in store.get_application_history('role-1')['items'] if event['type'] == 'import_version']
+            self.assertEqual(len(retained), 1)
+            self.assertEqual(retained[0]['resolution']['notes'], 'original')
+            page.close()
     def test_failed_inflight_write_exposes_already_observed_server_conflict(self):
         page=self.page();held=[]
         page.route('**/api/applications/role-1',lambda route:held.append(route))
@@ -125,6 +234,9 @@ class EditorRegression(unittest.TestCase):
         self.assertIn('Confirm language requirement',page.locator('#preparation-checklist').inner_text())
     def test_mobile_detail_excludes_background_skip_link_and_restores_it(self):
         page = self.page();page.set_viewport_size({'width':390,'height':844})
+        # MatchMedia change dispatch is asynchronous after viewport resizing.
+        # Assert the resulting modal state, not the first synchronous frame.
+        page.wait_for_function("document.querySelector('.skip-link').inert")
         self.assertTrue(page.locator('.skip-link').evaluate('(node) => node.inert'))
         page.locator('#application-notes').focus();page.keyboard.press('Escape')
         self.assertFalse(page.locator('.skip-link').evaluate('(node) => node.inert'))
