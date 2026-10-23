@@ -13,7 +13,7 @@ CV_SOURCE = 'CV 2026.pdf, verified 21 October 2026'
 RULES = (
     ('social', r'\bsocial[ -]media\b|\bcommunity (?:management|engagement)\b|\bengage communit', 'Social Collective Studio: full-cycle social media accounts, content planning and daily community management.'),
     ('content', r'\bcontent (?:creation|planning|strategy|strategies|calendar|calendars|ideas)\b|\b(?:create|creating|curate|curating|publish|publishing|schedule|scheduling|develop|developing)\b[^.;\n]{0,50}\bcontent\b', 'Social Collective Studio: content planning. uWave: digital content creation across social media platforms.'),
-    ('influencer', r'\binfluencer (?:outreach|relations|relationships|campaigns?|contracts?|communications?|engagement|tastings?)\b|\b(?:coordinate|manage|build|develop)\b[^.;\n]{0,45}\binfluencer', 'Social Collective Studio: influencer outreach, contract communications and campaign execution.'),
+    ('influencer', r'\binfluencer (?:outreach|relations|relationships|campaigns?|contracts?|communications?|engagement|tastings?)\b|\b(?:coordinate|manage|build|develop)\b[^.;\n]{0,45}\binfluencer', 'Social Collective Studio: influencer outreach, contract communications and execution for product launches and promotional campaigns.'),
     ('research', r'\b(?:audience|trend|market|consumer) research\b|\bresearch\b[^.;\n]{0,45}\b(?:audience|trends?|market)\b', 'Social Collective Studio: trend and audience research for marketing proposals and pitch decks.'),
     ('analytics', r'\b(?:social media|campaign|content|performance) (?:analytics|metrics|performance|reports?|reporting)\b|\bmonthly (?:analytics|reports?|reporting)\b|\b(?:monitor|analyse|analyze|track)\b[^.;\n]{0,40}\b(?:engagement|analytics|audience growth)\b', 'Social Collective Studio: performance metrics, monthly reports and campaign recommendations.'),
     ('interpretation', r'\b(?:thai[–— -]+english|english[–— -]+thai)\b[^.;\n]{0,55}\binterpret\w*|\binterpret\w*\b[^.;\n]{0,55}\bthai\b', 'APAC Food & Beverage Expo (21–23 August 2026) and Royal Thai Embassy (24 August 2026): Thai–English interpretation and B2B liaison.'),
@@ -37,8 +37,24 @@ def normalized(text):
 
 def is_boilerplate(line):
     text = normalized(line)
+    if re.search(r'^we (?:are (?:looking for|seeking|hiring)|require|need)\b', text, re.I):
+        return False
     return bool(re.search(r'^(?:https?://|our (?:company|agency|firm|business|services)|the company|we (?:are|have|were|operate|speciali[sz]e)|established in|founded in|incorporated in|EA\s*(?:licen[cs]e|reg)|(?:recruiter |company )?(?:registration|reg)\s*(?:no|number)|please (?:apply|send|submit)|(?:interested|shortlisted) candidates|submit your|send your|click (?:here|apply|on apply)|to apply\b|by applying|should your application|take an inside look|for job seekers|its clientele)', text, re.I)
         or re.search(r'\b(?:officially opened for business|is an? (?:approved training|professional staffing)|EA licen[cs]e (?:no|number))\b', text, re.I))
+
+
+def requirement_parts(line):
+    """Separate independently qualified requirements without waiving neighbours.
+
+    Return literal source spans; don't split bare language/degree alternatives.
+    """
+    names = '|'.join(LANGUAGES)
+    pattern = r'\s*;\s*|\s*,?\s+but\s+|(?:\s+and\s+|,\s*)(?=(?:' + names + r')\b[^;]{0,45}\b(?:preferred|required|optional)\b)'
+    return [part.strip() for part in re.split(pattern, line, flags=re.I) if part.strip()]
+
+
+def requirement_not_required(line):
+    return bool(re.search(r'\b(?:not (?:a )?(?:must|required|necessary)|no .{0,50}(?:required|necessary)|optional)\b', normalized(line), re.I))
 
 
 def _unique(lines):
@@ -64,7 +80,7 @@ def duty_lines(description, requirements):
         if heading(line): active = True; continue
         if STOP_HEADING.fullmatch(line.replace('’', "'")): active = False; continue
         if not active or is_boilerplate(line) or re.sub(r'\W+', '', line.lower()) in req_keys: continue
-        for sentence in re.split(r'(?<=[.!?])\s+|\s*[;]\s*', line):
+        for sentence in re.split(r'(?<=[.!?])\s+', line):
             sentence = sentence.strip()
             if ACTION.search(sentence) and not re.search(r'\b(?:must|minimum|required|qualifications)\b', sentence, re.I):
                 result.append(sentence)
@@ -77,6 +93,7 @@ def duty_lines(description, requirements):
 def _clause(quote):
     text = normalized(quote)
     matched = [(key, fact) for key, pattern, fact in RULES if re.search(pattern, text, re.I)]
+    negated = bool(re.search(r'\b(?:do not|does not|not responsible for|no need to|never)\b', text, re.I))
     # Require the activity to concern the documented task, not merely mention
     # it as the object of purchasing, software development or translation.
     task_actions = {
@@ -88,26 +105,49 @@ def _clause(quote):
         'sponsor': r'\b(?:acquire|identify|contact|secure|support|coordinate)\w*\b[^.;]{0,45}\bsponsor|\bsponsor(?:ship)? (?:acquisition|outreach)\b',
     }
     matched = [(key, fact) for key, fact in matched if key not in task_actions or re.search(task_actions[key], text, re.I)]
+    # Monitoring conversations is community management, not measurement of
+    # engagement metrics. The CV supports both, but they are distinct actions.
+    if re.search(r'\b(?:comments|messages|conversations)\b', text, re.I) and not re.search(r'\b(?:metrics|analytics|reports?|reporting|performance|growth)\b', text, re.I):
+        matched = [(key, fact) for key, fact in matched if key != 'analytics']
     if re.search(r'\b(?:buy|purchas\w*|sell|translat\w*)\b', text, re.I):
         matched = [(key, fact) for key, fact in matched if key == 'interpretation']
     # A topic is not an action. Managing accounts or communities is distinct from
     # producing assets for those channels, advertising or specialised analysis.
     if not re.search(r'\b(?:manag\w*|maintain\w*|engag\w*|plan\w*|schedul\w*|publish\w*|curat\w*|post\w*)\b[^.;]{0,45}\b(?:social[ -]media|communit\w*|content)|\b(?:social[ -]media|community) (?:management|engagement)\b', text, re.I):
         matched = [(key, fact) for key, fact in matched if key != 'social']
-    specialist = SPECIALIST.search(text)
+    specialist_text = re.sub(r'\bproduct launches\b', '', text, flags=re.I) if any(key == 'influencer' for key, _ in matched) else text
+    specialist = SPECIALIST.search(specialist_text)
     if not specialist:
-        specialist = re.search(r'\b(?:software|programming|algorithms?|automation|photography|photos?|graphic(?:s| design)?|visual assets|key visuals|artwork|video\w*|AI tools?|revenue|sales performance|cold calling|sales prospects?|sales opportunities|sales targets?|prospecting|media pitching|media invites|product launches)\b', text, re.I)
-    status = 'overlap' if matched and not specialist else 'check'
+        # CV content work is explicitly social-media content. It does not name
+        # email publishing, website maintenance, visual design or asset systems.
+        specialist = re.search(r'\b(?:e-?mail|edm|website|blog posts?|newsletters?|visual(?:s)?|digital assets)\b', specialist_text, re.I)
+    if not specialist:
+        specialist = re.search(r'\b(?:customer cases|case management|complaint resolution|hootsuite|sprout social|buffer|mailchimp|wordpress|figma|software|programming|algorithms?|automation|photography|photos?|graphic(?:s| design)?|visual assets|key visuals|artwork|video\w*|AI tools?|revenue|sales performance|cold calling|sales prospects?|sales opportunities|sales targets?|prospecting|media pitching|media invites|product launches)\b', specialist_text, re.I)
+    if not specialist:
+        tool = re.search(r'\b(?:using|via|with)\s+([A-Z][A-Za-z0-9]*(?:\s+[A-Z][A-Za-z0-9]*)*)', text)
+        if tool: specialist = tool
+    status = 'overlap' if matched and not specialist and not negated else 'check'
     return {'quote': quote, 'status': status, 'candidate_evidence': list(dict.fromkeys(fact for _, fact in matched)) if status == 'overlap' else [],
             'evidence_state': 'supported' if status == 'overlap' else 'missing_candidate_evidence',
-            'reason': 'Documented task overlap; depth and results still need your review.' if status == 'overlap' else f'The CV does not establish this specialist scope: {specialist.group(0)}.' if specialist else 'No specific CV evidence is mapped to this duty. Review it yourself.',
+            'reason': 'Documented task overlap; depth and results still need your review.' if status == 'overlap' else 'The source negates this responsibility; it cannot establish a positive task match.' if negated else f'The CV does not establish this specialist scope: {specialist.group(0)}.' if specialist else 'No specific CV evidence is mapped to this duty. Review it yourself.',
             'domains': [key for key, _ in matched] if status == 'overlap' else []}
 
 
 def _duty(quote):
     # Split only when a conjunction introduces an independent action. A noun
     # phrase such as "graphics and animation" stays together with its action.
-    pieces = re.split(r'\s*(?:;|,?\s+and|,?\s+as well as|,?\s+while)\s+(?=(?:plan|manage|create|curate|develop|coordinate|support|assist|conduct|research|monitor|analyse|analyze|track|prepare|produce|deliver|lead|own|oversee|drive|ensure|handle|maintain|build|execute|implement|engage|write|edit|film|design|identify|review|work|provide|liaise|facilitate|translate|interpret|schedule|publish)\w*\b)', quote, flags=re.I)
+    verbs = r'(?:plan|manage|create|curate|develop|coordinate|support|assist|conduct|research|monitor|analyse|analyze|track|prepare|produce|deliver|lead|own|oversee|drive|ensure|handle|maintain|build|execute|implement|engage|write|edit|film|design|identify|review|work|provide|liaise|facilitate|translate|interpret|schedule|publish|respond|optimise|optimize|generate)'
+    # Exact action forms prevent "engagement" from being mistaken for "engage".
+    boundary = r'(?=' + verbs + r'(?:s|d|ed|ing)?\b)'
+    pieces = re.split(r'(?<=[.!?])\s*' + boundary + r'|\s*;\s*|\s*(?:,?\s+and|,?\s+as well as|,?\s+while)\s+' + boundary, quote, flags=re.I)
+    if re.search(r'\b(?:do not|does not|not responsible for|no need to|never)\b', normalized(quote), re.I):
+        pieces = [quote]
+    # Coordinated verbs before a shared object are one assessable scope.
+    if len(pieces) > 1 and all(re.fullmatch(verbs + r'(?:s|d|ed|ing)?(?:\s*,\s*\w+)*', piece.strip(), re.I) for piece in pieces[:-1]):
+        pieces = [quote]
+    # An inherited action can still have distinct supported/unsupported objects.
+    if len(pieces) == 1 and not re.search(r'\b(?:not|never)\b', quote, re.I):
+        pieces = re.split(r'\s+and\s+(?=(?:paid (?:advertising|media|social)|graphic(?:s| design)|animation|video production|financial reports|payroll)\b)', quote, flags=re.I)
     clauses = [_clause(piece.strip()) for piece in pieces if piece.strip()]
     for clause in clauses: clause['source_quote'] = quote
     supported = [clause for clause in clauses if clause['status'] == 'overlap']
@@ -122,6 +162,8 @@ def _duty(quote):
 def requirement(line):
     text = normalized(line).strip(' .').lower()
     result = {'quote': line, 'status': 'check', 'evidence_state':'missing_candidate_evidence', 'candidate_evidence': [], 'reason': 'Not established by the verified CV; this is not a claim that you lack it.'}
+    if re.search(r'\bdegree\b', text) and re.search(r'\band\b', text):
+        return result  # Compound degree requirements need human subject/scope review.
     if re.search(r'\b(?:years?|native|fluent|fluency|certifi\w*|advanced|extensive|proven|excellent|strong|expert|leadership)\b', text) or SPECIALIST.search(text):
         return result
     degree = r"(?:(?:a|minimum|at least a) )?(?:diploma\s*/\s*degree|diploma or degree|(?:bachelor'?s?|master'?s?|university) degree|degree)(?: in (?:marketing|business)(?:\s*(?:,|or)\s*(?:(?:a )?related (?:field|discipline)|business|marketing))*)?(?: or equivalent(?: practical experience)?)?"
@@ -144,9 +186,9 @@ def requirement(line):
 
 def language_gaps(lines):
     gaps = []
-    for line in lines:
-        if PREFERRED.search(line): continue
-        if not re.search(r'speaking|language|fluen\w*|proficien\w*|communicat\w*|written|spoken|command of', line, re.I): continue
+    for line in [part for original in lines for part in requirement_parts(original)]:
+        if PREFERRED.search(line) or requirement_not_required(line): continue
+        if not re.search(r'speak\w*|language|fluen\w*|proficien\w*|communicat\w*|written|spoken|command of|required', line, re.I): continue
         found = [language for language in LANGUAGES if re.search(r'\b' + language + r'\b', line, re.I)]
         if not found: continue
         # "Japanese or English" is a supported alternative, not a Japanese gate.

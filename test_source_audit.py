@@ -68,10 +68,13 @@ class ScoreTests(unittest.TestCase):
         self.assertIn('Vietnamese',gate['reason']);self.assertNotIn('Japanese,',gate['reason'])
 
     def test_specialist_tools_and_video_skills_cannot_earn_duty_points(self):
-        for duty in ['Manage social media and paid advertising budgets.','Analyse content analytics using SQL.']:
+        for duty in ['Analyse content analytics using SQL.']:
             score = self.score(description=f'Responsibilities\n{duty}\nRequirements\nExperience in social media')
             self.assertEqual(score['components'][1]['earned'],0,duty)
             self.assertTrue(all(row['status']=='check' for row in score['duties']))
+        mixed = self.score(description='Responsibilities\nManage social media and paid advertising budgets.\nRequirements\nExperience in social media')
+        self.assertEqual(mixed['duties'][0]['status'], 'partial')
+        self.assertFalse(mixed['duties'][0]['clauses'][1]['candidate_evidence'])
         score = self.score(description='Responsibilities\nCreate content and edit videos with Adobe Premiere.\nRequirements\nExperience in social media')
         self.assertEqual(score['duties'][0]['status'], 'partial')
         self.assertEqual(score['components'][1]['earned'], 25)

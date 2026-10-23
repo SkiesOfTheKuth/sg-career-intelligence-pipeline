@@ -150,6 +150,11 @@ class WorkspaceAPI(unittest.TestCase):
         r=self.client.put('/api/applications/monthly',json={'expected_revision':0},auth=self.auth,headers={'Origin':'https://elsewhere.test'})
         self.assertEqual(r.status_code,403)
 
+    def test_cross_scheme_origin_write_rejected(self):
+        r=self.client.put('/api/applications/monthly',json={'expected_revision':0},auth=self.auth,
+                          headers={'Origin':'https://testserver'})
+        self.assertEqual(r.status_code,403)
+
     def test_lifespan_resumes_overdue_refresh(self):
         self.store.set_meta('next_sync_at',time.time()-20)
         async def exercise():
@@ -161,6 +166,25 @@ class WorkspaceAPI(unittest.TestCase):
                 try:await task
                 except asyncio.CancelledError:pass
                 self.assertEqual(synced.call_count,1)
+        asyncio.run(exercise())
+
+    def test_scheduler_rechecks_schedule_after_manual_refresh_during_sleep(self):
+        self.store.set_meta('next_sync_at', 100)
+        async def exercise():
+            sleeps = 0
+            async def wake(_delay):
+                nonlocal sleeps
+                sleeps += 1
+                if sleeps == 1:
+                    # A completed manual check advanced the persisted schedule
+                    # while the scheduler was asleep on the previous due time.
+                    self.store.set_meta('next_sync_at', 100 + web.REFRESH_SECONDS)
+                else:
+                    raise asyncio.CancelledError
+            with patch.object(web.asyncio, 'sleep', side_effect=wake), patch.object(web.time, 'time', return_value=100), patch.object(web, 'run_sync') as synced:
+                with self.assertRaises(asyncio.CancelledError):
+                    await web.refresh_loop(web.app)
+                synced.assert_not_called()
         asyncio.run(exercise())
 
     def test_downloadable_backup_restores_applications(self):

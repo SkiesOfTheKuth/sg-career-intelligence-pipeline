@@ -55,7 +55,6 @@
   function selectSource(id) {
     state.source = id; state.offset = 0;
     renderSelection(); scheduleRecords(0); updateURL();
-    $('selected-heading').focus({preventScroll: true});
   }
   async function loadOverview() {
     const epoch = ++state.overviewEpoch;
@@ -248,8 +247,26 @@
   $('close-inspector').addEventListener('click', () => closeRecord());
   $('record-source').addEventListener('change', event => selectSource(event.target.value));
   const compact = window.matchMedia('(max-width: 650px)');
-  const disclosures = () => document.querySelectorAll('.responsive-disclosure').forEach(node => {node.open = !compact.matches;});
-  disclosures(); compact.addEventListener('change', disclosures);
+  const auditSections = Object.fromEntries(Array.from($('audit-content').children, node => [node.classList[0], node]));
+  function responsiveLayout() {
+    // Reorder the existing sections, so reading and Tab order follow the display.
+    // The controls and their values stay the same when the viewport changes.
+    const focused = document.activeElement;
+    const order = compact.matches
+      ? ['collection-status', 'records-section', 'flow-section', 'audit-detail-disclosure', 'history-section']
+      : ['flow-section', 'collection-status', 'audit-detail-disclosure', 'records-section', 'history-section'];
+    order.forEach((name, index) => {
+      const node = auditSections[name];
+      if ($('audit-content').children[index] !== node) $('audit-content').insertBefore(node, $('audit-content').children[index]);
+    });
+    let focusTarget = focused;
+    document.querySelectorAll('.responsive-disclosure').forEach(node => {
+      node.open = !compact.matches;
+      if (!node.open && node.contains(focused)) focusTarget = node.querySelector('summary');
+    });
+    if (focusTarget !== document.body && focusTarget?.isConnected && document.activeElement !== focusTarget) focusTarget.focus({preventScroll: true});
+  }
+  responsiveLayout(); compact.addEventListener('change', responsiveLayout);
   $('all-sources').addEventListener('click', () => selectSource(''));
   $('refresh-overview').addEventListener('click', () => {loadOverview(); scheduleRecords(0);});
   $('check-source').addEventListener('click', checkSource);

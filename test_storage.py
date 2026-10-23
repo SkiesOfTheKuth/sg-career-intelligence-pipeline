@@ -2,6 +2,8 @@ import concurrent.futures
 from contextlib import closing
 from pathlib import Path
 import sqlite3
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -34,6 +36,26 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(actual["stage"], "Saved")
         self.assertEqual(actual["revision"], 1)
         self.assertIsNone(actual["applied_at"])
+
+    def test_acknowledged_notes_drafts_and_schedule_survive_abrupt_process_exit(self):
+        script = """
+import os, sys
+from storage import Store
+store = Store(sys.argv[1]).initialize()
+store.put_application('SG-OPP-1', {'expected_revision': 0, 'notes': 'Before hard exit', 'drafts': {'cover_letter': 'My edited draft'}})
+store.set_meta('active_sync', {'started_at': '2026-10-22T00:00:00Z'})
+store.set_meta('next_sync_at', 12345)
+os._exit(0)
+"""
+        subprocess.run([sys.executable, '-c', script, str(self.path)], cwd=Path(__file__).parent,
+                       check=True, timeout=20, capture_output=True)
+        restarted = Store(self.path).initialize()
+        saved = restarted.get_application('SG-OPP-1')
+        self.assertEqual(saved['notes'], 'Before hard exit')
+        self.assertEqual(saved['drafts']['cover_letter'], 'My edited draft')
+        self.assertEqual(saved['history'][0]['revision'], 1)
+        self.assertTrue(restarted.get_meta('active_sync'))
+        self.assertEqual(restarted.get_meta('next_sync_at'), 12345)
 
     def test_conflict_does_not_overwrite_current_notes_or_stage(self):
         self.store.put_application("SG-OPP-1", {"expected_revision": 0, "notes": "Browser A"})

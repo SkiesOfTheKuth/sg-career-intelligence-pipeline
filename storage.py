@@ -209,6 +209,21 @@ class Store:
             connection.executemany(
                 'INSERT INTO source_evidence(job_id,source,data_json,captured_at) VALUES(?,?,?,?)', rows)
 
+    def commit_source_refresh(self, jobs, records, result):
+        """Commit source versions, current job fields and the run in one transaction.
+
+        A crash or failed write leaves the prior complete state. The lifespan's
+        interrupted-run marker makes a hard restart retry the bounded check.
+        """
+        now = _now()
+        rows = [(_job_id(job), _json({k: v for k, v in job.items() if k != 'raw_evidence'}), now) for job in jobs]
+        evidence = [(job_id, source, _json(payload), now) for job_id, source, payload in records]
+        with self._connection(write=True) as connection:
+            connection.executemany('INSERT INTO source_evidence(job_id,source,data_json,captured_at) VALUES(?,?,?,?)', evidence)
+            connection.executemany('INSERT INTO jobs(id,data_json,updated_at) VALUES(?,?,?) '
+                                   'ON CONFLICT(id) DO UPDATE SET data_json=excluded.data_json,updated_at=excluded.updated_at', rows)
+            connection.execute('INSERT INTO sync_history(data_json,recorded_at) VALUES(?,?)', (_json(result), now))
+
     def list_jobs(self):
         with self._connection() as connection:
             return [json.loads(row[0]) for row in connection.execute("SELECT data_json FROM jobs ORDER BY id")]

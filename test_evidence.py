@@ -9,6 +9,22 @@ from evidence import (assess, build_job, draft_templates, extract_requirements,
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_thai_classification_refreshes_when_cached_source_or_requirement_section_changes(self):
+        requirements = {'mandatory': ['Thai language proficiency'], 'preferred': []}
+        self.assertEqual(thai_relevance('Marketing Executive', 'Manage campaigns.', requirements), 'Thai required')
+        requirements['mandatory'].clear()
+        requirements['preferred'].append('Thai language proficiency')
+        self.assertEqual(thai_relevance('Marketing Executive', 'Manage campaigns.', requirements), 'Thai preferred')
+        requirements['preferred'].clear()
+        self.assertIsNone(thai_relevance('Marketing Executive', 'Manage campaigns.', requirements))
+        self.assertEqual(thai_relevance('Marketing Executive', 'Manage campaigns in Thailand.', requirements), 'Thailand market context')
+        self.assertIsNone(thai_relevance('Marketing Executive', 'Thai is not required.', requirements))
+
+    def test_foreign_dollar_symbols_are_not_sgd_and_shared_k_range(self):
+        for display, currency in [('HK$ 5000 / month', 'HKD'), ('US$ 5000 / month', 'USD'), ('A$ 5000 / month', 'AUD')]:
+            pay = salary_presentation({'advertised_salary':display, 'source':'Indeed Singapore'})
+            self.assertEqual(pay['currency'], currency)
+        self.assertEqual(salary_presentation({'advertised_salary':'SGD 5 – 6k / month'})['minimum'], 5000)
     def test_repair_preserves_identity_full_text_and_rejects_generated_defaults(self):
         raw = {"id": "LI-1234567890", "title": "Marketing Executive", "company": "A", "source": "LinkedIn Jobs",
                "url": "https://sg.linkedin.com/jobs/view/marketing-1234567890?trackingId=first",

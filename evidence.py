@@ -15,7 +15,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit, urlunsplit
 from functools import lru_cache
-from fit_score import evaluate as evaluate_fit, requirement as check_requirement, language_gaps, normalized, is_boilerplate
+from fit_score import evaluate as evaluate_fit, requirement as check_requirement, language_gaps, normalized, is_boilerplate, requirement_parts, requirement_not_required
+from source_fields import source_field_supplied
 
 UTC = timezone.utc
 RAW_FILES = ("mcf_jobs_raw.json", "apify_jobs_raw.json", "cultjobs_raw.json")
@@ -144,6 +145,8 @@ def salary_presentation(raw):
         pay_text = re.split(r"/|\bper\b", pay_text, maxsplit=1, flags=re.I)[0]
         values = [float(v.replace(",", "")) * (1000 if suffix else 1)
                   for v, suffix in re.findall(r"(\d[\d,]*(?:\.\d+)?)\s*([kK]?)", pay_text)]
+        if len(values) == 2 and re.fullmatch(r'\s*\d+(?:\.\d+)?\s*[-–—]\s*\d+(?:\.\d+)?\s*[kK]\s*', pay_text) and values[0] < 1000:
+            values[0] *= 1000
         if values:
             if re.search(r"\b(?:up to|maximum|max)\b", display, re.I):
                 maximum = values[0]
@@ -152,7 +155,8 @@ def salary_presentation(raw):
                 if re.search(r"\b(?:from|minimum|min)\b", display, re.I) and len(values) == 1:
                     maximum = None
     disclosed = minimum is not None or maximum is not None
-    currency = "SGD" if re.search(r"SGD|S\$", display, re.I) else None
+    currency = next((code for marker, code in ((r'US\$', 'USD'), (r'HK\$', 'HKD'), (r'(?:AU|A)\$', 'AUD'), (r'(?:CA|C)\$', 'CAD'), (r'NZ\$', 'NZD')) if re.search(marker, display, re.I)), None)
+    if currency is None: currency = "SGD" if re.search(r"\bSGD\b|(?<![A-Za-z])S\$", display, re.I) else None
     if currency is None:
         currency = next((c for c in ("USD", "AUD", "HKD", "EUR", "GBP") if c in display.upper()), None)
     # Singapore vacancy source dollar amounts are SGD; explicit foreign currencies remain foreign.
@@ -186,7 +190,8 @@ def _requirements_cached(description, explicit_json):
         preferred.extend(plain_text(explicit.get("preferred")).splitlines())
     elif explicit:
         for line in plain_text(explicit).splitlines():
-            (preferred if _PREFERRED.search(line) else mandatory).append(line)
+            for part in requirement_parts(line):
+                (preferred if _PREFERRED.search(part) or requirement_not_required(part) else mandatory).append(part)
     for line in description.splitlines():
         clean = re.sub(r'^\s*(?:[-•●▪◦‣]+|\d+[.)])\s*', '', line).strip()
         if is_boilerplate(clean):
@@ -202,9 +207,11 @@ def _requirements_cached(description, explicit_json):
             section = None
             continue
         if section:
-            (preferred if section == "preferred" or _PREFERRED.search(clean) else mandatory).append(clean)
+            for part in requirement_parts(clean):
+                (preferred if section == "preferred" or _PREFERRED.search(part) or requirement_not_required(part) else mandatory).append(part)
         elif re.search(r"\b(?:must|minimum qualifications|is required|are required)\b", clean, re.I):
-            (preferred if _PREFERRED.search(clean) else mandatory).append(clean)
+            for part in requirement_parts(clean):
+                (preferred if _PREFERRED.search(part) or requirement_not_required(part) else mandatory).append(part)
     def candidate_lines(lines):
         seen = set()
         for line in lines:
@@ -229,14 +236,26 @@ def _canonical_requirements(job):
 
 
 def thai_relevance(title, description, requirements):
-    sentences = re.split(r"[\n.!?]", title + "\n" + description)
+    return _thai_relevance_cached(title, description, tuple(requirements.get('mandatory') or []),
+                                  tuple(requirements.get('preferred') or []))
+
+
+@lru_cache(maxsize=8192)
+def _thai_relevance_cached(title, description, mandatory, preferred_requirements):
+    text = '\n'.join([title, description] + list(mandatory) + list(preferred_requirements))
+    # Most records never mention Thai. Do not parse every responsibility and
+    # requirement again on each search/source read; changed evidence has its own
+    # immutable cache key, including requirement-section classification.
+    sentences = ([part for line in re.split(r"[\n.!?]", text) for part in requirement_parts(line)]
+                 if re.search(r'\bthai\b', text, re.I) else [])
     preferred, required = False, False
     for sentence in sentences:
+        if requirement_not_required(sentence): continue
         if not re.search(r"\bthai\b", sentence, re.I):
             continue
         # Geography and search queries do not establish a language requirement.
         if re.search(r"(?:thai[ -]speaking|thai language|fluen\w*[^.!?\n]{0,60}\bthai\b|\bthai\b[^.!?\n]{0,60}fluen\w*|(?:speak|read|write|communicat\w*|proficien\w*|translat\w*|interpret\w*)[^.!?\n]{0,60}\bthai\b|\bthai\b[^.!?\n]{0,40}(?:speaker|translat\w*|interpret\w*))", sentence, re.I):
-            if _PREFERRED.search(sentence) or sentence.strip() in requirements["preferred"]:
+            if _PREFERRED.search(sentence) or sentence.strip() in preferred_requirements:
                 preferred = True
             else:
                 required = True
@@ -338,6 +357,7 @@ def prepare_assessments(jobs):
     for job in jobs:
         description = job.get('description') or ''
         requirements = _canonical_requirements(job)
+        thai_relevance(job.get('title') or '', description, requirements)
         _current_assessment(job.get('title') or '', description, tuple(requirements.get('mandatory') or []),
                             tuple(requirements.get('preferred') or []), bool(job.get('description_complete')))
 
@@ -427,8 +447,15 @@ def build_job(raw, job_id, legacy=None):
                raw_evidence=copy.deepcopy(raw))
     job['source_requirements'] = copy.deepcopy(raw.get('requirements'))
     provenance = {'checked_at': checked or None, 'source_record_date': previous_checked or None, 'url': safe_url(raw.get('url')) or url}
-    job['field_provenance'] = {field: copy.deepcopy(provenance) for field in ('description', 'requirements')}
-    job['source_requirement_evidence'] = copy.deepcopy(raw.get('requirements_evidence') or provenance) if raw.get('requirements') is not None else None
+    source_fields = {'description':'description', 'requirements':'requirements', 'company':'company', 'location':'location', 'work_arrangement':'work_arrangement', 'posted_at':'posted_date', 'deadline':'expiry_date', 'employment_type':'employment_type', 'salary':'salary'}
+    job['field_provenance'] = {field: copy.deepcopy(provenance) if source_field_supplied(raw, source_field) else {'checked_at':None, 'source_record_date':None, 'url':provenance['url']} for field, source_field in source_fields.items()}
+    if job['work_arrangement']:
+        explicit_arrangement = raw.get('work_arrangement')
+        if explicit_arrangement and explicit_arrangement not in ('On-site / Hybrid (Singapore)', 'On-site / Hybrid', 'Not stated'):
+            job['field_provenance']['work_arrangement']['basis'] = 'explicit_source'
+        else:
+            job['field_provenance']['work_arrangement'] = {**copy.deepcopy(job['field_provenance']['description']), 'basis':'description'}
+    job['source_requirement_evidence'] = copy.deepcopy(raw.get('requirements_evidence', provenance)) if raw.get('requirements') is not None else None
     if status == "unavailable" and _is_search_page(url):
         job["source_warning"] = "This retained link is a search-results page, not an individual vacancy."
     return present_job(job)
@@ -459,6 +486,7 @@ def present_job(job, now=None, *, with_assessment=True):
         job["status"] = "unknown"
     requirements_input = job if with_assessment else {**job, **({'raw_evidence': raw_evidence} if raw_evidence is not None else {})}
     job['requirements'] = _canonical_requirements(requirements_input)
+    job['thai_relevance'] = thai_relevance(job.get('title') or '', job.get('description') or '', job['requirements'])
     if job.get('field_provenance'):
         job['field_provenance']['derived_requirements'] = copy.deepcopy(job['field_provenance'].get('description', {}))
     requirements = job.get('requirements') or {}

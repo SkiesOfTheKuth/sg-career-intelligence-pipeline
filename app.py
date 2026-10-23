@@ -97,6 +97,9 @@ async def refresh_loop(application):
     while True:
         due = store.get_meta('next_sync_at', time.time() + REFRESH_SECONDS)
         await asyncio.sleep(max(0, min(60, due - time.time())))
+        # A manual check may have completed while this loop slept. Its durable
+        # schedule supersedes the due time read before sleeping.
+        due = store.get_meta('next_sync_at', time.time() + REFRESH_SECONDS)
         if time.time() >= due:
             await run_sync(application)
 
@@ -142,7 +145,7 @@ async def lifespan(application):
         await asyncio.to_thread(verified_backup, store)
 
 
-app = FastAPI(title='SG Career Intelligence', version='2.2.0', lifespan=lifespan)
+app = FastAPI(title='SG Career Intelligence', version='2.2.1', lifespan=lifespan)
 app.state.database_path = DB_PATH
 app.mount('/static', StaticFiles(directory=BASE / 'static', check_dir=False), name='static')
 
@@ -151,7 +154,8 @@ app.mount('/static', StaticFiles(directory=BASE / 'static', check_dir=False), na
 async def security_headers(request, call_next):
     if request.method in {'PUT', 'POST', 'PATCH', 'DELETE'}:
         origin = request.headers.get('origin')
-        if request.headers.get('sec-fetch-site') == 'cross-site' or (origin and urlparse(origin).netloc != request.headers.get('host')):
+        if request.headers.get('sec-fetch-site') == 'cross-site' or (origin and
+                (urlparse(origin).netloc != request.headers.get('host') or urlparse(origin).scheme != request.url.scheme)):
             return Response('Cross-origin writes are not allowed', status_code=403)
     response = await call_next(request)
     response.headers['X-Content-Type-Options'] = 'nosniff'
@@ -330,12 +334,12 @@ def export_applications(stage:str|None=None,ids:str|None=None,format:str='csv',u
     if stage and stage not in STAGES: raise HTTPException(422,'Unknown application stage')
     rows=store.list_applications(stage=stage)
     if ids is not None:rows=[r for r in rows if r['job_id'] in ids.split(',')]
-    headers=['ID','Title','Company','Stage','Notes','Next action','Follow-up date','Applied at','Outcome','Original URL','Recruiter message','Cover letter','History']
+    headers=['ID','Title','Company','Stage','Notes','Next action','Follow-up date','Applied at','Outcome','Original URL','Recruiter message','Cover letter','History','Job snapshot']
     values=[]
     for r in rows:
         j=r['job_snapshot'];d=r.get('drafts') or {}
         retained_history=store.application_history(r['job_id'],limit=None)['items']
-        values.append([r['job_id'],j.get('title'),j.get('company'),r['stage'],r['notes'],r.get('next_action'),r.get('follow_up_date'),r.get('applied_at'),r.get('outcome'),j.get('url'),d.get('recruiter_message'),d.get('cover_letter'),json.dumps(retained_history,ensure_ascii=False)])
+        values.append([r['job_id'],j.get('title'),j.get('company'),r['stage'],r['notes'],r.get('next_action'),r.get('follow_up_date'),r.get('applied_at'),r.get('outcome'),j.get('url'),d.get('recruiter_message'),d.get('cover_letter'),json.dumps(retained_history,ensure_ascii=False),json.dumps(j,ensure_ascii=False)])
     return export_response(headers,values,'Applications',format)
 
 

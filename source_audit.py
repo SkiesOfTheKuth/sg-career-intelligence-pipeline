@@ -1,6 +1,7 @@
 """Read-only provenance and collection coverage for the authenticated source audit."""
 from collections import Counter
 from datetime import datetime, timezone
+import re
 from evidence import present_job, parse_date, safe_url
 from collector_mycareersfuture import API_URL
 from sync_engine import DEFAULT_QUERIES, DEFAULT_LIMIT
@@ -101,7 +102,9 @@ def audit_records(store,source='',q='',status='',offset=0,limit=25):
 # Show source records as data, with credential-like keys redacted at any depth.
 def redacted(value):
     if isinstance(value,dict):
-        return {k:('[redacted]' if any(t in str(k).lower() for t in ('token','password','secret','authorization','api_key','apikey','cookie')) else redacted(v)) for k,v in value.items()}
+        return {k:('[redacted]' if any(t in re.sub(r'[^a-z0-9]', '', str(k).lower())
+                                     for t in ('token','password','secret','authorization','apikey','accesskey','cookie'))
+                   else redacted(v)) for k,v in value.items()}
     if isinstance(value,list):return [redacted(v) for v in value]
     return value
 

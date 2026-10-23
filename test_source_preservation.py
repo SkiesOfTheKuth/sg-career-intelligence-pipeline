@@ -9,6 +9,8 @@ from unittest.mock import patch
 from evidence import build_job, present_job
 from storage import Store
 from sync_engine import synchronize_upstream_jobs
+from collector_mycareersfuture import normalize_mcf_item
+from source_audit import redacted
 
 
 class PreservationTests(unittest.TestCase):
@@ -70,6 +72,93 @@ class PreservationTests(unittest.TestCase):
                                 'verified_at': '2026-10-21T00:00:00Z'})
         for field in ('company', 'employment_type', 'employment_types', 'salary', 'location', 'deadline'):
             self.assertEqual(current[field], original[field], field)
+
+    def test_explicit_empty_fields_replace_old_facts_while_omitted_fields_remain(self):
+        raw = {**self.raw, 'employment_type': 'Full-time', 'employment_type_verified': True,
+               'location': 'Singapore', 'expiry_date': '2099-12-01'}
+        self.store.upsert_jobs([build_job(raw, 'SG-OPP-0042')])
+        item = {'uuid': 'jp', 'title': raw['title'], 'metadata': {'jobDetailsUrl': raw['url'], 'expiryDate': None},
+                'description': '', 'requirements': '', 'employmentTypes': [], 'addresses': []}
+        current = self.refresh(normalize_mcf_item(item, checked_at='2026-10-22T00:00:00Z'))
+        self.assertEqual(current['description'], '')
+        self.assertEqual(current['source_requirements'], '')
+        self.assertEqual(current['requirements']['mandatory'], [])
+        self.assertEqual(current['employment_types'], [])
+        self.assertIsNone(current['location'])
+        self.assertIsNone(current['deadline'])
+        self.assertEqual(current['company'], raw['company'])
+        self.assertIsNone(current['assessment']['score']['value'])
+
+    def test_same_source_uuid_with_new_slug_preserves_workspace_identity_and_url(self):
+        raw = {**self.raw, 'uuid': 'jp'}
+        self.store.upsert_jobs([build_job(raw, 'SG-OPP-0042')])
+        changed = {**raw, 'url': 'https://www.mycareersfuture.gov.sg/job/new-title-jp',
+                   'description': 'Responsibilities\nManage campaigns.', 'verified_at': '2026-10-22T00:00:00Z'}
+        current = self.refresh(changed)
+        self.assertEqual(self.store.count_jobs(), 1)
+        self.assertEqual(current['description'], changed['description'])
+        self.assertEqual(current['url'], raw['url'])
+        self.assertEqual(current['sources'][0]['url'], changed['url'])
+
+    def test_refreshed_description_replaces_derived_work_arrangement(self):
+        initial = normalize_mcf_item({'uuid': 'jp', 'title': self.raw['title'],
+                                     'description': 'Responsibilities\nManage social media.\nFully remote working.'},
+                                    checked_at='2026-10-01T00:00:00Z')
+        self.store.upsert_jobs([build_job(initial, 'SG-OPP-0042')])
+        changed = normalize_mcf_item({'uuid': 'jp', 'title': self.raw['title'],
+                                     'description': 'Responsibilities\nManage social media.\nThis position works on-site at our office.'},
+                                    checked_at='2026-10-22T00:00:00Z')
+        current = self.refresh(changed)
+        self.assertIsNone(current['work_arrangement'])
+        self.assertNotEqual(current['field_provenance']['work_arrangement'].get('checked_at'), initial['verified_at'])
+
+    def test_description_omission_retains_derived_arrangement_and_its_evidence(self):
+        initial = normalize_mcf_item({'uuid': 'jp', 'title': self.raw['title'],
+                                     'description': 'Responsibilities\nManage social media.\nFully remote working.'},
+                                    checked_at='2026-10-01T00:00:00Z')
+        original = build_job(initial, 'SG-OPP-0042')
+        self.store.upsert_jobs([original])
+        partial = normalize_mcf_item({'uuid': 'jp', 'title': self.raw['title']},
+                                    checked_at='2026-10-22T00:00:00Z')
+        current = self.refresh(partial)
+        self.assertEqual(current['work_arrangement'], original['work_arrangement'])
+        self.assertEqual(current['field_provenance']['work_arrangement'], original['field_provenance']['work_arrangement'])
+
+    def test_new_description_preserves_omitted_explicit_arrangement(self):
+        original = build_job({**self.raw, 'work_arrangement': 'Hybrid, two days at the office'}, 'SG-OPP-0042')
+        self.store.upsert_jobs([original])
+        partial = normalize_mcf_item({'uuid': 'jp', 'title': self.raw['title'],
+                                     'description': 'Responsibilities\nManage social media.'},
+                                    checked_at='2026-10-22T00:00:00Z')
+        current = self.refresh(partial)
+        self.assertEqual(current['work_arrangement'], original['work_arrangement'])
+        self.assertEqual(current['field_provenance']['work_arrangement'], original['field_provenance']['work_arrangement'])
+
+    def test_failed_job_commit_does_not_leave_new_source_payloads(self):
+        self.store.upsert_jobs([build_job(self.raw, 'SG-OPP-0042')])
+        before = self.store.get_job('SG-OPP-0042')
+        with closing(sqlite3.connect(self.path)) as connection:
+            connection.execute("CREATE TRIGGER fail_job_update BEFORE UPDATE ON jobs BEGIN SELECT RAISE(ABORT, 'isolated failure'); END")
+        report = {'jobs': [{**self.raw, 'description': 'New evidence'}], 'errors': [], 'successes': [], 'status': 'success'}
+        with patch('collector_mycareersfuture.fetch_mycareersfuture', return_value=report):
+            result = synchronize_upstream_jobs(store=self.store)
+        self.assertEqual(result['status'], 'error')
+        self.assertEqual(self.store.get_job('SG-OPP-0042'), before)
+        self.assertEqual(self.store.get_source_evidence('SG-OPP-0042'), [])
+
+    def test_omitted_description_keeps_derived_thai_classification(self):
+        raw = {**self.raw, 'description': 'Responsibilities\nManage campaigns.\nRequirements\nThai fluency is required.', 'requirements': ''}
+        original = build_job(raw, 'SG-OPP-0042')
+        self.store.upsert_jobs([original])
+        current = self.refresh({key: value for key, value in raw.items() if key != 'description'})
+        self.assertEqual(current['thai_relevance'], original['thai_relevance'])
+
+    def test_audit_redacts_hyphenated_and_spaced_credential_keys(self):
+        value = {'headers': {'X-API-Key': 'private-value'}, 'nested': [{'access key': 'private-value'}], 'title': 'Role'}
+        safe = redacted(value)
+        self.assertEqual(safe['headers']['X-API-Key'], '[redacted]')
+        self.assertEqual(safe['nested'][0]['access key'], '[redacted]')
+        self.assertEqual(safe['title'], 'Role')
 
     def test_resolved_import_history_retains_original_and_resolution(self):
         self.store.put_application('role', {'expected_revision': 0, 'notes': 'Server note', 'stage': 'Applied'})

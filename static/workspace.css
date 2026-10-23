@@ -4,6 +4,7 @@
   --ink: #18212f;
   --secondary: #526071;
   --line: #d9dfe7;
+  --control-line: #788595;
   --accent: #2563eb;
   --accent-hover: #1d4ed8;
   --selected: #eff6ff;
@@ -29,7 +30,7 @@ button.text-button:hover { background: var(--selected); }
 a { color: var(--accent-hover); }
 :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 [tabindex="-1"]:focus { outline: none; }
-input, select, textarea { min-width: 0; max-width: 100%; padding: .65rem .7rem; border: 1px solid #aab5c2; border-radius: 5px; color: var(--ink); background: white; }
+input, select, textarea { min-width: 0; max-width: 100%; padding: .65rem .7rem; border: 1px solid var(--control-line); border-radius: 5px; color: var(--ink); background: var(--surface); }
 input::placeholder, textarea::placeholder { color: var(--secondary); opacity: 1; }
 input[type="checkbox"] { width: 20px; height: 20px; min-height: 20px; flex: 0 0 20px; accent-color: var(--accent); cursor: pointer; }
 textarea { width: 100%; min-height: 120px; line-height: 1.6; resize: vertical; }

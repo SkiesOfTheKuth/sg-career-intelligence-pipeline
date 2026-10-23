@@ -74,7 +74,7 @@
       if (!session.error && !session.conflict) continue;
       const job = getJob(id);
       const node = el('div', 'notice warning');
-      node.append(paragraph(`${session.conflict ? 'Edits need review' : 'Couldn’t save edits'}: ${job.title || 'Saved role'}. Your text is retained in this browser.`));
+      node.append(paragraph(`${session.conflict ? 'Edits need review' : 'Couldn’t save edits'}: ${job.title || 'Saved role'}. ${recoveryMessage(session)}`));
       node.append(button('Review edits', () => openRole(id)));
       fragment.append(node);
     }
@@ -294,30 +294,59 @@
     } catch (error) { notice('options', `Filter choices couldn’t be loaded. ${error.message}`, loadOptions, 'Retry filters'); }
   }
 
-  // Immutable records are scoped to one editor, job and version.
+  // Immutable records are scoped to one editor, job and version. A malformed
+  // record cannot prevent independently valid records from being recovered.
   function readRecovery() {
+    const records = {};
+    let unreadable = false;
     try {
-      const legacyRaw = localStorage.getItem(RECOVERY_KEY);
-      if (legacyRaw && localStorage.getItem('sg_career_recovery_v2_imported') !== legacyRaw) {
-        for (const [id, record] of Object.entries(JSON.parse(legacyRaw) || {})) {
-          if (!hasKeys(record.patch)) continue;
-          const key = RECOVERY_PREFIX + 'legacy:' + crypto.randomUUID();
-          const raw = JSON.stringify({...record, job_id: id, editor_id: 'legacy'});
-          localStorage.setItem(key, raw);
-          if (localStorage.getItem(key) !== raw) throw new Error('Recovery verification failed');
+      try {
+        const legacyRaw = localStorage.getItem(RECOVERY_KEY);
+        if (legacyRaw && localStorage.getItem('sg_career_recovery_v2_imported') !== legacyRaw) {
+          const legacy = JSON.parse(legacyRaw);
+          if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) throw new Error('Invalid legacy recovery');
+          for (const [id, record] of Object.entries(legacy)) {
+            if (!record || !hasKeys(record.patch)) continue;
+            const raw = JSON.stringify({...record, job_id: id, editor_id: 'legacy'});
+            // Retry a partially completed conversion without duplicating copies.
+            let existing = false;
+            for (let i = 0; i < localStorage.length; i += 1) {
+              const key = localStorage.key(i);
+              if (key?.startsWith(RECOVERY_PREFIX + 'legacy:') && localStorage.getItem(key) === raw) { existing = true; break; }
+            }
+            if (!existing) {
+              const key = RECOVERY_PREFIX + 'legacy:' + crypto.randomUUID();
+              localStorage.setItem(key, raw);
+              if (localStorage.getItem(key) !== raw) throw new Error('Recovery verification failed');
+            }
+          }
+          // Retain the original map after verified conversion.
+          localStorage.setItem('sg_career_recovery_v2_imported', legacyRaw);
         }
-        // Retain the original map after verified conversion.
-        localStorage.setItem('sg_career_recovery_v2_imported', legacyRaw);
-      }
-      const records = {};
+      } catch { unreadable = true; }
       for (let i = 0; i < localStorage.length; i += 1) {
         const key = localStorage.key(i);
         if (!key?.startsWith(RECOVERY_PREFIX)) continue;
-        const record = JSON.parse(localStorage.getItem(key));
-        if (record?.job_id && hasKeys(record.patch)) records[key] = record;
+        try {
+          const record = JSON.parse(localStorage.getItem(key));
+          if (!record?.job_id || !record.patch || typeof record.patch !== 'object' || Array.isArray(record.patch)) throw new Error('Invalid recovery record');
+          if (hasKeys(record.patch)) records[key] = record;
+        } catch { unreadable = true; }
       }
       state.recovery = records;
-    } catch { notice('storage', 'Browser recovery could not be read. Keep this page open until your edits save.'); }
+    } catch { unreadable = true; }
+    if (unreadable) notice('storage-read', 'Some browser recovery records could not be read. Original records are retained; readable versions remain available. Keep unsaved edits open until they save.');
+    else clearNotice('storage-read');
+  }
+  function recoveryMessage(session) {
+    return session?.recoveryFailed ? 'Your unsaved edits are only on this page. Download or copy them before leaving.' : 'Your edits are kept in this browser for retry.';
+  }
+  function downloadUnsaved(id) {
+    const session = sessionFor(id);
+    const record = {job_id: id, expected_revision: session.revision, base: session.base, patch: mergePatch(session.inFlight, session.pending), job_snapshot: getJob(id)};
+    const url = URL.createObjectURL(new Blob([JSON.stringify(record, null, 2)], {type: 'application/json'}));
+    const link = el('a'); link.href = url; link.download = 'unsaved-application.json'; document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   function persistRecovery(id) {
     const session = state.sessions.get(id);
@@ -333,14 +362,18 @@
         state.recovery[key] = record; session.recoveryKey = key;
       } else session.recoveryKey = null;
       if (previous) { localStorage.removeItem(previous); delete state.recovery[previous]; }
-      clearNotice('storage');
-    } catch { notice('storage', 'Browser recovery could not be stored. Keep this page open until server saving succeeds.'); }
+      session.recoveryFailed = false;
+      clearNotice(`storage:${id}`);
+    } catch {
+      session.recoveryFailed = hasKeys(patch);
+      notice(`storage:${id}`, 'Browser recovery could not be stored. Keep this page open until server saving succeeds.', () => openRole(id), 'Review unsaved edits');
+    }
   }
   function sessionFor(id) {
     id = String(id);
     if (!state.sessions.has(id)) {
       const base = state.applications.get(id) || {job_id: id, stage: 'Saved', notes: '', revision: 0};
-      state.sessions.set(id, {base, revision: Number(base.revision), pending: {}, inFlight: {}, saving: false, error: null, conflict: null, timer: null, recoveryKey: null});
+      state.sessions.set(id, {base, revision: Number(base.revision), pending: {}, inFlight: {}, saving: false, error: null, conflict: null, timer: null, recoveryKey: null, recoveryFailed: false});
     }
     return state.sessions.get(id);
   }
@@ -365,13 +398,24 @@
     updateSaveFeedback(id);
     try {
       const saved = await api(`/api/applications/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ ...session.inFlight, expected_revision: session.revision }) });
+      const acknowledgedPatch = session.inFlight;
+      const matches = Object.entries(acknowledgedPatch).every(([key, value]) => key === 'resolve_import_conflicts' || (key === 'drafts' ? Object.entries(value).every(([name, text]) => saved?.drafts?.[name] === text) : saved?.[key] === value));
+      if (String(saved?.job_id) !== id || !Number.isInteger(saved?.revision) || saved.revision <= session.revision || !STAGES.includes(saved.stage) || typeof saved.notes !== 'string' || !matches) throw new Error('The server did not confirm these edits. Your pending text is preserved; retry saving.');
+      const observed = state.applications.get(id);
+      const latest = Number(observed?.revision || 0) > saved.revision ? observed : saved;
       session.base = saved;
-      session.revision = Number(saved.revision);
-      state.applications.set(id, saved);
+      session.revision = saved.revision;
+      state.applications.set(id, latest);
       session.inFlight = {};
       session.error = null;
       session.saving = false;
+      if (latest !== saved) {
+        if (hasKeys(session.pending)) session.conflict = latest;
+        else { session.base = latest; session.revision = latest.revision; }
+      }
       persistRecovery(id);
+      if (latest !== saved && state.activeId === id) renderDetail(getJob(id), false);
+      if (acknowledgedPatch.stage === 'Applied' && latest.stage === 'Applied' && !hasKeys(session.pending)) toast('Application marked applied.');
       renderNotices();
       updateImportNotice();
       updateSaveFeedback(id);
@@ -384,11 +428,13 @@
       session.inFlight = {};
       session.saving = false;
       session.error = error.message;
+      const observed = state.applications.get(id);
       if (error.status === 409) session.conflict = error.data?.detail?.current || error.data?.current || { revision: session.revision };
+      if (Number(observed?.revision || 0) > Math.max(session.revision, Number(session.conflict?.revision || 0))) session.conflict = observed;
       persistRecovery(id);
       updateSaveFeedback(id);
       renderNotices();
-      announce(session.conflict ? 'Another browser changed this application. Your edits are preserved for review.' : 'Couldn’t save. Your edits are retained for retry.');
+      announce(`${session.conflict ? 'Another browser changed this application.' : 'Couldn’t save.'} ${recoveryMessage(session)}`);
     }
   }
   function refreshRowStage(id) {
@@ -412,12 +458,13 @@
     const application = effectiveApplication(id);
     const status = el('p', 'save-status');
     status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-    if (session?.conflict) { status.textContent = 'Changes need review. Your edits are preserved.'; status.classList.add('is-error'); }
-    else if (session?.error) { status.textContent = 'Couldn’t save. Your edits are retained for retry.'; status.classList.add('is-error'); }
+    if (session?.conflict) { status.textContent = `Changes need review. ${recoveryMessage(session)}`; status.classList.add('is-error'); }
+    else if (session?.error) { status.textContent = `Couldn’t save. ${recoveryMessage(session)}`; status.classList.add('is-error'); }
     else if (session?.saving || hasKeys(session?.pending)) status.textContent = 'Saving…';
     else if (application?.revision) { status.textContent = 'Saved'; status.classList.add('is-saved'); }
     else status.textContent = 'Writing a note also saves this role.';
     container.replaceChildren(status);
+    if (session?.recoveryFailed) container.append(paragraph(recoveryMessage(session), 'field-help'), button('Download unsaved edits', () => downloadUnsaved(id)));
     const draftStatus = $('draft-save-status');
     if (draftStatus) { draftStatus.textContent = status.textContent; draftStatus.className = status.className; }
     if (session?.conflict) {
@@ -513,7 +560,8 @@
         persistRecovery(id); renderDetail(getJob(id), false); renderNotices();
       }));
       version.append(button('Discard this recovery copy', () => {
-        localStorage.removeItem(key); delete state.recovery[key]; restoreRecovery(); renderDetail(getJob(id), false);
+        try { localStorage.removeItem(key); delete state.recovery[key]; restoreRecovery(); renderDetail(getJob(id), false); }
+        catch { version.append(paragraph('This recovery copy could not be removed. It remains available; retry discarding when browser storage is accessible.', 'field-help')); }
       }, 'text-button'));
       section.append(version);
     }
@@ -608,6 +656,7 @@
     const modal = isOpen && mobile.matches;
     $('main-content').inert = modal;
     $('site-header').inert = modal;
+    document.querySelector('.skip-link').inert = modal;
     document.body.classList.toggle('detail-mobile-open', modal);
     $('role-detail').setAttribute('role', modal ? 'dialog' : 'region');
     if (modal) $('role-detail').setAttribute('aria-modal', 'true');
@@ -700,7 +749,7 @@
     closeRow.firstChild.textContent = state.view === 'applications' ? '← Back to applications' : '← Back to roles';
     if (application) closeRow.append(el('span', 'row-stage', application.stage));
     fragment.append(closeRow);
-    const header = el('header', 'detail-header');
+    const header = el('div', 'detail-header');
     const title = el('h2', '', job.title || 'Unavailable listing'); title.id = 'detail-title'; title.tabIndex = -1;
     header.append(title, paragraph(job.company || 'Company not stated', 'company'), roleMetadata(job));
     const facts = el('dl', 'detail-facts');
@@ -879,7 +928,7 @@
     if (application && ['Saved', 'Preparing'].includes(application.stage)) actions.append(button('Mark applied', () => {
       queueWrite(id, { stage: 'Applied' }, true);
       $('application-stage').value = 'Applied'; updateDetailActions(id); renderPreparation(id);
-      toast('Application marked applied.');
+      toast('Saving Applied stage…');
     }));
     const url = safeURL(getJob(id).url);
     if (url) {
@@ -892,10 +941,12 @@
     if (state.activeId !== id || !$('preparation')) return;
     const application = effectiveApplication(id);
     const container = $('preparation'); container.replaceChildren();
-    if (!application || !['Preparing', 'Applied', 'Interviewing', 'Offer'].includes(application.stage)) return;
+    if (!application || (!['Preparing', 'Applied', 'Interviewing', 'Offer'].includes(application.stage) && !hasKeys(application.drafts))) return;
     const section = el('details', 'detail-section'); section.open = application.stage === 'Preparing';
     section.append(el('summary', '', 'Application preparation'));
     section.append(paragraph('Review and edit these drafts before using them. They use documented candidate facts and the available role evidence.', 'field-help'));
+    const generated = state.drafts.get(id);
+    appendSupportedPairs(section, generated?.supported_pairs);
     const draftStatus = paragraph('', 'save-status'); draftStatus.id = 'draft-save-status'; draftStatus.setAttribute('role', 'status'); section.append(draftStatus);
     const drafts = application.drafts || {};
     for (const [name, title] of [['recruiter_message', 'Recruiter message'], ['cover_letter', 'Cover letter']]) {
@@ -915,7 +966,6 @@
     section.append(checklist);
     container.append(section);
     updateSaveFeedback(id);
-    const generated = state.drafts.get(id);
     if (generated?.error) {
       const retry = el('div', 'notice warning');
       retry.append(paragraph(`Draft suggestions couldn’t be loaded. Your edits are retained. ${generated.error}`), button('Retry draft suggestions', () => { retry.remove(); loadDrafts(id); }));
@@ -924,7 +974,27 @@
     if (application.stage === 'Interviewing' && generated?.interview_prep) {
       const interview = detailSection('Interview preparation'); appendList(interview, generated.interview_prep); container.append(interview);
     }
-    if (!state.drafts.has(id)) loadDrafts(id);
+    if (!state.drafts.has(id) && ['Preparing', 'Applied', 'Interviewing', 'Offer'].includes(application.stage)) loadDrafts(id);
+  }
+
+  function appendSupportedPairs(container, pairs) {
+    container.querySelector('.supported-pairs')?.remove();
+    if (!Array.isArray(pairs) || !pairs.length) return;
+    const section = detailSection('Supported evidence for this role');
+    section.classList.add('supported-pairs');
+    section.append(paragraph('These listing responsibilities have specific supporting CV evidence. Use the quotations as prompts and keep your own wording truthful.', 'field-help'));
+    const list = el('ul');
+    for (const pair of pairs) {
+      const item = el('li');
+      item.append(el('strong', '', `Listing: “${pair.quote || 'Responsibility not quoted'}”`));
+      const evidence = Array.isArray(pair.candidate_evidence) ? pair.candidate_evidence.filter(Boolean) : [];
+      item.append(paragraph(evidence.length ? `CV evidence: ${evidence.join(' ')}` : 'CV evidence is not recorded.', 'field-help'));
+      list.append(item);
+    }
+    section.append(list);
+    const anchor = container.querySelector('.save-status');
+    if (anchor) container.insertBefore(section, anchor);
+    else container.append(section);
   }
   async function loadDrafts(id) {
     state.drafts.set(id, { loading: true });
@@ -941,7 +1011,10 @@
       if (state.activeId === id) {
         const checklist = $('preparation-checklist');
         if (checklist) { checklist.replaceChildren(el('summary', '', 'Requirements to resolve before applying')); appendList(checklist, data.requirements_to_check, 'Review the original listing before applying.'); }
-        for (const [name, value] of Object.entries(patch)) { const input = $(`draft-${name}`); if (input && document.activeElement !== input) input.value = value; }
+        const preparation = $('preparation');
+        const section = preparation?.querySelector('.detail-section');
+        if (section) appendSupportedPairs(section, data.supported_pairs);
+        for (const [name, value] of Object.entries(patch)) { const input = $(`draft-${name}`); if (input) input.value = value; }
         if (effectiveApplication(id)?.stage === 'Interviewing' && !$('preparation').querySelector('.interview-preparation')) {
           const interview = detailSection('Interview preparation'); interview.classList.add('interview-preparation'); appendList(interview, data.interview_prep); $('preparation').append(interview);
         }
@@ -1014,7 +1087,7 @@
   });
   // beforeunload is only needed when browser recovery itself failed.
   window.addEventListener('beforeunload', event => {
-    if (state.notices.has('storage') && [...state.sessions.values()].some(session => session.saving || hasKeys(session.pending))) { event.preventDefault(); event.returnValue = ''; }
+    if ([...state.sessions.values()].some(session => session.recoveryFailed && (session.saving || hasKeys(session.pending)))) { event.preventDefault(); event.returnValue = ''; }
   });
   async function start() {
     readRecovery();

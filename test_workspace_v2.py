@@ -85,6 +85,22 @@ class WorkspaceV2API(unittest.TestCase):
         self.assertEqual(sheet.cell(2, 5).data_type, 's')
         self.assertTrue(sheet.cell(2, 5).value.startswith("'="))
 
+    def test_long_xlsx_text_is_complete_in_labelled_chunks_and_snapshot_exported(self):
+        from openpyxl import load_workbook
+        notes = '=SUM(1,2)' + 'long note ' * 4000
+        self.put('monthly', {'expected_revision': 0, 'notes': notes})
+        response = self.get('/api/export/applications?ids=monthly&format=xlsx')
+        book = load_workbook(io.BytesIO(response.content))
+        self.assertEqual(book.active.max_row, 2)
+        self.assertIn('Job snapshot', [cell.value for cell in book.active[1]])
+        self.assertIn('Full text', book.sheetnames)
+        parts = [row for row in book['Full text'].iter_rows(min_row=2, values_only=True) if row[1] == 'Notes']
+        restored = ''.join(row[3][1:] if row[4] == 'Yes' else row[3] for row in parts)
+        self.assertEqual(restored, notes)
+        self.assertTrue(all(cell.data_type != 'f' for row in book['Full text'] for cell in row))
+        exported = list(csv.DictReader(io.StringIO(self.get('/api/export/applications?ids=monthly').content.decode('utf-8-sig'))))
+        self.assertEqual(json.loads(exported[0]['Job snapshot'])['id'], 'monthly')
+
     def test_cached_presentation_tracks_changed_source_and_is_detached(self):
         job = vacancy('cache', requirements='Degree in Marketing')
         prepare_assessments([job])

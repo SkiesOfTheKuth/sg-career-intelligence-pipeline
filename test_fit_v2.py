@@ -3,10 +3,76 @@ import json
 import unittest
 from pathlib import Path
 from evidence import build_job, extract_requirements, draft_templates
-from fit_score import requirement
+from fit_score import requirement, language_gaps, _duty
 
 
 class FitV2Tests(unittest.TestCase):
+    def test_real_content_scope_does_not_expand_cv_channels_or_visual_skills(self):
+        for quote in ('Plan and implement multi-channel content strategy (social, email, digital).',
+                      'Assist in developing engaging visual and written content aligned with brand guidelines',
+                      'Maintain and organize digital assets including visuals, captions, and content calendars'):
+            row = _duty(quote)
+            self.assertFalse(row['candidate_evidence'], quote)
+
+    def test_concatenated_source_duties_cannot_share_credit_across_sentences(self):
+        quote = ('Digital Marketing & Social MediaCreate on-brand content across social media and eDM platforms.'
+                 'Manage digital channels, including website updates and social media platforms.'
+                 'Monitor and optimise campaigns using data analytics to ensure audience reach and engagement.')
+        row = _duty(quote)
+        self.assertGreaterEqual(len(row['clauses']), 3)
+        for clause in row['clauses']:
+            self.assertEqual(clause['source_quote'], quote)
+            if 'eDM' in clause['quote'] or 'website' in clause['quote']:
+                self.assertFalse(clause['candidate_evidence'])
+        self.assertFalse(any(clause['quote'] == 'engagement.' for clause in row['clauses']))
+
+    def test_community_responses_are_not_analytics(self):
+        row = _duty('Monitor comments, messages, and community engagement; respond in a timely and professional manner')
+        self.assertNotIn('analytics', row['domains'])
+        self.assertIn('social', row['domains'])
+
+    def test_mixed_optional_language_cannot_waive_mandatory_language(self):
+        for wording in ('Japanese required; Thai preferred.', 'Japanese not required, but Mandarin required.', 'Fluent Japanese required and Thai preferred.', 'Japanese not required, Mandarin required.'):
+            job = build_job({'title':'Marketing Executive', 'description':'Responsibilities\nManage social media accounts.\nRequirements\n'+wording}, 'language')
+            self.assertTrue(job['assessment']['score']['gates'], wording)
+            self.assertLessEqual(job['assessment']['score']['value'], 39)
+        self.assertFalse(language_gaps(['Japanese is not required.']))
+        job = build_job({'title':'Marketing', 'description':'Thai language is not required.'}, 'thai')
+        self.assertIsNone(job['thai_relevance'])
+        explicit = build_job({'title':'Marketing', 'requirements':{'mandatory':['Thai language required']}}, 'explicit-thai')
+        self.assertEqual(explicit['thai_relevance'], 'Thai required')
+
+    def test_social_channel_does_not_establish_customer_case_management(self):
+        row = _duty('Manage and document customer cases from initial social media contact through resolution.')
+        self.assertFalse(row['candidate_evidence'])
+
+    def test_negated_duties_and_named_tools_do_not_claim_support(self):
+        for wording in ('Do not manage social media accounts.', 'Do not create content and manage social media accounts.', 'Manage social media accounts using Hootsuite.', 'Manage social media accounts using Sprout Social.', 'Manage social media accounts using UnverifiedTool.'):
+            self.assertFalse(_duty(wording)['candidate_evidence'], wording)
+
+    def test_cv_influencer_product_launch_scope_is_supported(self):
+        self.assertEqual(_duty('Coordinate influencer outreach and contracts for product launches.')['status'], 'overlap')
+
+    def test_compound_actions_keep_shared_object_and_partial_scopes(self):
+        self.assertEqual(_duty('Plan and manage social media accounts.')['status'], 'overlap')
+        row = _duty('Manage social media accounts and paid advertising budgets.')
+        self.assertEqual(row['status'], 'partial')
+        self.assertEqual(len(row['clauses']), 2)
+        self.assertFalse(row['clauses'][1]['candidate_evidence'])
+        quote = 'Manage social media accounts; create graphics and animation.'
+        job = build_job({'title':'Marketing', 'description':'Responsibilities\n'+quote+'\nRequirements\nDegree in Marketing'}, 'semicolon')
+        row = job['assessment']['score']['duties'][0]
+        self.assertEqual(row['quote'], quote)
+        self.assertTrue(all(part['source_quote'] == quote for part in row['clauses']))
+
+    def test_recruiter_voice_does_not_hide_candidate_requirements(self):
+        req = extract_requirements('Requirements\nWe are looking for fluent Japanese speakers.\nDegree in Marketing')
+        self.assertIn('We are looking for fluent Japanese speakers.', req['mandatory'])
+        self.assertIn('Degree in Marketing', req['mandatory'])
+
+    def test_mixed_degree_conjunction_needs_review(self):
+        self.assertNotEqual(requirement('Degree in Marketing or Communications and Law')['status'], 'supported')
+
     @classmethod
     def setUpClass(cls):
         cls.jobs = {r['id']: build_job(r, r['id']) for r in json.loads(Path(__file__).with_name('fit_review_corpus.json').read_text(encoding='utf-8'))}
@@ -78,7 +144,7 @@ class FitV2Tests(unittest.TestCase):
             self.assertFalse(any('Disclaimer:' == line or 'Why Join Us?' == line for line in job['requirements']['mandatory']))
             for duty in job['assessment']['score']['duties']:
                 for clause in duty['clauses']:
-                    if any(term in clause['quote'].lower() for term in ['revenue performance', 'edit photos', 'adobe', 'graphic design', 'video production', 'media invites']):
+                    if any(term in clause['quote'].lower() for term in ['revenue performance', 'edit photos', 'adobe', 'graphic design', 'video production', 'media invites', 'customer cases']):
                         self.assertEqual(clause['candidate_evidence'], [], clause['quote'])
                     if clause['candidate_evidence']:
                         self.assertEqual(clause['status'], 'overlap')

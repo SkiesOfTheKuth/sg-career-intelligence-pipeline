@@ -29,13 +29,38 @@ def export_response(headers,rows,name,format='csv'):
         from openpyxl.styles import Font, Alignment
         book=Workbook();sheet=book.active;sheet.title='Roles'
         sheet.append(headers)
-        for row in rows: sheet.append([safe_cell(v) for v in row])
+        full_text = None
+        for row in rows:
+            cells = []
+            for index, value in enumerate(row):
+                original = '' if value is None else str(value)
+                safe = safe_cell(original)
+                if len(safe) > 32767:
+                    # Excel's native cell limit is 32,767 characters. openpyxl
+                    # silently truncates longer values, so retain full content
+                    # in ordered, identified parts on a separate worksheet.
+                    if full_text is None:
+                        full_text = book.create_sheet('Full text')
+                        full_text.append(['Record ID', 'Field', 'Part', 'Text', 'Formula prefix added'])
+                        full_text.freeze_panes = 'A2'
+                    chunks = [original[start:start + 30000] for start in range(0, len(original), 30000)]
+                    for part, chunk in enumerate(chunks, 1):
+                        escaped = safe_cell(chunk)
+                        full_text.append([safe_cell(row[0]), headers[index], part, escaped, 'Yes' if escaped != chunk else 'No'])
+                    safe = safe_cell(original[:120] + f'… [Complete text: Full text worksheet; {len(chunks)} parts; field: {headers[index]}]')
+                cells.append(safe)
+            sheet.append(cells)
         sheet.freeze_panes='A2';sheet.auto_filter.ref=sheet.dimensions
         for cell in sheet[1]:cell.font=Font(bold=True)
         for column in sheet.columns:
             sheet.column_dimensions[column[0].column_letter].width=28
         for row in sheet.iter_rows(min_row=2):
             for cell in row: cell.alignment=Alignment(vertical='top')
+        if full_text is not None:
+            for cell in full_text[1]: cell.font = Font(bold=True)
+            for column in full_text.columns:
+                full_text.column_dimensions[column[0].column_letter].width = 28
+            full_text.column_dimensions['D'].width = 80
         data=io.BytesIO();book.save(data)
         return Response(data.getvalue(),media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',headers={'Content-Disposition':f'attachment; filename="{name}.xlsx"'})
     data=io.StringIO();writer=csv.writer(data);writer.writerow(headers)

@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from evidence import build_job, present_job, repair_jobs, source_key
+from source_fields import source_field_supplied
 
 logger = logging.getLogger("sg_sync_engine")
 _sync_lock = threading.Lock()
@@ -23,6 +24,11 @@ DEFAULT_QUERIES = ("Thai", "Marketing Executive", "Social Media Executive", "Pub
 DEFAULT_LIMIT = 10
 _telemetry = {"is_syncing": False, "last_sync_timestamp": None, "last_sync_status": "idle",
               "last_new_jobs_count": 0, "lifetime_synced_count": 0, "last_error": None}
+
+
+
+def _mcf_identity(value):
+    return str(value or '').removeprefix('MCF-')
 
 
 def _now():
@@ -75,6 +81,9 @@ def synchronize_upstream_jobs(data_file=None, queries=None, limit_per_query=DEFA
             existing = repair_jobs(existing)
         by_id = {job["id"]: job for job in existing}
         by_url = {source_key(job.get("url")): job for job in existing if source_key(job.get("url"))}
+        by_source_id = {_mcf_identity(source.get('source_id')): job for job in existing
+                        for source in job.get('sources', [])
+                        if 'mycareersfuture' in source.get('name', '').lower() and source.get('source_id')}
         max_id = max((int(job["id"].split("-")[-1]) for job in existing
                       if re.fullmatch(r"SG-OPP-\d+", job["id"])), default=0)
         report = fetch_mycareersfuture(queries or DEFAULT_QUERIES,
@@ -84,11 +93,13 @@ def synchronize_upstream_jobs(data_file=None, queries=None, limit_per_query=DEFA
         if isinstance(report, list):
             report = {"jobs": report, "errors": [], "successes": [], "status": "success"}
         changed, updated_ids, added_count, updated_count = {}, set(), 0, 0
+        evidence_records = []
         for raw in report["jobs"]:
             key = source_key(raw.get("url"))
             if not key:
                 continue
-            previous = by_url.get(key)
+            source_id = _mcf_identity(raw.get('uuid') or raw.get('id'))
+            previous = by_source_id.get(source_id) or by_url.get(key)
             if previous is None and is_excluded_title(raw.get("title")):
                 continue
             if previous:
@@ -107,24 +118,32 @@ def synchronize_upstream_jobs(data_file=None, queries=None, limit_per_query=DEFA
                 for field, source_field in (('company', 'company'), ('location', 'location'),
                                             ('work_arrangement', 'work_arrangement'), ('posted_at', 'posted_date'),
                                             ('deadline', 'expiry_date'), ('employment_type', 'employment_type')):
-                    if not raw.get(source_field) and previous.get(field):
-                        updated[field] = copy.deepcopy(previous[field])
-                if not raw.get('employment_type'):
+                    if not source_field_supplied(raw, source_field):
+                        if field == 'work_arrangement' and source_field_supplied(raw, 'description'):
+                            previous_basis = previous.get('field_provenance', {}).get(field, {}).get('basis')
+                            if previous_basis == 'description' or (not previous_basis and previous.get(field) in (
+                                    'Hybrid (stated in source)', 'Remote work mentioned; check conditions')):
+                                # This is derived from description text, not an
+                                # omitted explicit employer field. New text must
+                                # not retain an old, contradicted arrangement.
+                                continue
+                        if field in previous:
+                            updated[field] = copy.deepcopy(previous[field])
+                        if field in previous.get('field_provenance', {}):
+                            updated.setdefault('field_provenance', {})[field] = copy.deepcopy(previous['field_provenance'][field])
+                if not source_field_supplied(raw, 'employment_type'):
                     updated['employment_types'] = copy.deepcopy(previous.get('employment_types', []))
-                raw_response = raw.get('raw_response')
-                salary_omitted = ('salary' not in raw_response if isinstance(raw_response, dict) else
-                                  not any(raw.get(key) not in (None, '', 'Not disclosed')
-                                          for key in ('salary_min', 'salary_max', 'advertised_salary')))
+                salary_omitted = not source_field_supplied(raw, 'salary')
                 if salary_omitted and previous.get('salary'):
                     updated['salary'] = copy.deepcopy(previous['salary'])
-                if not updated["description"] and previous.get("description"):
+                    if 'salary' in previous.get('field_provenance', {}):
+                        updated.setdefault('field_provenance', {})['salary'] = copy.deepcopy(previous['field_provenance']['salary'])
+                if not source_field_supplied(raw, 'description') and previous.get("description"):
                     for field in ("description", "description_complete"):
                         updated[field] = copy.deepcopy(previous.get(field))
                     updated.setdefault('field_provenance', {})['description'] = copy.deepcopy(previous.get('field_provenance', {}).get('description', {}))
                     updated["source_warning"] = "The latest source response omitted the description; the previously retained text is shown."
-                # The native collector normalizes omitted/empty fields to ''.
-                # Only non-empty explicit source text can supersede retained text.
-                if not raw.get('requirements'):
+                if not source_field_supplied(raw, 'requirements'):
                     updated['source_requirements'] = copy.deepcopy(previous.get('source_requirements',
                         previous.get('retained_requirements_source', previous.get('raw_evidence', {}).get('requirements'))))
                     updated['source_requirement_evidence'] = copy.deepcopy(previous.get('source_requirement_evidence', []))
@@ -135,10 +154,12 @@ def synchronize_upstream_jobs(data_file=None, queries=None, limit_per_query=DEFA
                 updated = present_job(updated)
             by_id[job_id] = updated
             by_url[key] = updated
+            if source_id:
+                by_source_id[source_id] = updated
             changed[job_id] = updated
             updated_ids.add(job_id)
             if store:
-                store.record_source_evidence(job_id, SOURCE, {"status": "success", "checked_at": raw.get("verified_at"), "record": raw})
+                evidence_records.append((job_id, SOURCE, {"status": "success", "checked_at": raw.get("verified_at"), "record": raw}))
         errors = report.get("errors", [])
         if errors:
             latest_attempt = max((error.get("attempted_at", started_at) for error in errors), default=started_at)
@@ -151,22 +172,20 @@ def synchronize_upstream_jobs(data_file=None, queries=None, limit_per_query=DEFA
                 degraded = present_job(degraded)
                 by_id[job_id] = changed[job_id] = degraded
             if store:
-                store.record_source_evidence("__source__:mycareersfuture", SOURCE, {"status": report["status"], "errors": errors})
+                evidence_records.append(("__source__:mycareersfuture", SOURCE, {"status": report["status"], "errors": errors}))
         # Expiry can change even when no new upstream record is returned.
         for job_id, job in list(by_id.items()):
             current = present_job(job)
             if current != job:
                 by_id[job_id] = changed[job_id] = current
-        if store and changed:
-            store.upsert_jobs(list(changed.values()))
-        elif data_file and changed:
+        if not store and data_file and changed:
             atomic_save_jobs(data_file, list(by_id.values()))
         result = {"status": report.get("status", "success"), "started_at": started_at, "finished_at": _now(),
                   "added_count": added_count, "updated_count": updated_count, "total_jobs": len(by_id),
                   "errors": errors, "sources": report.get("successes", []),
                   "duration_seconds": round(time.monotonic() - started_clock, 2)}
         if store:
-            store.record_sync(result)
+            store.commit_source_refresh(list(changed.values()), evidence_records, result)
         _telemetry.update(last_sync_timestamp=result["finished_at"], last_sync_status=result["status"],
                           last_new_jobs_count=added_count, lifetime_synced_count=_telemetry["lifetime_synced_count"] + added_count,
                           last_error=errors[0]["message"] if errors else None)

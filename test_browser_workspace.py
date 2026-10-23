@@ -31,6 +31,7 @@ class EditorRegression(unittest.TestCase):
             elif path == '/api/jobs/role-1': data = JOB
             elif path == '/api/applications': data = {'items':[copy.deepcopy(self.app)]}
             elif path.endswith('/history'): data = {'items':self.history_items, 'total':len(self.history_items), 'offset':0, 'limit':25}
+            elif path == '/api/drafts/role-1': data = {'recruiter_message':'Supported recruiter prompt', 'cover_letter':'Supported cover prompt', 'supported_pairs':[{'quote':'Manage social campaigns','candidate_evidence':['CV: led social campaign planning.']}], 'requirements_to_check':['Confirm language requirement']}
             elif path == '/api/applications/role-1':
                 if self.fail_requests: return route.fulfill(status=503,json={'detail':'Offline fixture'})
                 patch = route.request.post_data_json
@@ -44,6 +45,146 @@ class EditorRegression(unittest.TestCase):
     def page(self):
         page = self.context.new_page(); page.goto('https://workspace.test/?view=applications&role=role-1')
         page.locator('#application-notes').wait_for(); return page
+    def test_closed_application_keeps_existing_draft_reviewable(self):
+        self.app.update(stage='Closed',drafts={'cover_letter':'Retained user draft'})
+        page=self.page()
+        self.assertEqual(page.locator('#draft-cover_letter').count(),1)
+        page.get_by_text('Application preparation',exact=True).click()
+        self.assertEqual(page.locator('#draft-cover_letter').input_value(),'Retained user draft')
+    def test_failed_inflight_write_exposes_already_observed_server_conflict(self):
+        page=self.page();held=[]
+        page.route('**/api/applications/role-1',lambda route:held.append(route))
+        page.locator('#application-notes').fill('pending old base');page.wait_for_timeout(400)
+        self.app.update(notes='new server revision',revision=2)
+        page.locator('#refresh-applications').click();page.wait_for_timeout(100)
+        held[0].fulfill(status=503,json={'detail':'request unavailable'});page.wait_for_timeout(100)
+        self.assertTrue(page.get_by_role('button',name='Save my edits over this version',exact=True).is_visible())
+        self.assertEqual(page.locator('#application-notes').input_value(),'pending old base')
+    def test_append_retry_label_resets_after_success(self):
+        page=self.context.new_page();attempts=[]
+        def search(route):
+            if 'offset=1' in route.request.url:
+                attempts.append(1)
+                if len(attempts)==1: route.fulfill(status=503,json={'detail':'try again'})
+                else: route.fulfill(json={'items':[{**JOB,'id':'role-2'}],'total':3})
+            else: route.fulfill(json={'items':[JOB],'total':3})
+        page.route('**/api/jobs?*',search);page.goto('https://workspace.test/')
+        page.locator('#job-list .role-row').wait_for();page.locator('#load-more').click();page.wait_for_timeout(100)
+        self.assertEqual(page.locator('#load-more').inner_text(),'Retry loading more')
+        page.locator('#load-more').click();page.wait_for_timeout(100)
+        self.assertEqual(page.locator('#load-more').inner_text(),'Load more roles')
+    def test_failed_export_retains_selected_application(self):
+        page=self.page();page.get_by_role('button',name='Back to applications',exact=False).click()
+        page.locator('#application-list input[type=checkbox]').check()
+        page.route('**/api/export/applications?*',lambda route:route.fulfill(status=503,body='unavailable'))
+        page.get_by_role('button',name='Export selected (1)',exact=True).click();page.wait_for_timeout(100)
+        self.assertTrue(page.locator('#application-list input[type=checkbox]').is_checked())
+        self.assertFalse(page.get_by_role('button',name='Export selected (1)',exact=True).is_disabled())
+        self.assertIn('Export failed',page.locator('#toast').inner_text())
+    def test_unavailable_storage_still_saves_server_and_retains_failure_warning(self):
+        page = self.context.new_page()
+        page.add_init_script("Object.defineProperty(window,'localStorage',{get(){throw new DOMException('Blocked','SecurityError')}})")
+        page.goto('https://workspace.test/?view=applications&role=role-1');page.locator('#application-notes').wait_for()
+        page.locator('#application-notes').fill('server remains available');page.wait_for_timeout(450)
+        self.assertEqual(self.app['notes'],'server remains available')
+        self.assertEqual(page.locator('#save-feedback > .save-status').inner_text(),'Saved')
+        self.fail_requests=True
+        page.locator('#application-notes').fill('keep page open');page.wait_for_timeout(450)
+        self.assertIn('only on this page',page.locator('#save-feedback').inner_text())
+        self.assertTrue(page.evaluate("(() => {const e=new Event('beforeunload',{cancelable:true});window.dispatchEvent(e);return e.defaultPrevented;})()"))
+    def test_earlier_ack_with_newer_keystrokes_and_refreshed_revision_conflicts(self):
+        page=self.page();held=[]
+        page.route('**/api/applications/role-1',lambda route:held.append(route))
+        page.locator('#application-notes').fill('submitted');page.wait_for_timeout(400)
+        acknowledged={**copy.deepcopy(self.app),'notes':'submitted','revision':2}
+        page.locator('#application-notes').fill('newer keystrokes')
+        self.app.update(notes='remote revision 3',revision=3)
+        page.locator('#refresh-applications').click();page.wait_for_timeout(100)
+        held[0].fulfill(json=acknowledged);page.wait_for_timeout(150)
+        self.assertEqual(page.locator('#application-notes').input_value(),'newer keystrokes')
+        self.assertTrue(page.get_by_role('button',name='Save my edits over this version',exact=True).is_visible())
+        self.assertEqual(len(held),1)
+        records=page.evaluate("Object.keys(localStorage).filter(k=>k.startsWith('sg_career_recovery_v2:')).map(k=>JSON.parse(localStorage.getItem(k)))")
+        self.assertTrue(any(r['expected_revision']==2 and r['patch'].get('notes')=='newer keystrokes' for r in records))
+    def test_user_draft_edit_wins_over_late_generation(self):
+        page=self.page();held=[]
+        page.route('**/api/drafts/role-1',lambda route:held.append(route))
+        page.get_by_role('button',name='Prepare application',exact=True).click()
+        page.locator('#draft-cover_letter').fill('my truthful draft')
+        held[0].fulfill(json={'cover_letter':'generated suggestion','recruiter_message':'message'});page.wait_for_timeout(450)
+        self.assertEqual(page.locator('#draft-cover_letter').input_value(),'my truthful draft')
+        self.assertEqual(self.app['drafts']['cover_letter'],'my truthful draft')
+
+    def test_preparation_shows_supported_pairs_separately_from_checklist(self):
+        page=self.page()
+        page.get_by_role('button',name='Prepare application',exact=True).click()
+        page.locator('.supported-pairs').wait_for()
+        self.assertIn('Manage social campaigns',page.locator('.supported-pairs').inner_text())
+        self.assertNotIn('Confirm language requirement',page.locator('.supported-pairs').inner_text())
+        page.locator('#preparation-checklist').click()
+        self.assertIn('Confirm language requirement',page.locator('#preparation-checklist').inner_text())
+    def test_mobile_detail_excludes_background_skip_link_and_restores_it(self):
+        page = self.page();page.set_viewport_size({'width':390,'height':844})
+        self.assertTrue(page.locator('.skip-link').evaluate('(node) => node.inert'))
+        page.locator('#application-notes').focus();page.keyboard.press('Escape')
+        self.assertFalse(page.locator('.skip-link').evaluate('(node) => node.inert'))
+    def test_recovery_delete_failure_preserves_version_and_explains_retry(self):
+        page = self.page()
+        page.evaluate("""() => localStorage.setItem('sg_career_recovery_v2:fixture',JSON.stringify({job_id:'role-1',editor_id:'other',expected_revision:1,patch:{notes:'keep recoverable'}}))""")
+        page.reload();page.locator('#application-notes').wait_for(); errors=[];page.on('pageerror',lambda error: errors.append(str(error)))
+        page.evaluate("() => {Storage.prototype.removeItem = () => {throw new DOMException('Denied', 'SecurityError')};}")
+        page.get_by_role('button',name='Discard this recovery copy',exact=True).click()
+        self.assertEqual(errors, [])
+        self.assertIn('could not be removed',page.locator('#role-detail').inner_text())
+        self.assertIn('keep recoverable',page.locator('#role-detail').inner_text())
+    def test_focused_unedited_draft_matches_generated_saved_value(self):
+        page = self.page(); held=[]
+        page.route('**/api/drafts/role-1',lambda route: held.append(route))
+        page.get_by_role('button',name='Prepare application',exact=True).click()
+        page.locator('#draft-cover_letter').focus();page.wait_for_timeout(100)
+        held[0].fulfill(json={'cover_letter':'Supported generated draft','recruiter_message':'Supported message'})
+        page.wait_for_timeout(450)
+        self.assertEqual(page.locator('#draft-cover_letter').input_value(),'Supported generated draft')
+        self.assertEqual(self.app['drafts']['cover_letter'],'Supported generated draft')
+    def test_late_save_acknowledgement_keeps_newer_refreshed_server_copy(self):
+        page = self.page(); held=[]
+        page.route('**/api/applications/role-1',lambda route: held.append(route))
+        page.locator('#application-notes').fill('my submitted version'); page.wait_for_timeout(400)
+        acknowledged={**copy.deepcopy(self.app),'notes':'my submitted version','revision':2}
+        self.app.update(notes='later other browser version',revision=3)
+        page.locator('#refresh-applications').click();page.wait_for_timeout(100)
+        self.assertEqual(page.locator('#application-notes').input_value(),'my submitted version')
+        held[0].fulfill(json=acknowledged);page.wait_for_timeout(150)
+        self.assertEqual(page.locator('#application-notes').input_value(),'later other browser version')
+        self.assertIn('later other browser version',page.locator('#application-list').inner_text())
+    def test_invalid_success_acknowledgement_never_discards_pending_text(self):
+        page = self.page()
+        page.route('**/api/applications/role-1', lambda route: route.fulfill(json={}))
+        page.locator('#application-notes').fill('must survive malformed acknowledgement'); page.wait_for_timeout(450)
+        self.assertTrue(page.get_by_role('button', name='Retry save', exact=True).is_visible())
+        records = page.evaluate("Object.keys(localStorage).filter(k => k.startsWith('sg_career_recovery_v2:')).map(k => JSON.parse(localStorage.getItem(k)))")
+        self.assertTrue(any(record['patch'].get('notes') == 'must survive malformed acknowledgement' for record in records))
+    def test_one_malformed_recovery_record_does_not_hide_valid_versions(self):
+        page = self.page()
+        page.evaluate("""() => {
+          localStorage.setItem('sg_career_recovery_v2:broken', '{');
+          localStorage.setItem('sg_career_recovery_v2:valid', JSON.stringify({job_id:'role-1',editor_id:'fixture',expected_revision:1,patch:{notes:'valid independent draft'}}));
+        }""")
+        page.reload(); page.locator('#application-notes').wait_for()
+        self.assertIn('valid independent draft', page.locator('#role-detail').inner_text())
+        self.assertEqual(page.evaluate("localStorage.getItem('sg_career_recovery_v2:broken')"), '{')
+    def test_storage_failure_is_not_reported_as_durable_browser_recovery(self):
+        page = self.page(); self.fail_requests = True
+        page.evaluate("""() => {const native = Storage.prototype.setItem; Storage.prototype.setItem = function(key,value) {if (key.startsWith('sg_career_recovery_v2:')) throw new DOMException('Full', 'QuotaExceededError');return native.call(this,key,value);};}""")
+        page.locator('#application-notes').fill('only on this page'); page.wait_for_timeout(450)
+        self.assertIn('only on this page', page.locator('#save-feedback').inner_text())
+        self.assertNotIn('Your text is retained in this browser', page.locator('#global-notices').inner_text())
+        self.assertTrue(page.get_by_role('button',name='Download unsaved edits',exact=True).is_visible())
+    def test_failed_mark_applied_never_announces_success(self):
+        page = self.page(); self.fail_requests = True
+        page.get_by_role('button', name='Mark applied',exact=True).click(); page.wait_for_timeout(400)
+        self.assertNotIn('Application marked applied.',page.locator('#toast').text_content())
+        self.assertEqual(self.app['stage'],'Saved')
     def test_documented_incompatibility_is_never_labelled_supported(self):
         page = self.page()
         page.evaluate('''() => {
