@@ -174,6 +174,15 @@ class CampaignTests(unittest.TestCase):
         self.worker.import_page(b,[item],self.now)
         self.assertEqual(self.store.count_jobs(),0);self.assertEqual(self.j.batches()[0]['lead_count'],1)
 
+    def test_new_missing_text_is_a_lead_and_explicit_expiry_is_preserved(self):
+        self.production();b=self.enqueue();self.reserve(b);b=self.j.batches()[0]
+        item=copy.deepcopy(self.api.pages[0][0]);item.pop('description')
+        self.worker.import_page(b,[item],self.now);self.assertEqual(self.store.count_jobs(),0)
+        b=next(x for x in self.j.batches() if x['id']==b['id'])
+        item=copy.deepcopy(self.api.pages[0][0]);item['isExpired']=True
+        self.worker.import_page(b,[item],self.now)
+        self.assertEqual(self.store.list_jobs()[0]['status'],'expired')
+
     def test_seven_day_shutdown_aborts_and_imports_obtained_results(self):
         b=self.enqueue();self.reserve(b);self.j.update_batch(b['id'],state='running',run_id='run1',dataset_id='data1')
         self.now+=7*DAY+1;self.worker.tick()

@@ -124,6 +124,9 @@ class CampaignWorker:
                 outcome = 'lead'
                 if raw:
                     old = by_id.get((raw['source'],str(raw.get('id')))) or by_url.get(source_key(raw['url']))
+                    if not old and not raw.get('description'):
+                        raw = None  # New search-only items need vacancy text.
+                if raw:
                     job = merge_job(raw,old,iso(now))
                     comparable = ('title','company','description','source_requirements','location','employment_type','salary','posted_at','deadline')
                     outcome = 'new' if not old else 'duplicate' if all(job.get(k)==old.get(k) for k in comparable) else 'updated'
@@ -233,6 +236,7 @@ class CampaignWorker:
                 if cost is None or not isinstance(cost,(int,float)) or cost<0:
                     self.journal.update_batch(batch['id'],error='Final run cost is unknown; reservation retained.',retry_at=now+300)
                     return
+                self.store.set_meta('campaign_remote_'+batch['id'],{k:run.get(k) for k in ('id','status','startedAt','finishedAt','usageTotalUsd','options')})
                 self.journal.update_batch(batch['id'],state='importing',remote_status=run['status'],charge_units=units(cost),
                                           dataset_id=run.get('defaultDatasetId'),error=None)
                 batch = {**batch,'state':'importing','dataset_id':run.get('defaultDatasetId'),'remote_status':run['status']}
@@ -266,6 +270,15 @@ class CampaignWorker:
         if expired or campaign['state'] in ('paused','stopped','prepared'):
             if campaign['started_at'] and now-self.last_accounts>=120:
                 self.refresh_accounts(self.clock())
+            if expired:
+                from evidence import parse_date
+                unresolved = self.journal.batches(ACTIVE)
+                remote = [self.store.get_meta('campaign_remote_'+b['id']) for b in self.journal.batches() if b['run_id']]
+                confirmed = not unresolved and all(r and parse_date(r.get('finishedAt')) and parse_date(r['finishedAt']).timestamp()<=campaign['stops_at'] for r in remote)
+                self.store.set_meta('campaign_shutdown_verification',{'observed_at':iso(self.clock()),'deadline':iso(campaign['stops_at']),
+                    'all_paid_runs_confirmed_stopped_by_deadline':bool(confirmed),
+                    'unresolved_batches':len(unresolved),'remote_runs_with_evidence':sum(bool(r) for r in remote),
+                    'note':'Imports and account-cost observations may continue after paid collection ends.'})
             self.store.set_meta('campaign_report',self.journal.status(now))
             return
         if not disk_capacity(self.store)['safe']:

@@ -206,6 +206,8 @@ def normalize(source, item, checked_at):
         if field in item and item[field] is not None:
             raw[field] = copy.deepcopy(item[field])
     raw['employment_type_verified'] = bool(raw.get('employment_type'))
+    if item.get('isExpired') is True:
+        raw['status'] = 'expired'
     return raw
 
 

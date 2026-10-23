@@ -14,6 +14,7 @@ SOURCE_CATALOG = [
     {'id':'indeed','name':'Indeed','match':'indeed','method':'Retained Apify collector records','mode':'retained','home':'https://sg.indeed.com/','retained_file':'apify_jobs_raw.json','scope':'Imported listing evidence. No recurring Indeed collector is running.'},
     {'id':'cultjobs','name':'Cultjobs','match':'cultjobs','method':'Retained site collector records','mode':'retained','home':'https://www.cultjobs.com/','retained_file':'cultjobs_raw.json','scope':'Imported listing evidence. Some descriptions were truncated by the original collector. No recurring Cultjobs collector is running.'},
     {'id':'google','name':'Google search','match':'google','method':'Retained search-result snippets','mode':'retained','home':'https://www.google.com/','retained_file':'apify_jobs_raw.json','scope':'Search results are leads, not verified vacancies. Identified aggregate results pages are excluded from discovery.'},
+    {'id':'careers','name':'Career websites','match':'career websites','method':'Vetted public career leads','mode':'retained','scope':'Career leads and listing rechecks are retained in a bounded queue. Crawling awaits verified redirect/private-network isolation.'},
 ]
 
 
@@ -52,7 +53,7 @@ def build_audit(store, *, scheduler_enabled, running, interval_seconds):
     now=datetime.now(timezone.utc)
     jobs=[present_job(j,now,with_assessment=False) for j in store.list_jobs()]
     history=store.get_sync_history(100)
-    campaign=CampaignStore(store).status()
+    campaign={**CampaignStore(store).status(),'accounting_error':store.get_meta('campaign_account_error'),'worker_error':store.get_meta('campaign_worker_error')}
     sources=[]
     catalog=SOURCE_CATALOG+([{'id':'other','name':'Other retained sources','method':'Retained records','mode':'retained','scope':'Source provenance is shown per record.'}] if any(source_id(j)=='other' for j in jobs) else [])
     for config in catalog:

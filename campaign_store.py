@@ -257,6 +257,7 @@ class CampaignStore:
             sources = [dict(r) for r in c.execute('SELECT * FROM campaign_sources WHERE campaign_id=? ORDER BY source', (row['id'],))]
             queue = dict(c.execute('SELECT state,COUNT(*) FROM campaign_discovery WHERE campaign_id=? GROUP BY state', (row['id'],)).fetchall())
             accounts = c.execute('SELECT COUNT(*),SUM(available),SUM(expiry IS NULL) FROM campaign_accounts WHERE campaign_id=?', (row['id'],)).fetchone()
+            unique = c.execute('SELECT COUNT(DISTINCT i.job_id) FROM campaign_items i JOIN campaign_batches b ON b.id=i.batch_id WHERE b.campaign_id=? AND i.job_id IS NOT NULL',(row['id'],)).fetchone()[0]
         for s in sources:
             relevant = [r for r in rows if r['source'] == s['source']]
             for key in ('new_count','updated_count','duplicate_count','lead_count'):
@@ -268,6 +269,8 @@ class CampaignStore:
                 'observed_account_usage_usd':observed/1e6, 'ancillary_or_unreconciled_usd':extra/1e6,
                 'total_ceiling_usd':350, 'rolling_ceiling_usd':50, 'pilot_ceiling_usd':3,
                 'sources':sources, 'discovery':queue,
+                'unique_supported_vacancies':unique,
+                'shutdown_verification':self.store.get_meta('campaign_shutdown_verification'),
                 'accounts':{'verified':accounts[0], 'available':accounts[1] or 0, 'unknown_expiry':accounts[2] or 0},
                 'runs':[{k:r[k] for k in ('id','source','state','reserved_at','finished_at','run_id','remote_status','checkpoint','new_count','updated_count','duplicate_count','lead_count','error')} for r in rows[-100:]],
                 'accounting_note':'Caps remain committed after completion. Account usage includes storage, reads and transfers; credit expiry is unknown unless independently verified.'}

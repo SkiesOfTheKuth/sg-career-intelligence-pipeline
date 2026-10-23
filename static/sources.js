@@ -119,10 +119,22 @@
       ['Account usage since baseline',money(campaign.observed_account_usage_usd)],['Actor budget committed',`${money(campaign.actor_committed_usd)} total; ${money(campaign.rolling_actor_committed_usd)} in the rolling day`],
       ['Ceilings','US$50 per rolling 24 hours; US$350 total'],['Last worker heartbeat',date(campaign.heartbeat)]]);
     if (campaign.reason) detail.append(el('p',campaign.reason,'audit-error'));
+    if (campaign.accounting_error) detail.append(el('p',`Admissions blocked: ${campaign.accounting_error}`,'audit-error'));
+    if (campaign.worker_error) detail.append(el('p',`Worker needs inspection: ${campaign.worker_error.type}. Last recorded ${date(campaign.worker_error.at)}.`,'audit-error'));
     detail.append(el('p',campaign.accounting_note,'field-help'));
     const list = el('ul');
     for (const s of campaign.sources || []) list.append(el('li',`${s.source}: ${number(s.new_count)} new, ${number(s.updated_count)} updated, ${number(s.duplicate_count)} duplicate, ${number(s.lead_count)} leads. ${s.blocked_reason || (active ? 'Next cycle: '+date(s.due_at) : 'Paid collection is not active.')}`));
     detail.append(list,link('Open campaign report','/api/campaign/report'));
+    const runs = el('details'); runs.append(el('summary','Recent paid batches'));
+    if (!(campaign.runs || []).length) runs.append(el('p','No paid batch has been admitted.'));
+    for (const run of (campaign.runs || []).slice(-20).reverse()) {
+      const row = el('div',null,'history-run');
+      row.append(el('p',`${run.source} · ${run.state} · ${date(run.reserved_at)}`),el('p',`${number(run.new_count)} new; ${number(run.updated_count)} updated; ${number(run.duplicate_count)} duplicate; ${number(run.lead_count)} leads.`));
+      if (run.error) row.append(el('p',run.error,'audit-error'));
+      if (run.run_id) row.append(link('Inspect Apify run ↗',`https://console.apify.com/actors/runs/${encodeURIComponent(run.run_id)}`,true));
+      runs.append(row);
+    }
+    detail.append(runs);
   }
   function renderSelection() {
     if (!state.audit) return;

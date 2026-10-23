@@ -10,7 +10,7 @@ First startup imports every ID in `processed_master_jobs.json`, repairing facts 
 
 ## Render
 
-`render.yaml` records the native single-instance setup: Singapore service, one Uvicorn worker, 1 GB disk mounted at `/var/data`, and `DATABASE_PATH=/var/data/career.sqlite3`. The existing Render service is `srv-dbb3dfnf3r2c73848abg`. A persistent disk requires a brief stop/start during deployment. Live configuration is managed through Render's documented service, environment-variable, and disk APIs. The 23 October independent check found runtime plan `1c-2g` with Starter build plan; this audit preserves that existing service configuration.
+`render.yaml` records the native single-instance setup: Singapore service, one Uvicorn worker, 2 GB disk mounted at `/var/data`, and `DATABASE_PATH=/var/data/career.sqlite3`. The existing Render service is `srv-dbb3dfnf3r2c73848abg`. A persistent disk requires a brief stop/start during deployment. Live configuration is managed through Render's documented service, environment-variable, and disk APIs. The 23 October independent check found runtime plan `1c-2g` with Starter build plan; this audit preserves that existing service configuration.
 
 ## Data and recovery
 

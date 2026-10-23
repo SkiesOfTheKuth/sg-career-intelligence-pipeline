@@ -225,3 +225,14 @@ A fresh production SQLite backup contained 4,406 jobs, 4,538 source-evidence row
 Live preflight verified 33 distinct accounts, zero active runs and zero schedules. Usage limits did not establish promotional balances or expiry; only verified free-plan included capacity is admitted. Current official actor builds/inputs differ from historical scripts. LinkedIn and Google search paths are disallowed by their robots rules. Career crawling is blocked because the official actor's post-load hook cannot establish prevention of private-network/unsafe redirect navigation. Cultjobs consent remains unresolved. Therefore complete multi-source recursive coverage is **not accepted**.
 
 Deployment, isolated paid pilot, cost reconciliation and live status will be recorded below as they occur.
+
+
+### Live pilot and storage evidence — 23 October 2026
+
+Native Render deployment 12524ce is healthy with both lifespan loops. Existing tokens were installed through the native APIFY_TOKENS_JSON secret; no keys/account settings were changed. Measured disk free space (489,611,264 bytes) fell below the 519,188,480-byte safety reserve. The existing disk was expanded from 1 GB to 2 GB, adding US$0.25/month at the plan pricing; after restart free space was 1,545,949,184 bytes. The Blueprint records the same native configuration.
+
+Pilot run dKWkpxwZB76oQzeYo succeeded: ten returned records, nine supported Singapore vacancies in isolated pilot tables, one lead whose location was only “Geylang”. Nine normalized descriptions exactly matched the source text; original source identifiers and dates were retained. The query also returned adjacent titles, so query wording is not treated as vacancy facts. Run charge US$0.06; reconciled observed account delta US$0.060111; conservative actor commitment remains US$0.20. No production job/evidence/application/import/sync-history content changed, confirmed against a fresh full-content backup.
+
+The campaign clock began 23 October 2026 at 21:37:21 SGT and ends 30 October 2026 at 21:37:21 SGT. Pilot evidence and full production comparisons are in output/campaign/pilot-verification.json and production-after-pilot.sqlite3. Live read-only browser journeys at 390, 768 and 1,440 px verified Sources, campaign stop/cost display, newly-discovered ordering and role details without overflow or JavaScript errors. Screenshots are output/playwright/campaign/live-*.png.
+
+Performance: local 4,406-record warm search 2.823s; a 26,436-record synthetic presentation-volume search 16.544s. The synthetic set repeats known source text and does not establish cold assessment performance for 26,436 distinct descriptions. This is a scaling limitation; current browser source journeys were 3.75–7.88s including page/screenshot work. Unattended six-hour cycles, actual seven-day shutdown, full-source coverage and independent operational review remain unverified.
