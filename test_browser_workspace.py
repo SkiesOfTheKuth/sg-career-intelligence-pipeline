@@ -4,7 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 from storage import Conflict, Store
 
 ROOT = Path(__file__).parent
@@ -219,8 +219,13 @@ class EditorRegression(unittest.TestCase):
         page=self.page();held=[]
         page.route('**/api/drafts/role-1',lambda route:held.append(route))
         page.get_by_role('button',name='Prepare application',exact=True).click()
-        page.locator('#draft-cover_letter').fill('my truthful draft')
-        held[0].fulfill(json={'cover_letter':'generated suggestion','recruiter_message':'message'});page.wait_for_timeout(450)
+        with page.expect_response(lambda response: response.request.method == 'PUT'
+                and response.url.endswith('/api/applications/role-1')
+                and (response.request.post_data_json.get('drafts') or {}).get('cover_letter') == 'my truthful draft'):
+            page.locator('#draft-cover_letter').fill('my truthful draft')
+            held[0].fulfill(json={'cover_letter':'generated suggestion','recruiter_message':'message'})
+        # Wait for the actual save acknowledgement, not a machine-speed sleep.
+        expect(page.locator('#draft-save-status')).to_have_text('Saved')
         self.assertEqual(page.locator('#draft-cover_letter').input_value(),'my truthful draft')
         self.assertEqual(self.app['drafts']['cover_letter'],'my truthful draft')
 

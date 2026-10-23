@@ -177,7 +177,7 @@ def normalize(source, item, checked_at):
                            'location':['location'],'employment_type':['employmentType'],'posted_date':['postedAt','postedDate']},
                 'indeed':{'id':['id','jobKey'],'title':['positionName','jobTitle','title'],'company':['company','companyName'],
                           'url':['url','jobUrl'],'description':['description','jobDescriptionText'],
-                          'location':['location'],'employment_type':['jobType','jobTypes'],'posted_date':['postedAt','datePublished']}}
+                          'location':['location'],'employment_type':['jobType','jobTypes'],'posted_date':['postingDateParsed','postedAt','datePublished']}}
     raw = {'source':NAMES[source]}
     for field, aliases in mappings[source].items():
         for alias in aliases:
@@ -205,6 +205,8 @@ def normalize(source, item, checked_at):
     for field in ('requirements','salary','salaryCurrency','salaryType'):
         if field in item and item[field] is not None:
             raw[field] = copy.deepcopy(item[field])
+    if isinstance(item.get('salary'),str) and item['salary'].strip():
+        raw['advertised_salary'] = item['salary']
     raw['employment_type_verified'] = bool(raw.get('employment_type'))
     if item.get('isExpired') is True:
         raw['status'] = 'expired'

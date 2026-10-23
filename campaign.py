@@ -18,7 +18,7 @@ from campaign_sources import (CONTRACTS, CORE, HISTORICAL, NAMES, AccessBlocked,
     access_url, canonical_url, check_robots, input_for, merge_job, normalize,
     queries, relevant_career_url, validate_input)
 from campaign_store import CampaignStore, DAY, ACTIVE, encode, units
-from evidence import source_key
+from evidence import source_key, salary_presentation
 
 logger = logging.getLogger(__name__)
 TERMINAL = {'SUCCEEDED','FAILED','ABORTED','TIMED-OUT'}
@@ -260,6 +260,7 @@ class CampaignWorker:
         campaign = self.journal.current()
         if not campaign or not self.journal.claim(self.owner,now):
             return
+        self.repair_normalization()
         expired = bool(campaign['stops_at'] and now>=campaign['stops_at'])
         if expired and campaign['state']!='stopped':
             self.journal.state('stopped','The 168-hour campaign has ended.')
@@ -361,6 +362,37 @@ class CampaignWorker:
                 self.journal.update_batch(batch['id'],error=str(e),retry_at=now+300)
                 self.journal.source(source,blocked_reason=str(e))
         self.store.set_meta('campaign_report',self.journal.status(self.clock()))
+
+    def repair_normalization(self):
+        """Add newly recognized returned salary/date fields from retained items.
+
+        This is a local normalization correction, never a fresh source check.
+        Original payloads, application snapshots and successful-check dates stay.
+        """
+        if self.store.get_meta('campaign_normalization_version') == 2:
+            return
+        with self.store._connection(write=True) as c:
+            rows=c.execute('''SELECT i.*,b.campaign_id,b.source,b.context_json FROM campaign_items i
+                JOIN campaign_batches b ON b.id=i.batch_id WHERE i.job_id IS NOT NULL
+                ORDER BY b.reserved_at,i.item_index''').fetchall()
+            for row in rows:
+                payload=json.loads(row['payload_json'])
+                pilot=json.loads(row['context_json']).get('pilot',False)
+                table='campaign_pilot_jobs' if pilot else 'jobs'
+                result=c.execute('SELECT data_json FROM '+table+' WHERE '+('campaign_id=? AND job_id=?' if pilot else 'id=?'),
+                                 (row['campaign_id'],row['job_id']) if pilot else (row['job_id'],)).fetchone()
+                if not result:continue
+                job=json.loads(result[0]);raw=normalize(row['source'],payload,job.get('verification',{}).get('last_success_at'))
+                if not raw:continue
+                provenance=job.setdefault('field_provenance',{})
+                basis=dict(provenance.get('description',{}),basis='retained_actor_field')
+                if raw.get('advertised_salary'):
+                    job['salary']=salary_presentation(raw);provenance['salary']=basis
+                if raw.get('posted_date'):
+                    job['posted_at']=raw['posted_date'];provenance['posted_at']=basis
+                c.execute('UPDATE '+table+' SET data_json=? WHERE '+('campaign_id=? AND job_id=?' if pilot else 'id=?'),
+                          (encode(job),row['campaign_id'],row['job_id']) if pilot else (encode(job),row['job_id']))
+            c.execute('INSERT INTO metadata VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json',('campaign_normalization_version','2'))
 
 
 async def campaign_loop(application):

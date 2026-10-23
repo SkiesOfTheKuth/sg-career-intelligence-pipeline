@@ -236,3 +236,12 @@ Pilot run dKWkpxwZB76oQzeYo succeeded: ten returned records, nine supported Sing
 The campaign clock began 23 October 2026 at 21:37:21 SGT and ends 30 October 2026 at 21:37:21 SGT. Pilot evidence and full production comparisons are in output/campaign/pilot-verification.json and production-after-pilot.sqlite3. Live read-only browser journeys at 390, 768 and 1,440 px verified Sources, campaign stop/cost display, newly-discovered ordering and role details without overflow or JavaScript errors. Screenshots are output/playwright/campaign/live-*.png.
 
 Performance: local 4,406-record warm search 2.823s; a 26,436-record synthetic presentation-volume search 16.544s. The synthetic set repeats known source text and does not establish cold assessment performance for 26,436 distinct descriptions. This is a scaling limitation; current browser source journeys were 3.75–7.88s including page/screenshot work. Unattended six-hour cycles, actual seven-day shutdown, full-source coverage and independent operational review remain unverified.
+
+
+### First recurring cycle and normalization correction
+
+Indeed production activation succeeded after pilot cost reconciliation and a restart preserved the campaign ID, immutable deadline, pilot run ID and import checkpoint. The native worker admitted two simultaneous bounded batches on separate accounts. Current LinkedIn/Google restrictions and career-crawler gate became visible blocked source outcomes.
+
+Review of current payloads found salary and parsed posting dates present in retained raw evidence but omitted from displayed fields. Paid admissions were paused while mapping salary → advertised_salary and postingDateParsed → posted_at, preserving the original actor fields in the raw item journal. An idempotent local backfill changes only those recognized fields/provenance, without refreshing verification dates or changing application snapshots. Explicit source expiry is retained; new records without vacancy text remain leads.
+
+The final full explicit suite passed **198 tests in 39.501 seconds**. The earlier draft-generation fixture was corrected to await the matching draft-save HTTP response, rather than a 450 ms sleep or potentially earlier stage-save status. No editor product behavior was changed. A further focused campaign pass validates the report's persisted cycle evidence.

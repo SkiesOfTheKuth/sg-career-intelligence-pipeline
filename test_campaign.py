@@ -183,6 +183,21 @@ class CampaignTests(unittest.TestCase):
         self.worker.import_page(b,[item],self.now)
         self.assertEqual(self.store.list_jobs()[0]['status'],'expired')
 
+    def test_returned_salary_date_and_local_repair_preserve_snapshots(self):
+        self.production();b=self.enqueue();self.reserve(b);b=self.j.batches()[0]
+        item=copy.deepcopy(self.api.pages[0][0]);item.update(salary='$3,500 - $4,500 a month',postingDateParsed='2026-10-23T10:00:00Z')
+        self.worker.import_page(b,[item],self.now)
+        job=self.store.list_jobs()[0];self.assertEqual(job['salary']['monthly_minimum'],3500)
+        self.assertEqual(job['posted_at'],item['postingDateParsed'])
+        self.store.put_application(job['id'],{'expected_revision':0,'notes':'Keep snapshot'})
+        application=self.store.get_application(job['id']);verification=job['verification'].copy()
+        job['salary']={};job['posted_at']=None;self.store.upsert_jobs([job])
+        self.worker.repair_normalization();restored=self.store.get_job(job['id'])
+        self.assertEqual(restored['salary']['monthly_minimum'],3500)
+        self.assertEqual(restored['posted_at'],item['postingDateParsed'])
+        self.assertEqual(restored['verification'],verification)
+        self.assertEqual(self.store.get_application(job['id']),application)
+
     def test_seven_day_shutdown_aborts_and_imports_obtained_results(self):
         b=self.enqueue();self.reserve(b);self.j.update_batch(b['id'],state='running',run_id='run1',dataset_id='data1')
         self.now+=7*DAY+1;self.worker.tick()

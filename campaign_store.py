@@ -258,6 +258,20 @@ class CampaignStore:
             queue = dict(c.execute('SELECT state,COUNT(*) FROM campaign_discovery WHERE campaign_id=? GROUP BY state', (row['id'],)).fetchall())
             accounts = c.execute('SELECT COUNT(*),SUM(available),SUM(expiry IS NULL) FROM campaign_accounts WHERE campaign_id=?', (row['id'],)).fetchone()
             unique = c.execute('SELECT COUNT(DISTINCT i.job_id) FROM campaign_items i JOIN campaign_batches b ON b.id=i.batch_id WHERE b.campaign_id=? AND i.job_id IS NOT NULL',(row['id'],)).fetchone()[0]
+            all_batches = c.execute('SELECT * FROM campaign_batches WHERE campaign_id=?',(row['id'],)).fetchall()
+            domains = c.execute('SELECT COUNT(DISTINCT domain) FROM campaign_discovery WHERE campaign_id=?',(row['id'],)).fetchone()[0]
+        cycles = {}
+        for batch in all_batches:
+            context=json.loads(batch['context_json'])
+            if 'cycle' not in context:continue
+            key=(batch['source'],context['cycle'])
+            cycle=cycles.setdefault(key,{'source':key[0],'cycle':key[1],'scheduled_at':batch['created_at'],
+                                         'admitted':0,'finished':0,'blocked':0,'first_launch':None,'last_finish':None})
+            cycle['admitted']+=int(batch['reserved_at'] is not None)
+            cycle['finished']+=int(batch['finished_at'] is not None)
+            cycle['blocked']+=int(batch['state'] in ('blocked','superseded'))
+            if batch['reserved_at']:cycle['first_launch']=min(cycle['first_launch'] or batch['reserved_at'],batch['reserved_at'])
+            if batch['finished_at']:cycle['last_finish']=max(cycle['last_finish'] or 0,batch['finished_at'])
         for s in sources:
             relevant = [r for r in rows if r['source'] == s['source']]
             for key in ('new_count','updated_count','duplicate_count','lead_count'):
@@ -270,6 +284,7 @@ class CampaignStore:
                 'total_ceiling_usd':350, 'rolling_ceiling_usd':50, 'pilot_ceiling_usd':3,
                 'sources':sources, 'discovery':queue,
                 'unique_supported_vacancies':unique,
+                'discovered_domains':domains, 'cycles':list(cycles.values()),
                 'shutdown_verification':self.store.get_meta('campaign_shutdown_verification'),
                 'accounts':{'verified':accounts[0], 'available':accounts[1] or 0, 'unknown_expiry':accounts[2] or 0},
                 'runs':[{k:r[k] for k in ('id','source','state','reserved_at','finished_at','run_id','remote_status','checkpoint','new_count','updated_count','duplicate_count','lead_count','error')} for r in rows[-100:]],
