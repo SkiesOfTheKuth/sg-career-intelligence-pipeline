@@ -98,3 +98,6 @@ Use the inspected `test_workspace_journey.py` only with explicit isolated localh
 | UI/authentication | 194 explicit tests passed, including campaign auth/CSRF and responsive 390/768/1440 browser fixtures | Fixture evidence is not live or participant acceptance |
 
 Current artifacts: output/campaign/migration-report.json, full-regression.txt, and output/playwright/campaign/status-fixture-*.png. The earlier 2.2.2 acceptance remains historical; it does not accept this campaign.
+
+
+Final campaign deployment: `7eafd77f6af5725b1eb905315d64783e772c790a`; active Indeed collection, preserved MCF; 198-test full pass and 27-test focused campaign pass. Fresh live auth/filter-export/field-repair/mobile checks and full original-ID/application-table preservation passed. See the latest operational handoff in ACCEPTANCE_REPORT.md. Multi-source coverage, two unattended six-hour cycles, actual deadline shutdown, independent review and projected-volume performance remain explicit acceptance gaps.
