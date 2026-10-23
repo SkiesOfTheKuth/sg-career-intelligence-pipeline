@@ -93,7 +93,10 @@ def public_get(url, max_bytes=262144):
 def check_robots(url, fetch=public_get):
     url = canonical_url(url)
     p = urlsplit(url)
-    _, status, text = fetch(urlunsplit((p.scheme,p.netloc,'/robots.txt','','')))
+    try:
+        _, status, text = fetch(urlunsplit((p.scheme,p.netloc,'/robots.txt','','')))
+    except OSError as e:
+        raise AccessBlocked('Source access check unavailable: '+type(e).__name__) from None
     if status in (404,410):
         return {'url':url, 'robots_status':status, 'allowed':True}
     if status != 200:

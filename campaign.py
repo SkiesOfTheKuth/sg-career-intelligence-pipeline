@@ -41,7 +41,13 @@ def disk_capacity(store):
 class CampaignWorker:
     def __init__(self, store, api=None, access=check_robots, clock=time.time):
         self.store, self.journal = store, CampaignStore(store)
-        self.api = api if api is not None else Apify()
+        try:
+            self.api = api if api is not None else Apify()
+        except (ValueError,TypeError):
+            # A malformed collection secret cannot take the private workspace
+            # or its independent free MCF scheduler offline.
+            self.api = Apify([])
+            store.set_meta('campaign_account_error','Invalid APIFY_TOKENS_JSON configuration; paid collection is unavailable.')
         self.access, self.clock = access, clock
         self.owner = uuid.uuid4().hex
         self.last_accounts = 0

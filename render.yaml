@@ -11,11 +11,13 @@ services:
     disk:
       name: career-data
       mountPath: /var/data
-      sizeGB: 1
+      sizeGB: 2
     envVars:
       - key: DATABASE_PATH
         value: /var/data/career.sqlite3
       - key: AUTH_USERNAME
         sync: false
       - key: AUTH_PASSWORD
+        sync: false
+      - key: APIFY_TOKENS_JSON
         sync: false

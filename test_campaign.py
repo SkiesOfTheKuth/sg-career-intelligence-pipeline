@@ -189,6 +189,13 @@ class CampaignTests(unittest.TestCase):
         with patch('campaign.disk_capacity',return_value={'safe':False}):self.worker.tick()
         self.assertEqual(self.j.current()['state'],'paused');self.assertEqual(self.api.launched,[])
 
+    def test_invalid_secret_does_not_prevent_workspace_startup(self):
+        import os
+        with patch.dict(os.environ,{'APIFY_TOKENS_JSON':'invalid-json'}):
+            worker=CampaignWorker(self.store)
+        self.assertEqual(worker.api.tokens,{})
+        self.assertIn('Invalid APIFY',self.store.get_meta('campaign_account_error'))
+
     def test_access_failure_has_explicit_status_without_charge(self):
         self.enqueue();self.worker.access=lambda u:(_ for _ in ()).throw(AccessBlocked('robots disallow'))
         self.worker.tick();self.assertEqual(self.j.batches()[0]['state'],'blocked')
