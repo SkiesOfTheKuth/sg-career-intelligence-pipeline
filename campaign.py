@@ -618,7 +618,14 @@ async def campaign_loop(application):
             # must never leave an unowned mutation running in the background.
             async def owned_tick():
                 async with worker.mutation_lock:
+                    started = time.time()
                     await asyncio.to_thread(worker.tick)
+                    current = worker.journal.current()
+                    if current and (current['heartbeat'] or 0)>=started:
+                        previous = worker.store.get_meta('campaign_worker_error')
+                        if previous:
+                            worker.store.set_meta('campaign_previous_worker_error',previous)
+                            worker.store.set_meta('campaign_worker_error',None)
             tick = asyncio.create_task(owned_tick())
             try:
                 await asyncio.shield(tick)

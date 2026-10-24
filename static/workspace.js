@@ -996,6 +996,14 @@
       const label = el('label'); label.append(document.createTextNode(title));
       const input = document.createElement('textarea'); input.id = `draft-${name}`; input.value = drafts[name] || ''; input.setAttribute('aria-describedby', 'draft-save-hint');
       input.addEventListener('input', () => queueWrite(id, { drafts: { [name]: input.value } })); label.append(input);
+      input.addEventListener('blur', () => {
+        const current = effectiveApplication(id)?.drafts || {};
+        const suggestion = state.drafts.get(id)?.[name];
+        if (!Object.prototype.hasOwnProperty.call(current, name) && typeof suggestion === 'string') {
+          input.value = suggestion;
+          queueWrite(id, { drafts: { [name]: suggestion } });
+        }
+      });
       field.append(label, button(`Copy ${title.toLowerCase()}`, async () => {
         try { await navigator.clipboard.writeText(input.value); toast(`${title} copied.`); }
         catch { input.focus(); input.select(); toast('Clipboard access failed. The draft is selected so you can copy it.'); }

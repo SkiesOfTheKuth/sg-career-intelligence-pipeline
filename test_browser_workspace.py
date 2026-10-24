@@ -273,13 +273,17 @@ class EditorRegression(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertIn('could not be removed',page.locator('#role-detail').inner_text())
         self.assertIn('keep recoverable',page.locator('#role-detail').inner_text())
-    def test_focused_unedited_draft_matches_generated_saved_value(self):
+    def test_focused_unedited_draft_defers_suggestion_until_blur(self):
         page = self.page(); held=[]
         page.route('**/api/drafts/role-1',lambda route: held.append(route))
         page.get_by_role('button',name='Prepare application',exact=True).click()
         page.locator('#draft-cover_letter').focus();page.wait_for_timeout(100)
         held[0].fulfill(json={'cover_letter':'Supported generated draft','recruiter_message':'Supported message'})
-        page.wait_for_timeout(450)
+        expect(page.locator('#draft-recruiter_message')).to_have_value('Supported message')
+        expect(page.locator('#draft-cover_letter')).to_have_value('')
+        with page.expect_response(lambda response:response.request.method=='PUT' and response.url.endswith('/api/applications/role-1') and (response.request.post_data_json.get('drafts') or {}).get('cover_letter')=='Supported generated draft'):
+            page.locator('#application-notes').focus()
+        expect(page.locator('#draft-save-status')).to_have_text('Saved')
         self.assertEqual(page.locator('#draft-cover_letter').input_value(),'Supported generated draft')
         self.assertEqual(self.app['drafts']['cover_letter'],'Supported generated draft')
     def test_late_save_acknowledgement_keeps_newer_refreshed_server_copy(self):

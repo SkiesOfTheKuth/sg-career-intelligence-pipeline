@@ -332,12 +332,15 @@ def campaign_leads(offset:int=Query(0,ge=0),limit:int=Query(25,ge=1,le=100),sour
             obj=item if isinstance(item,dict) else {}
             url=obj.get('url') or obj.get('searchQuery',{}).get('url')
             queue=connection.execute('SELECT * FROM campaign_discovery WHERE url=?',(url,)).fetchone() if url else None
+            discovered=[{k:r[k] for k in ('url','domain','parent_url','depth','state','checked_at','reason')} for r in connection.execute(
+                "SELECT * FROM campaign_discovery WHERE json_extract(evidence_json,'$.parent_batch_id')=? AND json_extract(evidence_json,'$.parent_item_index')=? ORDER BY depth,url",
+                (record['batch_id'],record['item_index']))]
             rows.append({'id':record['batch_id']+':'+str(record['item_index']), 'source':record['source'],
                 'url':url,'title':obj.get('title') or obj.get('positionName') or obj.get('metadata',{}).get('title') or context.get('query') or 'Returned source evidence',
                 'reason':record['error'] or 'Returned evidence does not establish a supported Singapore vacancy.',
                 'state':queue['state'] if queue else 'lead','discovered_at':record['finished_at'] or record['created_at'],
                 'parent_url':queue['parent_url'] if queue else context.get('parent_url'),
-                'payload':item,'context':context,'pilot':pilot,'job_id':record['job_id'],
+                'payload':item,'context':{**context,'discovered_pages':discovered},'pilot':pilot,'job_id':record['job_id'],
                 'depth':queue['depth'] if queue else context.get('depth'),
                 'queue':dict(queue) if queue else None,'error_category':record['error_category']})
     return redacted({'items':rows,'total':total,'offset':offset,'limit':limit})
