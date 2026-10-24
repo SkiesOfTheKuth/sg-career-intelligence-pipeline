@@ -527,6 +527,13 @@ class CampaignWorker:
         self.repair_normalization()
         if disk_capacity(self.store)['safe']:
             self.repair_locality_leads(now)
+        # A capacity pause is recoverable after the native disk is expanded.
+        # Explicit operator pauses keep their state and reason.
+        if (campaign['state'] == 'paused' and
+                str(campaign.get('reason') or '').startswith('Low disk capacity') and
+                disk_capacity(self.store)['safe'] and not self.store.get_meta('campaign_account_error')):
+            self.journal.state('active')
+            campaign = self.journal.current()
         expired = bool(campaign['stops_at'] and now>=campaign['stops_at'])
         if expired and campaign['state']!='stopped':
             self.journal.state('stopped','The 168-hour campaign has ended.')

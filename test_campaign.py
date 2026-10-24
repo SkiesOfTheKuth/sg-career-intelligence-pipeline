@@ -221,6 +221,15 @@ class CampaignTests(unittest.TestCase):
         with patch('campaign.disk_capacity',return_value={'safe':False}):self.worker.tick()
         self.assertEqual(self.j.current()['state'],'paused');self.assertEqual(self.api.launched,[])
 
+    def test_capacity_pause_resumes_after_native_disk_is_safe(self):
+        self.production()
+        with self.store._connection(write=True) as c:c.execute('UPDATE campaign_sources SET due_at=?',(self.now+DAY,))
+        self.enqueue()
+        with patch('campaign.disk_capacity',return_value={'safe':False}):self.worker.tick()
+        self.assertEqual(self.j.current()['state'],'paused')
+        with patch('campaign.disk_capacity',return_value={'safe':True}):self.worker.tick()
+        self.assertEqual(self.j.current()['state'],'active')
+
     def test_invalid_secret_does_not_prevent_workspace_startup(self):
         import os
         with patch.dict(os.environ,{'APIFY_TOKENS_JSON':'invalid-json'}):
