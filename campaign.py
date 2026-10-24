@@ -575,9 +575,15 @@ class CampaignWorker:
                     continue
                 launched = False
                 cap = json.loads(batch['context_json'])['cap_usd']
+                reason = self.journal.budget_reason(batch['id'],cap,self.clock())
+                if reason:
+                    self.journal.source(source,blocked_reason=reason)
+                    self.journal.update_batch(batch['id'],retry_at=self.clock()+300,error=reason)
+                    continue
                 commitments = self.journal.batches()
+                occupied = {b['account_id'] for b in commitments if b['state'] in ACTIVE}
                 for account in self.journal.accounts():
-                    if not account['available']:
+                    if not account['available'] or account['account_id'] in occupied:
                         continue
                     committed_units = sum(b['reserved_units'] for b in commitments if b['account_id']==account['account_id'])
                     if max(account['usage_units'],account['baseline_units']+committed_units)+units(cap+.15)>account['limit_units']:
@@ -593,7 +599,9 @@ class CampaignWorker:
                     ok,reason = self.journal.reserve(batch['id'],account['account_id'],cap,self.owner,self.clock())
                     if not ok:
                         self.journal.source(source,blocked_reason=reason)
-                        continue
+                        if reason in ('Account is unavailable.','Account credit capacity is exhausted.'):
+                            continue
+                        break  # Another account cannot fix campaign-wide rejection.
                     committed = next(b for b in self.journal.batches(('launching',)) if b['id']==batch['id'])
                     try:
                         run = self.api.launch(account['reference'],committed,self.journal.current()['stops_at'],self.clock())
@@ -611,7 +619,7 @@ class CampaignWorker:
                     launched = True
                     break
                 if not launched:
-                    self.journal.update_batch(batch['id'],retry_at=now+300,error='No account currently admits this reservation.')
+                    self.journal.update_batch(batch['id'],retry_at=self.clock()+300,error=reason or 'No account currently admits this reservation.')
             except (AccessBlocked,ValueError) as e:
                 self.journal.update_batch(batch['id'],state='blocked',error=str(e),error_category='input')
                 self.journal.source(source,blocked_reason=str(e),last_attempt=now)

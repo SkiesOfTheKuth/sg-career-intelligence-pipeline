@@ -139,6 +139,27 @@ class SchedulerTests(unittest.TestCase):
             self.assertEqual(json.loads(batch['input_json'])['maxPagesPerQuery'],3)
         self.assertFalse(self.j.reserve(batches[0]['id'],'one',.49,self.worker.owner,self.now)[0])
 
+    def test_campaign_budget_rejection_skips_provider_account_reads(self):
+        self.production()
+        spent = []
+        for index in range(32):
+            spent.append(self.batch('linkedin',input_for('linkedin','Thai'),
+                                    {'cap_usd':.25,'cycle':-1},key='spent-'+str(index)))
+        with self.store._connection(write=True) as c:
+            for batch in spent:
+                c.execute("UPDATE campaign_batches SET state='done',account_id='one',reserved_units=?,reserved_at=?,finished_at=? WHERE id=?",
+                          (units(.25),self.now,self.now,batch['id']))
+            c.execute('UPDATE campaign_sources SET due_at=? WHERE source=?',(self.now+DAY,'linkedin'))
+        queued = self.batch('linkedin',input_for('linkedin','Thai'),{'cap_usd':.25,'cycle':-1},key='after-cap')
+        self.api.snapshot = lambda *_: self.fail('provider account read should be skipped')
+        self.api.contract = lambda *_: self.fail('provider contract read should be skipped')
+        self.worker.tick()
+        observed = next(b for b in self.j.batches() if b['id']==queued['id'])
+        self.assertEqual(observed['state'],'queued')
+        self.assertIn('allowance', observed['error'])
+        source = next(s for s in self.j.status()['sources'] if s['source']=='linkedin')
+        self.assertIn('allowance', source['blocked_reason'])
+
     def test_career_queue_domain_depth_page_limits_survive_restart(self):
         self.production()
         for domain in range(22):

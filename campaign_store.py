@@ -191,6 +191,41 @@ class CampaignStore:
         extra = max(0, observed - sum(r['charge_units'] or 0 for r in rows))
         return rows, recent, caps, rolling, observed, extra
 
+    def _budget_reason(self, c, campaign, b, amount, now):
+        rows, recent, caps, rolling, observed, extra = self._exposure(c, campaign['id'], now)
+        is_pilot = bool(json.loads(b['context_json']).get('pilot')) or campaign['mode'] == 'pilot'
+        if is_pilot:
+            pilot_rows = [r for r in rows if json.loads(r['context_json']).get('pilot') or r['batch_key'].startswith('pilot:')]
+            pilot_caps = sum(max(r['reserved_units'], r['charge_units'] or 0) for r in pilot_rows)
+            if pilot_caps + amount > units(2.5) or pilot_caps + amount + extra > units(3):
+                return 'The original pilot allowance is fully committed.'
+        if b['source'] == 'google' and amount < units(.5):
+            return 'Google requires a minimum US$0.50 reservation.'
+        total_limit = units(2.5) if campaign['mode'] == 'pilot' else units(315)
+        if caps + amount > total_limit or caps + amount + extra > units(3 if campaign['mode'] == 'pilot' else 350):
+            return 'Campaign budget is fully committed.'
+        if rolling + amount > units(45) or rolling + amount + extra > units(50):
+            return 'Rolling 24-hour budget is fully committed.'
+        if sum(r['reserved_units'] for r in recent if r['source'] == b['source']) + amount > units(ALLOWANCES[b['source']]):
+            return 'Source allowance is fully committed.'
+        return None
+
+    def budget_reason(self, batch_id, dollars, now):
+        """Avoid provider reads for work the existing ledger cannot admit.
+
+        This is an optimization only; reserve repeats the same check inside its
+        write transaction after live account/contract verification.
+        """
+        amount = units(dollars)
+        if amount <= 0 or amount > units(2):
+            raise ValueError('Each batch must reserve more than zero and at most US$2.')
+        with self.store._connection() as c:
+            b = c.execute('SELECT * FROM campaign_batches WHERE id=?', (batch_id,)).fetchone()
+            if not b or b['state'] != 'queued':
+                return 'Batch is no longer queued.'
+            campaign = c.execute('SELECT * FROM campaigns WHERE id=?', (b['campaign_id'],)).fetchone()
+            return self._budget_reason(c, campaign, b, amount, now)
+
     def reserve(self, batch_id, account_id, dollars, owner, now):
         amount = units(dollars)
         if amount <= 0 or amount > units(2):
@@ -216,25 +251,10 @@ class CampaignStore:
             account = next((a for a in accounts if a['account_id'] == account_id), None)
             if not account or not account['available'] or account['expiry'] and account['expiry'] <= now:
                 return False, 'Account is unavailable.'
-            rows, recent, caps, rolling, observed, extra = self._exposure(c, campaign['id'], now)
-            # Supplemental validation shares the original pilot allowance even
-            # after production activation. It never resets the campaign clock.
-            is_pilot = bool(json.loads(b['context_json']).get('pilot')) or campaign['mode'] == 'pilot'
-            if is_pilot:
-                pilot_rows = [r for r in rows if json.loads(r['context_json']).get('pilot') or r['batch_key'].startswith('pilot:')]
-                pilot_caps = sum(max(r['reserved_units'], r['charge_units'] or 0) for r in pilot_rows)
-                if pilot_caps + amount > units(2.5) or pilot_caps + amount + extra > units(3):
-                    return False, 'The original pilot allowance is fully committed.'
-            if b['source'] == 'google' and amount < units(.5):
-                return False, 'Google requires a minimum US$0.50 reservation.'
-            # Reserve $35 across seven days for ancillary use; $5 each rolling day.
-            total_limit = units(2.5) if campaign['mode'] == 'pilot' else units(315)
-            if caps + amount > total_limit or caps + amount + extra > units(3 if campaign['mode'] == 'pilot' else 350):
-                return False, 'Campaign budget is fully committed.'
-            if rolling + amount > units(45) or rolling + amount + extra > units(50):
-                return False, 'Rolling 24-hour budget is fully committed.'
-            if sum(r['reserved_units'] for r in recent if r['source'] == b['source']) + amount > units(ALLOWANCES[b['source']]):
-                return False, 'Source allowance is fully committed.'
+            reason = self._budget_reason(c, campaign, b, amount, now)
+            if reason:
+                return False, reason
+            rows = c.execute('SELECT * FROM campaign_batches WHERE campaign_id=? AND reserved_at IS NOT NULL', (campaign['id'],)).fetchall()
             account_caps = sum(r['reserved_units'] for r in rows if r['account_id'] == account_id)
             # Both observed usage and campaign commitments count against the
             # verified hard limit. No cash-overage settings are ever changed.
