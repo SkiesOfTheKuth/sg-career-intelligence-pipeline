@@ -26,6 +26,20 @@ def posting_item(**changes):
 
 
 class CorrectedSourcePolicyTests(unittest.TestCase):
+    def test_returned_singapore_indeed_localities_have_reference_evidence(self):
+        item = {'id':'local-1','positionName':'Marketing Executive','company':'Example',
+                'location':'Geylang','url':'https://sg.indeed.com/viewjob?jk=local-1','description':DESCRIPTION}
+        for locality in ('Geylang','Outram','Bugis','Ang Mo Kio','MacPherson'):
+            raw = sources.normalize('indeed',{**item,'location':locality},NOW)
+            self.assertEqual(raw['location'],locality)
+            self.assertEqual(raw['location_evidence']['country'],'Singapore')
+            job = sources.merge_job(raw,None,NOW)
+            self.assertIn('singstat.gov.sg',job['field_provenance']['location']['reference_url'])
+        for changes in ({'location':'Remote'}, {'location':None}, {'location':'Kuala Lumpur'},
+                        {'location':'Geylang, Malaysia'}, {'url':'https://my.indeed.com/viewjob?jk=local-1'},
+                        {'location':'Unlisted District','searchInput':{'country':'SG','location':'Singapore'}}):
+            self.assertIsNone(sources.normalize('indeed',{**item,**changes},NOW))
+
     def test_canonicalization_does_not_recreate_network_gates(self):
         with patch('socket.getaddrinfo',side_effect=AssertionError('No DNS admission')):
             for url in ('http://127.0.0.1:8000/jobs','http://[::1]:8080/jobs',

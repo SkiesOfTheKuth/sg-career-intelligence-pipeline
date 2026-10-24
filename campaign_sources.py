@@ -15,6 +15,8 @@ from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode, urljoin
 from evidence import build_job, source_key, plain_text
 
 CONTRACTS = json.loads((Path(__file__).parent / 'campaign_contracts.json').read_text(encoding='utf8'))
+LOCALITIES = json.loads((Path(__file__).parent / 'singapore_localities.json').read_text(encoding='utf8'))
+LOCALITY_NAMES = {name.casefold() for name in LOCALITIES['names']}
 CORE = ['Thai', 'Marketing Executive', 'Social Media Executive', 'Public Relations']
 HISTORICAL = ['Thai interpreter', 'Thailand market', 'Digital Marketing Executive', 'Influencer Marketing',
               'KOL Marketing', 'Corporate Communications Executive', 'Partnerships Executive',
@@ -371,8 +373,18 @@ def normalize(source, item, checked_at):
         return None
     # Search filters aren't location evidence. Unclear/off-market records remain
     # leads until an actual Singapore listing supplies supporting evidence.
-    if 'singapore' not in plain_text(raw.get('location')).lower():
-        return None
+    location = plain_text(raw.get('location'))
+    if 'singapore' not in location.lower():
+        # An exact returned locality on Indeed's Singapore listing site is
+        # geographic evidence. Search country/keywords and employer names are
+        # not location evidence. Preserve the actual returned locality wording.
+        if (source != 'indeed' or urlsplit(raw['url']).hostname != 'sg.indeed.com'
+                or location.casefold() not in LOCALITY_NAMES):
+            return None
+        raw['location_evidence'] = {'basis':'returned Singapore Indeed locality',
+                                    'returned_location':location,'country':'Singapore',
+                                    'reference_url':LOCALITIES['source_url'],
+                                    'reference_dataset':LOCALITIES['dataset']}
     if raw.get('description'):
         raw['verified_at'] = checked_at
     else:
@@ -391,6 +403,8 @@ def normalize(source, item, checked_at):
 def merge_job(raw, old, now):
     jid = old['id'] if old else 'SG-CAM-' + hashlib.sha256((raw['source']+'|'+str(raw.get('id') or source_key(raw['url']))).encode()).hexdigest()[:20]
     job = build_job(raw,jid)
+    if raw.get('location_evidence'):
+        job['field_provenance']['location'].update(copy.deepcopy(raw['location_evidence']))
     job['discovered_at'] = old.get('discovered_at') if old else now
     if old:
         job['url'] = old.get('url') or job['url']

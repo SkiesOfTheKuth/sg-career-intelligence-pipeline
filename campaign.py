@@ -145,6 +145,39 @@ class CampaignWorker:
             job['verification'] = {**job.get('verification',{}),'last_attempt_at':iso(now),'last_error':reason,'status':'error'}
             c.execute('UPDATE jobs SET data_json=?,updated_at=? WHERE id=?',(encode(job),iso(now),jid))
 
+    def persist_vacancy(self, c, batch, item, raw, originals, by_url, by_id, now, pilot, historical=False):
+        """Shared identity, evidence and duplicate handling for import/recovery."""
+        old = by_id.get((raw['source'],str(raw.get('id')))) or by_url.get(source_key(raw['url']))
+        if not old and not raw.get('description'):
+            return None, 'lead'
+        job = merge_job(raw,old,iso(now))
+        comparable = ('title','company','description','source_requirements','location','employment_type','salary','posted_at','deadline')
+        outcome = 'new' if not old else 'duplicate' if all(job.get(k)==old.get(k) for k in comparable) else 'updated'
+        if historical and old and (old.get('verification',{}).get('last_success_at') or '') > iso(now):
+            # A newly recognized older payload must not replace newer facts.
+            retained_sources = job['sources']
+            job = dict(old, sources=retained_sources)
+            outcome = 'duplicate'
+        if not old:
+            candidates = [j['id'] for j in originals if str(j.get('title','')).casefold()==job['title'].casefold() and str(j.get('company','')).casefold()==str(job.get('company','')).casefold()]
+            if candidates:
+                job['possible_duplicate_ids'] = candidates[:20]
+            originals.append(job)
+        if pilot:
+            c.execute('INSERT INTO campaign_pilot_jobs VALUES(?,?,?) ON CONFLICT(campaign_id,job_id) DO UPDATE SET data_json=excluded.data_json',(batch['campaign_id'],job['id'],encode(job)))
+        else:
+            c.execute('INSERT INTO jobs VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET data_json=excluded.data_json,updated_at=excluded.updated_at',(job['id'],encode(job),iso(self.clock() if historical else now)))
+            context = json.loads(batch['context_json'])
+            if historical:
+                context = {**context,'normalization_recovery':'singapore-locality-v1','recovered_at':iso(self.clock())}
+            c.execute('INSERT INTO source_evidence(job_id,source,data_json,captured_at) VALUES(?,?,?,?)',
+                      (job['id'],NAMES[batch['source']],encode({'record':raw,'raw_response':item,'run_id':batch['run_id'],'context':context}),iso(now)))
+        by_url[source_key(job['url'])] = job
+        by_url[source_key(raw['url'])] = job
+        if raw.get('id'):
+            by_id[(raw['source'],str(raw['id']))] = job
+        return job, outcome
+
     def import_page(self, batch, items, now):
         cid = batch['campaign_id']
         campaign = self.journal.current()
@@ -167,26 +200,7 @@ class CampaignWorker:
                 job = None
                 outcome = 'lead'
                 if raw:
-                    old = by_id.get((raw['source'],str(raw.get('id')))) or by_url.get(source_key(raw['url']))
-                    if not old and not raw.get('description'):
-                        raw = None  # New search-only items need vacancy text.
-                if raw:
-                    job = merge_job(raw,old,iso(now))
-                    comparable = ('title','company','description','source_requirements','location','employment_type','salary','posted_at','deadline')
-                    outcome = 'new' if not old else 'duplicate' if all(job.get(k)==old.get(k) for k in comparable) else 'updated'
-                    if not old:
-                        candidates = [j['id'] for j in originals if str(j.get('title','')).casefold()==job['title'].casefold() and str(j.get('company','')).casefold()==str(job.get('company','')).casefold()]
-                        if candidates:
-                            job['possible_duplicate_ids'] = candidates[:20]
-                        originals.append(job)
-                    if pilot:
-                        c.execute('INSERT INTO campaign_pilot_jobs VALUES(?,?,?) ON CONFLICT(campaign_id,job_id) DO UPDATE SET data_json=excluded.data_json',(cid,job['id'],encode(job)))
-                    else:
-                        c.execute('INSERT INTO jobs VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET data_json=excluded.data_json,updated_at=excluded.updated_at',(job['id'],encode(job),iso(now)))
-                        c.execute('INSERT INTO source_evidence(job_id,source,data_json,captured_at) VALUES(?,?,?,?)',
-                                  (job['id'],NAMES[batch['source']],encode({'record':raw,'raw_response':item,'run_id':batch['run_id'],'context':json.loads(batch['context_json'])}),iso(now)))
-                    by_url[source_key(job['url'])] = job
-                    if raw.get('id'): by_id[(raw['source'],str(raw['id']))] = job
+                    job, outcome = self.persist_vacancy(c,batch,item,raw,originals,by_url,by_id,now,pilot)
                 counts[outcome+'_count'] += 1
                 c.execute('INSERT INTO campaign_items VALUES(?,?,?,?,?)',(batch['id'],index,encode(item),job['id'] if job else None,outcome))
                 if isinstance(item,dict) and not pilot:
@@ -511,6 +525,8 @@ class CampaignWorker:
         self.repair_removed_policy(now)
         self.repair_career_inputs(now)
         self.repair_normalization()
+        if disk_capacity(self.store)['safe']:
+            self.repair_locality_leads(now)
         expired = bool(campaign['stops_at'] and now>=campaign['stops_at'])
         if expired and campaign['state']!='stopped':
             self.journal.state('stopped','The 168-hour campaign has ended.')
@@ -627,6 +643,55 @@ class CampaignWorker:
                 self.journal.update_batch(batch['id'],error=str(e),error_category=e.kind,retry_at=now+300)
                 self.journal.source(source,blocked_reason=str(e))
         self.store.set_meta('campaign_report',self.journal.status(self.clock()))
+
+    def repair_locality_leads(self, now):
+        """Checkpointed reclassification of retained locality-only Indeed leads.
+
+        No actor submission, charge, run checkpoint, raw payload or application
+        changes. Each page commits derived jobs, evidence, counts and cursor
+        together. Already processed rows cannot be replayed after a restart.
+        """
+        from evidence import parse_date
+        key = 'campaign_locality_recovery_v1'
+        saved = self.store.get_meta(key) or {'cursor':0,'examined':0,'promoted':0,'complete':False}
+        if saved['complete']:
+            return
+        cid = self.journal.current()['id']
+        with self.store._connection(write=True) as c:
+            rows = c.execute('''SELECT b.*,i.rowid AS item_rowid,i.item_index,i.payload_json FROM campaign_items i
+                JOIN campaign_batches b ON b.id=i.batch_id
+                WHERE b.campaign_id=? AND b.source='indeed' AND i.outcome='lead' AND i.rowid>?
+                ORDER BY i.rowid LIMIT 100''',(cid,saved['cursor'])).fetchall()
+            jobs = [json.loads(r[0]) for r in c.execute('SELECT data_json FROM jobs')]
+            scopes = {}
+            for row in rows:
+                batch = dict(row)
+                item = json.loads(row['payload_json'])
+                collected = parse_date(item.get('scrapedAt')) if isinstance(item,dict) else None
+                collected_at = collected.timestamp() if collected else row['finished_at'] or row['reserved_at']
+                # Only dates within this actual run window are credible here.
+                if not collected_at or collected_at < (row['reserved_at'] or 0) or collected_at > now:
+                    collected_at = row['finished_at'] or row['reserved_at']
+                raw = normalize('indeed',item,iso(collected_at)) if isinstance(item,dict) and collected_at else None
+                if raw and raw.get('location_evidence') and raw.get('company') and raw.get('description'):
+                    pilot = bool(json.loads(row['context_json']).get('pilot'))
+                    if pilot not in scopes:
+                        originals = list(jobs)
+                        if pilot:
+                            originals += [json.loads(r[0]) for r in c.execute('SELECT data_json FROM campaign_pilot_jobs WHERE campaign_id=?',(cid,))]
+                        scopes[pilot] = (originals,
+                            {source_key(j['url']):j for j in originals if j.get('url')},
+                            {(s.get('name'),str(s.get('source_id'))):j for j in originals for s in j.get('sources',[]) if s.get('source_id')})
+                    job,outcome = self.persist_vacancy(c,batch,item,raw,*scopes[pilot],collected_at,pilot,historical=True)
+                    if job:
+                        c.execute('UPDATE campaign_items SET job_id=?,outcome=? WHERE batch_id=? AND item_index=?',
+                                  (job['id'],outcome,row['id'],row['item_index']))
+                        c.execute('UPDATE campaign_batches SET lead_count=lead_count-1,'+outcome+'_count='+outcome+'_count+1 WHERE id=?',(row['id'],))
+                        saved['promoted'] += 1
+                saved['examined'] += 1
+                saved['cursor'] = row['item_rowid']
+            saved.update(complete=len(rows)<100,updated_at=iso(now))
+            c.execute('INSERT INTO metadata VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json',(key,encode(saved)))
 
     def repair_normalization(self):
         """Add newly recognized returned salary/date fields from retained items.
