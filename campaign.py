@@ -169,7 +169,7 @@ class CampaignWorker:
             c.execute('INSERT INTO jobs VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET data_json=excluded.data_json,updated_at=excluded.updated_at',(job['id'],encode(job),iso(self.clock() if historical else now)))
             context = json.loads(batch['context_json'])
             if historical:
-                context = {**context,'normalization_recovery':'singapore-locality-v1','recovered_at':iso(self.clock())}
+                context = {**context,'normalization_recovery':'singapore-locality-v2','recovered_at':iso(self.clock())}
             c.execute('INSERT INTO source_evidence(job_id,source,data_json,captured_at) VALUES(?,?,?,?)',
                       (job['id'],NAMES[batch['source']],encode({'record':raw,'raw_response':item,'run_id':batch['run_id'],'context':context}),iso(now)))
         by_url[source_key(job['url'])] = job
@@ -652,7 +652,7 @@ class CampaignWorker:
         together. Already processed rows cannot be replayed after a restart.
         """
         from evidence import parse_date
-        key = 'campaign_locality_recovery_v1'
+        key = 'campaign_locality_recovery_v2'
         saved = self.store.get_meta(key) or {'cursor':0,'examined':0,'promoted':0,'complete':False}
         if saved['complete']:
             return

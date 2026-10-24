@@ -29,10 +29,11 @@ class CorrectedSourcePolicyTests(unittest.TestCase):
     def test_returned_singapore_indeed_localities_have_reference_evidence(self):
         item = {'id':'local-1','positionName':'Marketing Executive','company':'Example',
                 'location':'Geylang','url':'https://sg.indeed.com/viewjob?jk=local-1','description':DESCRIPTION}
-        for locality in ('Geylang','Outram','Bugis','Ang Mo Kio','MacPherson'):
+        for locality in ('Geylang','Outram','Bugis','Ang Mo Kio','MacPherson','Macpherson Road','Jurong Island','Bishan Street 11','Ubi','Raffles'):
             raw = sources.normalize('indeed',{**item,'location':locality},NOW)
             self.assertEqual(raw['location'],locality)
             self.assertEqual(raw['location_evidence']['country'],'Singapore')
+            self.assertTrue(raw['location_evidence']['matched_reference_name'])
             job = sources.merge_job(raw,None,NOW)
             self.assertIn('singstat.gov.sg',job['field_provenance']['location']['reference_url'])
         for changes in ({'location':'Remote'}, {'location':None}, {'location':'Kuala Lumpur'},

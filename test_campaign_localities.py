@@ -27,12 +27,12 @@ class LocalityRecoveryTests(SchedulerTests):
                       (self.now-20,self.now-5,batch['id']))
         before = self.j.batches()[0]
         self.worker.repair_locality_leads(self.now)
-        self.assertEqual(self.store.get_meta('campaign_locality_recovery_v1')['promoted'],100)
-        self.assertFalse(self.store.get_meta('campaign_locality_recovery_v1')['complete'])
+        self.assertEqual(self.store.get_meta('campaign_locality_recovery_v2')['promoted'],100)
+        self.assertFalse(self.store.get_meta('campaign_locality_recovery_v2')['complete'])
         restarted = CampaignWorker(self.store,self.api,clock=lambda:self.now+30)
         restarted.repair_locality_leads(self.now+30)
-        self.assertTrue(self.store.get_meta('campaign_locality_recovery_v1')['complete'])
-        self.assertEqual(self.store.get_meta('campaign_locality_recovery_v1')['promoted'],102)
+        self.assertTrue(self.store.get_meta('campaign_locality_recovery_v2')['complete'])
+        self.assertEqual(self.store.get_meta('campaign_locality_recovery_v2')['promoted'],102)
         restarted.repair_locality_leads(self.now+60)
         after = self.j.batches()[0]
         for key in ('checkpoint','reserved_at','finished_at','charge_units','reserved_units','state','run_id','input_json','context_json'):

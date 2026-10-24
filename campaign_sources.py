@@ -17,6 +17,19 @@ from evidence import build_job, source_key, plain_text
 CONTRACTS = json.loads((Path(__file__).parent / 'campaign_contracts.json').read_text(encoding='utf8'))
 LOCALITIES = json.loads((Path(__file__).parent / 'singapore_localities.json').read_text(encoding='utf8'))
 LOCALITY_NAMES = {name.casefold() for name in LOCALITIES['names']}
+
+
+def singapore_locality_reference(value):
+    """Return a current official locality match for a short Indeed location."""
+    if not isinstance(value,str):
+        return None
+    cleaned = re.sub(r'\s+(?:road|rd|street|st)\s*\d*$', '', value.strip(), flags=re.I).casefold()
+    if cleaned in LOCALITY_NAMES:
+        return next(name for name in LOCALITIES['names'] if name.casefold() == cleaned)
+    # Returned shorthand such as Ubi, Raffles or Jurong Island can identify a
+    # single official subzone name. Ambiguous broader terms stay leads.
+    matches = [name for name in LOCALITIES['names'] if cleaned and cleaned in name.casefold()]
+    return matches[0] if len(matches) == 1 else None
 CORE = ['Thai', 'Marketing Executive', 'Social Media Executive', 'Public Relations']
 HISTORICAL = ['Thai interpreter', 'Thailand market', 'Digital Marketing Executive', 'Influencer Marketing',
               'KOL Marketing', 'Corporate Communications Executive', 'Partnerships Executive',
@@ -378,11 +391,13 @@ def normalize(source, item, checked_at):
         # An exact returned locality on Indeed's Singapore listing site is
         # geographic evidence. Search country/keywords and employer names are
         # not location evidence. Preserve the actual returned locality wording.
+        reference_name = singapore_locality_reference(location)
         if (source != 'indeed' or urlsplit(raw['url']).hostname != 'sg.indeed.com'
-                or location.casefold() not in LOCALITY_NAMES):
+                or not reference_name):
             return None
         raw['location_evidence'] = {'basis':'returned Singapore Indeed locality',
                                     'returned_location':location,'country':'Singapore',
+                                    'matched_reference_name':reference_name,
                                     'reference_url':LOCALITIES['source_url'],
                                     'reference_dataset':LOCALITIES['dataset']}
     if raw.get('description'):
