@@ -127,7 +127,7 @@ class Store:
             """)
         with self._connection(write=True) as connection:
             version = connection.execute('PRAGMA user_version').fetchone()[0]
-            if version > 3:
+            if version > 4:
                 raise ValueError('Database schema is newer than this application supports')
             if version < 2:
                 columns = {row['name'] for row in connection.execute('PRAGMA table_info(import_conflicts)')}
@@ -135,10 +135,10 @@ class Store:
                     connection.execute('ALTER TABLE import_conflicts ADD COLUMN resolution_json TEXT')
                 self._backfill_source_fields(connection)
                 connection.execute('PRAGMA user_version = 2')
-            if version < 3:
+            if version < 4:
                 from campaign_store import initialize as initialize_campaign
                 initialize_campaign(connection)
-                connection.execute('PRAGMA user_version = 3')
+                connection.execute('PRAGMA user_version = 4')
         return self
 
     @staticmethod

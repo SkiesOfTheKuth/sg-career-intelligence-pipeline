@@ -15,6 +15,17 @@ from storage import Store
 
 
 class ContinuationTests(unittest.TestCase):
+    def test_existing_schema_three_gets_additive_error_category_migration(self):
+        path=Path(self.temp.name)/'old.sqlite3'
+        store=Store(path).initialize()
+        with store._connection(write=True) as c:
+            c.execute('ALTER TABLE campaign_batches DROP COLUMN error_category')
+            c.execute('PRAGMA user_version=3')
+        store.initialize()
+        with store._connection() as c:
+            self.assertEqual(c.execute('PRAGMA user_version').fetchone()[0],4)
+            self.assertIn('error_category',[r[1] for r in c.execute('PRAGMA table_info(campaign_batches)')])
+        journal=CampaignStore(store);journal.create();journal.status()
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
         self.path=Path(self.temp.name)/'test.sqlite3'

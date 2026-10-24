@@ -1046,6 +1046,10 @@
       const current = effectiveApplication(id)?.drafts || {};
       const patch = {};
       for (const name of ['recruiter_message', 'cover_letter']) {
+        const input = state.activeId === id ? $(`draft-${name}`) : null;
+        // Focus establishes editing intent before the first input event. A late
+        // suggestion must not replace the selection beneath a user's keystroke.
+        if (input && document.activeElement === input) continue;
         if (!Object.prototype.hasOwnProperty.call(current, name) && typeof data[name] === 'string') patch[name] = data[name];
       }
       if (hasKeys(patch)) queueWrite(id, { drafts: patch });

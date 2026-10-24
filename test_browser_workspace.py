@@ -235,6 +235,19 @@ class EditorRegression(unittest.TestCase):
         self.assertEqual(page.locator('#draft-cover_letter').input_value(),'my truthful draft')
         self.assertEqual(self.app['drafts']['cover_letter'],'my truthful draft')
 
+    def test_focused_draft_is_not_replaced_before_first_keystroke(self):
+        page=self.page();held=[]
+        page.route('**/api/drafts/role-1',lambda route:held.append(route))
+        page.get_by_role('button',name='Prepare application',exact=True).click()
+        field=page.locator('#draft-cover_letter');field.focus()
+        held[0].fulfill(json={'cover_letter':'late generated text','recruiter_message':'message'})
+        expect(page.locator('#draft-recruiter_message')).to_have_value('message')
+        expect(field).to_have_value('')
+        with page.expect_response(lambda response:response.request.method=='PUT' and response.url.endswith('/api/applications/role-1') and (response.request.post_data_json.get('drafts') or {}).get('cover_letter')=='User wording'):
+            field.fill('User wording')
+        expect(page.locator('#draft-save-status')).to_have_text('Saved')
+        self.assertEqual(self.app['drafts']['cover_letter'],'User wording')
+
     def test_preparation_shows_supported_pairs_separately_from_checklist(self):
         page=self.page()
         page.get_by_role('button',name='Prepare application',exact=True).click()
