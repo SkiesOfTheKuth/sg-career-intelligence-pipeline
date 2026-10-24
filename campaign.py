@@ -362,6 +362,40 @@ class CampaignWorker:
             c.execute('INSERT INTO metadata VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json',
                       ('campaign_policy_correction_v2',encode({'at':iso(now),'superseded_observations':observations})))
 
+    def repair_career_inputs(self, now):
+        """Migrate batches queued before the validated crawler proxy input.
+
+        The old payload and any failed reservation remain immutable evidence;
+        only an unlaunched queued payload is edited in place, while a failed
+        reserved batch receives one corrected replacement with a new key.
+        """
+        if self.store.get_meta('campaign_career_proxy_v1'):
+            return
+        with self.store._connection(write=True) as c:
+            campaign = self.journal.current()
+            replacements = []
+            for row in c.execute("SELECT * FROM campaign_batches WHERE campaign_id=? AND source='careers' AND state IN ('queued','failed')",(campaign['id'],)).fetchall():
+                payload = json.loads(row['input_json'])
+                if payload.get('proxyConfiguration',{}).get('useApifyProxy') is not False:
+                    continue
+                context = json.loads(row['context_json'])
+                urls = context.get('urls') or [x.get('url') for x in payload.get('startUrls',[]) if isinstance(x,dict)]
+                if not urls:
+                    continue
+                corrected = input_for('careers',urls)
+                if row['state']=='queued' and row['reserved_at'] is None:
+                    c.execute('UPDATE campaign_batches SET input_json=? WHERE id=?',(encode(corrected),row['id']))
+                elif row['reserved_at'] is not None:
+                    replacements.append((row,corrected,context))
+            for row, corrected, context in replacements:
+                key = row['batch_key']+':proxy-v1'
+                c.execute('''INSERT OR IGNORE INTO campaign_batches
+                    (id,campaign_id,source,batch_key,input_json,context_json,state,created_at)
+                    VALUES(?,?,?,?,?,?,'queued',?)''',
+                    (uuid.uuid4().hex,campaign['id'],'careers',key,encode(corrected),encode({**context,'retry_of':row['id'],'input_correction':'proxy-v1'}),now))
+            c.execute('INSERT INTO metadata VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json',
+                      ('campaign_career_proxy_v1',encode({'at':iso(now),'replaced_failed_batches':len(replacements)})))
+
     def import_career_errors(self, batch, reference, now):
         """Checkpoint the official crawler's documented named errors dataset.
 
@@ -475,6 +509,7 @@ class CampaignWorker:
         if not campaign or not self.journal.claim(self.owner,now):
             return
         self.repair_removed_policy(now)
+        self.repair_career_inputs(now)
         self.repair_normalization()
         expired = bool(campaign['stops_at'] and now>=campaign['stops_at'])
         if expired and campaign['state']!='stopped':

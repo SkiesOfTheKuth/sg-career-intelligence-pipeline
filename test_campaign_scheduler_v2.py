@@ -215,6 +215,22 @@ class SchedulerTests(unittest.TestCase):
         self.worker.repair_removed_policy(self.now+1)
         self.assertEqual(len(self.store.get_meta('campaign_policy_correction_v2')['superseded_observations']),2)
 
+    def test_old_career_proxy_payload_is_preserved_and_corrected_replacement_is_durable(self):
+        self.production()
+        old = self.batch('careers',input_for('careers','https://example.org/jobs'),{'cap_usd':.5,'domain':'example.org','depth':0,'urls':['https://example.org/jobs']},key='old')
+        with self.store._connection(write=True) as c:
+            c.execute("UPDATE campaign_batches SET state='failed',reserved_units=?,reserved_at=?,error='Apify input (HTTP 400)' WHERE id=?",(units(.5),self.now,old['id']))
+        # Recreate the legacy payload exactly as the earlier build emitted it.
+        with self.store._connection(write=True) as c:
+            payload=json.loads(old['input_json']);payload['proxyConfiguration']={'useApifyProxy':False}
+            c.execute('UPDATE campaign_batches SET input_json=? WHERE id=?',(json.dumps(payload),old['id']))
+        self.worker.repair_career_inputs(self.now)
+        rows=self.j.batches();replacement=next(b for b in rows if b['batch_key']=='old:proxy-v1')
+        self.assertEqual(next(b for b in rows if b['id']==old['id'])['state'],'failed')
+        self.assertTrue(json.loads(replacement['input_json'])['proxyConfiguration']['useApifyProxy'])
+        self.worker.repair_career_inputs(self.now+1)
+        self.assertEqual(len([b for b in self.j.batches() if b['batch_key']=='old:proxy-v1']),1)
+
     def test_named_crawler_errors_are_checkpointed_and_classified(self):
         self.production()
         url = 'https://employer.example/careers'
