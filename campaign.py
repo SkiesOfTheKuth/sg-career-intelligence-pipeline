@@ -74,7 +74,7 @@ class CampaignWorker:
         self.refresh_accounts(self.clock())
         return self.journal.status()
 
-    def pilot(self, source='indeed', urls=None):
+    def pilot(self, source='indeed', urls=None, retry_of=None):
         if source not in NAMES:
             raise ValueError('Unknown validation source')
         if not self.journal.current():
@@ -103,7 +103,14 @@ class CampaignWorker:
             context.update(urls=urls,domain=urlsplit(urls[0]).hostname,depth=0,root_url=urls[0])
         # A source's supplemental validation never changes an active campaign's
         # mode, original start time, ledger, or recurring sources.
-        self.journal.enqueue(source,'pilot:'+source,payload,context,now)
+        key = 'pilot:'+source
+        if retry_of:
+            previous = next((b for b in self.journal.batches() if b['id']==retry_of),None)
+            if not previous or previous['source']!=source or previous['state']!='failed' or not json.loads(previous['context_json']).get('pilot'):
+                raise ValueError('A validation retry must reference a terminal failed pilot of the same source.')
+            key += ':retry:'+retry_of
+            context['retry_of'] = retry_of
+        self.journal.enqueue(source,key,payload,context,now)
         if campaign['mode']=='pilot' and campaign['state']=='prepared':
             self.journal.state('pilot')
         return self.journal.status()

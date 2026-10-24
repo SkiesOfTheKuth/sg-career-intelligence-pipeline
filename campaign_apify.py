@@ -9,9 +9,9 @@ from campaign_sources import CONTRACTS, validate_input
 
 
 class ApiError(RuntimeError):
-    def __init__(self, kind, status=None):
+    def __init__(self, kind, status=None, detail=None):
         self.kind, self.status = kind, status
-        super().__init__(f'Apify {kind}' + (f' (HTTP {status})' if status else ''))
+        super().__init__(f'Apify {kind}' + (f' (HTTP {status})' if status else '') + (': '+detail if detail else ''))
 
 
 class Apify:
@@ -40,7 +40,17 @@ class Apify:
                 if method == 'GET' and response.status_code in (429,500,502,503,504) and attempt < 2:
                     time.sleep(2**attempt)
                     continue
-                raise ApiError(kind,response.status_code)
+                detail = None
+                try:
+                    error = response.json().get('error',{})
+                    detail = str(error.get('type',''))+': '+str(error.get('message',''))
+                    for secret in self.tokens.values():
+                        detail = detail.replace(secret,'[redacted]')
+                    import re
+                    detail = re.sub(r'(?i)(token|authorization|password|api[_-]?key)([=: ]+)\S+',r'\1\2[redacted]',detail)[:1500]
+                except (ValueError,AttributeError):
+                    pass
+                raise ApiError(kind,response.status_code,detail)
             try:
                 return response.json()
             except ValueError:

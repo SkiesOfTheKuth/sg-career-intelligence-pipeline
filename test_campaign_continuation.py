@@ -120,5 +120,16 @@ class ContinuationTests(unittest.TestCase):
         self.assertIn('minimum',self.j.reserve(batch['id'],'one',.49,'owner',self.now)[1])
         self.assertEqual(self.j.status()['actor_committed_usd'],0)
 
+    def test_retry_preserves_failed_validation_and_is_idempotent(self):
+        self.post('pilot',{'source':'careers','urls':['https://example.org/jobs']})
+        first=self.j.batches()[0]
+        self.j.update_batch(first['id'],state='failed',error='Apify input (HTTP 400)',error_category='input')
+        payload={'source':'careers','urls':['https://example.org/jobs'],'retry_of':first['id']}
+        self.assertEqual(self.post('pilot',payload).status_code,200)
+        self.assertEqual(self.post('pilot',payload).status_code,200)
+        self.assertEqual(len(self.j.batches()),2)
+        self.assertEqual(next(b for b in self.j.batches() if b['id']==first['id'])['state'],'failed')
+        self.assertEqual(self.post('pilot',{**payload,'retry_of':'missing'}).status_code,409)
+
 
 if __name__=='__main__':unittest.main()

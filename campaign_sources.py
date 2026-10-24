@@ -77,7 +77,7 @@ def input_for(source, query, limit=100):
             raise ValueError('Career batches require 1–50 URLs from one domain')
         return {'startUrls':[{'url':url} for url in urls],'crawlerType':'cheerio','maxCrawlDepth':0,
                 'maxCrawlPages':len(urls),'maxResults':len(urls),'respectRobotsTxtFile':False,
-                'proxyConfiguration':{'useApifyProxy':False},'maxConcurrency':1,
+                'proxyConfiguration':{'useApifyProxy':True},'maxConcurrency':1,
                 'maxRequestRetries':0,'maxSessionRotations':0,'saveFiles':False,
                 'saveContentTypes':'','saveMarkdown':True,'saveHtml':True,
                 'saveHtmlAsFile':False,'saveScreenshots':False,'summarize':False,
