@@ -3,8 +3,12 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const state = {audit: null, source: '', offset: 0, job: null, recordEpoch: 0, inspectEpoch: 0, overviewEpoch: 0, controller: null, timer: null, poll: null, checking: false};
+  const leadState = {offset: 0, epoch: 0, controller: null};
   const labels = {scheduled: 'Automatic · every 12 hours', retained: 'Retained import', error: 'Last check failed', degraded: 'Check incomplete', paused: 'Automatic checks paused', checking: 'Checking source…', active: 'Campaign active', pilot: 'Pilot in progress', prepared: 'Prepared for pilot', stopped: 'Campaign ended', blocked: 'Collection blocked'};
   const number = value => Number(value || 0).toLocaleString('en-SG');
+  const sourceName = value => ({linkedin: 'LinkedIn', indeed: 'Indeed', google: 'Google', careers: 'Career websites'})[value] || value;
+  const money = value => value === null || value === undefined ? 'Not reported' : new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD', maximumFractionDigits: 4}).format(value);
+  const counts = value => value ? `${number(value.new_count)} new; ${number(value.updated_count)} updated; ${number(value.duplicate_count)} duplicate; ${number(value.lead_count)} leads` : 'Counts not yet reported';
   const el = (tag, text, cls) => {const node = document.createElement(tag); if (text !== undefined && text !== null) node.textContent = text; if (cls) node.className = cls; return node;};
   const button = (text, action, cls) => {const node = el('button', text, cls); node.type = 'button'; node.addEventListener('click', action); return node;};
   function link(text, path, external = false) {
@@ -85,7 +89,7 @@
     $('record-source').replaceChildren(new Option('All sources', ''), ...audit.sources.map(source => new Option(source.name, source.id)));
     $('record-source').value = state.source;
     const errors = audit.sources.filter(source => ['error', 'degraded'].includes(source.state));
-    $('collection-health').textContent = errors.length ? errors.map(source => `${source.name}: ${labels[source.state]}`).join(' · ') : 'Source restrictions and collection outcomes are shown below.';
+    $('collection-health').textContent = errors.length ? errors.map(source => `${source.name}: ${labels[source.state]}`).join(' · ') : 'Collection outcomes and next runs are shown below.';
     $('engine-count').textContent = `${number(audit.total)} retained jobs`;
     $('discovery-count').textContent = `${number(audit.discovery_count)} records before your filters`;
     $('application-count').textContent = `${number(audit.applications_count)} tracked applications`;
@@ -114,22 +118,33 @@
     $('pause-campaign').hidden = !active;
     $('campaign-summary').textContent = `Seven-day campaign · ${labels[campaign?.state] || 'Not started'}`;
     if (!campaign || campaign.state === 'not_prepared') {detail.append(el('p', 'Paid collection has not started. MyCareersFuture keeps its existing schedule.')); return;}
-    const money = value => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:4}).format(value || 0);
     facts(detail, [['Automatic stop',date(campaign.stops_at)],['Reported run charges',money(campaign.reported_run_charges_usd)],
       ['Account usage since baseline',money(campaign.observed_account_usage_usd)],['Actor budget committed',`${money(campaign.actor_committed_usd)} total; ${money(campaign.rolling_actor_committed_usd)} in the rolling day`],
       ['Ceilings','US$50 per rolling 24 hours; US$350 total'],['Last worker heartbeat',date(campaign.heartbeat)]]);
     if (campaign.reason) detail.append(el('p',campaign.reason,'audit-error'));
     if (campaign.accounting_error) detail.append(el('p',`Admissions blocked: ${campaign.accounting_error}`,'audit-error'));
     if (campaign.worker_error) detail.append(el('p',`Worker needs inspection: ${campaign.worker_error.type}. Last recorded ${date(campaign.worker_error.at)}.`,'audit-error'));
-    detail.append(el('p',campaign.accounting_note,'field-help'));
-    const list = el('ul');
-    for (const s of campaign.sources || []) list.append(el('li',`${s.source}: ${number(s.new_count)} new, ${number(s.updated_count)} updated, ${number(s.duplicate_count)} duplicate, ${number(s.lead_count)} leads. ${s.blocked_reason || (active ? 'Next cycle: '+date(s.due_at) : 'Paid collection is not active.')}`));
-    detail.append(list,link('Open campaign report','/api/campaign/report'));
+    facts(detail, [['Production collection', counts(campaign.production_counts)], ['Isolated validation', counts(campaign.pilot_counts)],
+      ['Distinct supported production vacancies', campaign.production_counts ? number(campaign.production_counts.unique_supported_vacancies) : 'Not yet reported'],
+      ['Distinct supported validation vacancies', campaign.pilot_counts ? number(campaign.pilot_counts.unique_supported_vacancies) : 'Not yet reported'],
+      ['Discovered domains', number(campaign.discovered_domains)]]);
+    detail.append(el('p', 'New, updated and duplicate counts describe import outcomes. Distinct supported vacancies include existing roles checked again. Isolated validation does not add roles to Find roles.', 'field-help'));
+    if (campaign.accounting_note) detail.append(el('p',campaign.accounting_note,'field-help'));
+    for (const s of campaign.sources || []) {
+      const group = el('section', null, 'campaign-source'); group.append(el('h3', sourceName(s.source)));
+      group.append(el('p', `Production: ${counts(s.production_counts)}.`), el('p', `Isolated validation: ${counts(s.pilot_counts)}.`));
+      if (s.blocked_reason) group.append(el('p', s.blocked_reason, 'audit-error'));
+      group.append(el('p', active ? 'Next cycle: '+date(s.due_at) : 'Paid collection is not active.'));
+      if (s.outcome) group.append(el('p', `Latest outcome: ${s.outcome}${s.error_category ? ' · '+s.error_category : ''}.`));
+      detail.append(group);
+    }
+    detail.append(link('Open campaign report','/api/campaign/report'));
     const runs = el('details'); runs.append(el('summary','Recent paid batches'));
     if (!(campaign.runs || []).length) runs.append(el('p','No paid batch has been admitted.'));
     for (const run of (campaign.runs || []).slice(-20).reverse()) {
       const row = el('div',null,'history-run');
-      row.append(el('p',`${run.source} · ${run.state} · ${date(run.reserved_at)}`),el('p',`${number(run.new_count)} new; ${number(run.updated_count)} updated; ${number(run.duplicate_count)} duplicate; ${number(run.lead_count)} leads.`));
+      row.append(el('p',`${sourceName(run.source)} · ${run.pilot ? 'Isolated validation' : 'Production'} · ${run.state} · ${date(run.reserved_at)}`),el('p',counts(run)+'.'));
+      row.append(el('p', `Reserved: ${money(run.cap_usd)}. Reported charge: ${money(run.charge_usd)}.${run.error_category ? ' Failure category: '+run.error_category+'.' : ''}`));
       if (run.error) row.append(el('p',run.error,'audit-error'));
       if (run.run_id) row.append(link('Inspect Apify run ↗',`https://console.apify.com/actors/runs/${encodeURIComponent(run.run_id)}`,true));
       runs.append(row);
@@ -159,7 +174,7 @@
       }
       if (source.latest_errors.length) detail.append(el('p', `Latest failure: ${source.latest_errors[0].message}`, 'audit-error'));
       if (source.campaign?.blocked_reason) detail.append(el('p',source.campaign.blocked_reason,'audit-error'));
-      if (source.campaign) facts(detail,[['Next cycle',date(source.next_check_at)],['Campaign results',`${number(source.campaign.new_count)} new; ${number(source.campaign.updated_count)} updated; ${number(source.campaign.duplicate_count)} duplicate`]]);
+      if (source.campaign) facts(detail,[['Next cycle',date(source.next_check_at)],['Production collection',counts(source.campaign.production_counts)],['Isolated validation',counts(source.campaign.pilot_counts)]]);
       detail.append(el('p', 'Retained record dates can come from the original import. They do not prove that the source was checked successfully.', 'field-help'));
     }
     const bars = (source || state.audit).coverage.map((item, index) => {
@@ -211,6 +226,51 @@
     } catch (error) {$('check-feedback').textContent = `${error.message} The server may still be checking. Reload the audit to see its recorded outcome.`;}
     finally {state.checking = false; await loadOverview(); scheduleRecords(0);}
   }
+  async function loadLeads(reset = false) {
+    if (reset) leadState.offset = 0;
+    leadState.controller?.abort(); leadState.controller = new AbortController();
+    const epoch = ++leadState.epoch;
+    $('lead-count').textContent = 'Loading discovery leads…'; $('leads').setAttribute('aria-busy', 'true');
+    $('previous-leads').disabled = true; $('next-leads').disabled = true;
+    const params = new URLSearchParams({source: $('lead-source').value, pilot: $('lead-scope').value, offset: leadState.offset, limit: 20});
+    try {
+      const data = await api('/api/campaign/leads?' + params, {signal: leadState.controller.signal});
+      if (epoch !== leadState.epoch) return;
+      const rows = data.items.map(item => {
+        const row = el('article', null, 'audit-record'); const identity = el('div');
+        identity.append(el('strong', item.title || item.url || 'Untitled lead'), el('p', `${sourceName(item.source) || 'Career discovery'} · ${item.state || 'Retained lead'}`));
+        const metadata = el('div'); metadata.append(el('p', item.reason || 'Vacancy evidence needs review.'), el('p', `Collected: ${date(item.discovered_at)}`));
+        const inspect = button('Inspect lead', () => openLead(item)); inspect.setAttribute('aria-label', `Inspect lead: ${item.title || item.url || item.id}`);
+        row.append(identity, metadata, inspect); return row;
+      });
+      $('leads').replaceChildren(...rows);
+      if (!rows.length) $('leads').append(el('p', 'No discovery leads in this collection scope.'));
+      $('lead-count').textContent = `${number(data.total)} ${$('lead-scope').value === 'true' ? 'isolated validation' : 'production'} leads`;
+      $('lead-page').textContent = data.total ? `${number(leadState.offset + 1)}–${number(Math.min(leadState.offset + data.limit, data.total))} of ${number(data.total)}` : '0 leads';
+      $('previous-leads').disabled = leadState.offset === 0; $('next-leads').disabled = leadState.offset + data.limit >= data.total;
+    } catch (error) {
+      if (epoch === leadState.epoch && error.name !== 'AbortError') {$('lead-count').textContent = 'Leads couldn’t be loaded'; failure($('leads'), error, () => loadLeads());}
+    } finally {if (epoch === leadState.epoch) $('leads').setAttribute('aria-busy', 'false');}
+  }
+  function openLead(item) {
+    ++state.inspectEpoch; state.job = null; updateURL();
+    const dialog = $('record-inspector');
+    if (!dialog.open) dialog.showModal(); document.body.classList.add('inspector-open');
+    $('inspector-title').textContent = item.title || 'Discovery lead';
+    const content = $('inspector-content'); content.replaceChildren();
+    content.append(el('p', item.reason || 'The returned evidence does not yet establish a supported vacancy.', 'notice'));
+    facts(content, [['Source', sourceName(item.source)], ['Collection scope', item.pilot ? 'Isolated validation' : 'Production'], ['Queue state', item.state], ['Collected', date(item.discovered_at)], ['Discovery depth', item.depth]]);
+    const links = el('div', null, 'inspector-links');
+    if (item.url) links.append(link('Open discovered page ↗', item.url, true));
+    if (item.parent_url) links.append(link('Open parent evidence page ↗', item.parent_url, true));
+    if (item.job_id && !item.pilot) links.append(link('View supported role', '/?role=' + encodeURIComponent(item.job_id)));
+    content.append(links);
+    const lineage = section(content, 'Collection context and parent evidence');
+    lineage.append(el('pre', JSON.stringify(item.context || item.evidence || {parent_url: item.parent_url, batch_id: item.batch_id}, null, 2), 'evidence-json'));
+    const payload = section(content, 'Returned source payload');
+    payload.append(el('p', 'Retained source content, with credential-like values redacted for inspection. Search wording and snippets do not establish a vacancy.', 'secondary'), el('pre', JSON.stringify(item.payload ?? item.evidence ?? {}, null, 2), 'evidence-json'));
+    $('inspector-title').focus({preventScroll: true});
+  }
   function section(container, title) {const node = el('section'); node.append(el('h3', title)); container.append(node); return node;}
   function evidenceVersions(container, evidence) {
     for (const record of evidence.items) {
@@ -234,7 +294,7 @@
       const role = link('View role', '/?role=' + encodeURIComponent(id)); role.className = 'button-link'; actions.append(role);
       if (job.url) {const original = link('Open original listing ↗', job.url, true); original.className = 'button-link'; actions.append(original);}
       content.append(actions);
-      facts(content, [['Record ID', id], ['Listing status', job.status], ['Last successful listing check', date(job.verification?.last_success_at)], ['Retained record date', date(job.verification?.checked_at)], ['Latest failed attempt', job.verification?.last_error ? date(job.verification?.last_attempt_at) : 'None recorded'], ['Closing date', job.deadline || 'Not stated']]);
+      facts(content, [['Record ID', id], ['Listing status', job.status], ['First collected', date(job.discovered_at || job.collected_at)], ['Employer posting date', date(job.posted_at)], ['Last successful listing check', date(job.verification?.last_success_at)], ['Retained record date', date(job.verification?.checked_at)], ['Latest failed attempt', job.verification?.last_error ? date(job.verification?.last_attempt_at) : 'None recorded'], ['Closing date', job.deadline || 'Not stated']]);
       for (const [name, evidence] of Object.entries(job.field_provenance || {})) facts(content, [[`${name} source date`, date(evidence.checked_at || evidence.source_record_date)], [`${name} evidence version`, evidence.evidence_id || 'Not recorded']]);
       if (job.source_warning) content.append(el('p', job.source_warning, 'notice warning'));
       if (job.verification?.last_error) content.append(el('p', job.verification.last_error, 'audit-error'));
@@ -284,8 +344,8 @@
     // The controls and their values stay the same when the viewport changes.
     const focused = document.activeElement;
     const order = compact.matches
-      ? ['collection-status', 'records-section', 'flow-section', 'audit-detail-disclosure', 'history-section']
-      : ['flow-section', 'collection-status', 'audit-detail-disclosure', 'records-section', 'history-section'];
+      ? ['collection-status', 'records-section', 'leads-section', 'flow-section', 'audit-detail-disclosure', 'history-section']
+      : ['flow-section', 'collection-status', 'audit-detail-disclosure', 'records-section', 'leads-section', 'history-section'];
     order.forEach((name, index) => {
       const node = auditSections[name];
       if ($('audit-content').children[index] !== node) $('audit-content').insertBefore(node, $('audit-content').children[index]);
@@ -299,7 +359,7 @@
   }
   responsiveLayout(); compact.addEventListener('change', responsiveLayout);
   $('all-sources').addEventListener('click', () => selectSource(''));
-  $('refresh-overview').addEventListener('click', () => {loadOverview(); scheduleRecords(0);});
+  $('refresh-overview').addEventListener('click', () => {loadOverview(); scheduleRecords(0); loadLeads();});
   $('check-source').addEventListener('click', checkSource);
   $('pause-campaign').addEventListener('click', async () => {
     $('pause-campaign').disabled = true;
@@ -311,7 +371,10 @@
   $('record-filters').addEventListener('submit', event => {event.preventDefault(); state.offset = 0; updateURL(); scheduleRecords(0);});
   $('record-query').addEventListener('input', () => {state.offset = 0; updateURL(true); scheduleRecords();});
   $('record-status').addEventListener('change', () => {state.offset = 0; updateURL(); scheduleRecords(0);});
+  $('lead-filters').addEventListener('submit', event => {event.preventDefault(); loadLeads(true);});
+  for (const id of ['lead-source', 'lead-scope']) $(id).addEventListener('change', () => loadLeads(true));
+  for (const [id, step] of [['previous-leads', -20], ['next-leads', 20]]) $(id).addEventListener('click', () => {leadState.offset = Math.max(0, leadState.offset + step); loadLeads(); $('leads-heading').scrollIntoView({block: 'start'});});
   for (const [id, step] of [['previous-records', -20], ['next-records', 20]]) $(id).addEventListener('click', () => {state.offset = Math.max(0, state.offset + step); updateURL(); scheduleRecords(0); $('records-heading').scrollIntoView({block: 'start'});});
   window.addEventListener('popstate', () => {const job = readURL(); renderSelection(); scheduleRecords(0); if (job) openRecord(job, false); else closeRecord(false);});
-  const initialJob = readURL(); loadOverview(); scheduleRecords(0); if (initialJob) openRecord(initialJob, false);
+  const initialJob = readURL(); loadOverview(); scheduleRecords(0); loadLeads(); if (initialJob) openRecord(initialJob, false);
 })();

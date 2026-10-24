@@ -156,7 +156,7 @@ async def lifespan(application):
         await asyncio.to_thread(verified_backup, store)
 
 
-app = FastAPI(title='SG Career Intelligence', version='2.3.0', lifespan=lifespan)
+app = FastAPI(title='SG Career Intelligence', version='2.4.0', lifespan=lifespan)
 app.state.database_path = DB_PATH
 app.mount('/static', StaticFiles(directory=BASE / 'static', check_dir=False), name='static')
 
@@ -195,7 +195,7 @@ def filter_parameters(q: str = '', category: str = '', fit: str = '', thai_relev
 
 
 def filter_jobs(jobs, **filters):
-    results = [present_job(j) for j in jobs]
+    results = [present_job(j, copy_result=False) for j in jobs]
     q = filters.get('q', '').strip().lower()
     tokens = [q[1:-1]] if len(q) > 1 and q[0] == q[-1] and q[0] in "\"'" else q.split()
     def matches(j):
@@ -296,10 +296,11 @@ async def prepare_campaign(request:Request,user=Depends(verify_credentials)):
 
 
 @app.post('/api/campaign/pilot')
-async def pilot_campaign(request:Request,user=Depends(verify_credentials)):
+async def pilot_campaign(request:Request,payload:dict=None,user=Depends(verify_credentials)):
     worker = request.app.state.campaign_worker
     try:
-        return await owned_operation(worker,worker.pilot)
+        options = payload or {}
+        return await owned_operation(worker,lambda:worker.pilot(options.get('source','indeed'),options.get('urls')))
     except ValueError as exc:
         raise HTTPException(409,str(exc))
 
@@ -314,12 +315,31 @@ def pilot_evidence(user=Depends(verify_credentials),store=Depends(get_store)):
 
 
 @app.get('/api/campaign/leads')
-def campaign_leads(offset:int=Query(0,ge=0),limit:int=Query(25,ge=1,le=100),user=Depends(verify_credentials),store=Depends(get_store)):
+def campaign_leads(offset:int=Query(0,ge=0),limit:int=Query(25,ge=1,le=100),source:str='',pilot:bool=False,user=Depends(verify_credentials),store=Depends(get_store)):
     from source_audit import redacted
     with store._connection() as connection:
-        total=connection.execute('SELECT COUNT(*) FROM campaign_discovery').fetchone()[0]
-        rows=[dict(r) for r in connection.execute('SELECT * FROM campaign_discovery ORDER BY discovered_at,url LIMIT ? OFFSET ?',(limit,offset))]
-        for row in rows:row['evidence']=json.loads(row.pop('evidence_json'))
+        where = "i.outcome IN ('lead','error') AND COALESCE(json_extract(b.context_json,'$.pilot'),0)=?"
+        params=[int(pilot)]
+        if source:
+            where+=' AND b.source=?';params.append(source)
+        query=' FROM campaign_items i JOIN campaign_batches b ON b.id=i.batch_id WHERE '+where
+        total=connection.execute('SELECT COUNT(*)'+query,params).fetchone()[0]
+        records=connection.execute('SELECT i.*,b.source,b.created_at,b.finished_at,b.context_json,b.error,b.error_category'+query+' ORDER BY b.created_at DESC,i.item_index LIMIT ? OFFSET ?', [*params,limit,offset])
+        rows=[]
+        for record in records:
+            item=json.loads(record['payload_json'])
+            context=json.loads(record['context_json'])
+            obj=item if isinstance(item,dict) else {}
+            url=obj.get('url') or obj.get('searchQuery',{}).get('url')
+            queue=connection.execute('SELECT * FROM campaign_discovery WHERE url=?',(url,)).fetchone() if url else None
+            rows.append({'id':record['batch_id']+':'+str(record['item_index']), 'source':record['source'],
+                'url':url,'title':obj.get('title') or obj.get('positionName') or obj.get('metadata',{}).get('title') or context.get('query') or 'Returned source evidence',
+                'reason':record['error'] or 'Returned evidence does not establish a supported Singapore vacancy.',
+                'state':queue['state'] if queue else 'lead','discovered_at':record['finished_at'] or record['created_at'],
+                'parent_url':queue['parent_url'] if queue else context.get('parent_url'),
+                'payload':item,'context':context,'pilot':pilot,'job_id':record['job_id'],
+                'depth':queue['depth'] if queue else context.get('depth'),
+                'queue':dict(queue) if queue else None,'error_category':record['error_category']})
     return redacted({'items':rows,'total':total,'offset':offset,'limit':limit})
 
 
@@ -328,9 +348,24 @@ async def activate_campaign(payload:dict,request:Request,user=Depends(verify_cre
     worker = request.app.state.campaign_worker
     async with worker.mutation_lock:
         journal = CampaignStore(store)
-        pilots = [b for b in journal.batches() if b['batch_key'].startswith('pilot:')]
-        if not pilots or any(b['state']!='done' or b['charge_units'] is None or b['new_count']+b['updated_count']+b['duplicate_count']==0 for b in pilots):
-            raise HTTPException(409,'A successful reconciled pilot with supported vacancy evidence is required.')
+        from campaign_sources import CONTRACTS
+        requested = payload.get('sources') or ([payload['source']] if payload.get('source') else ['indeed'])
+        if not isinstance(requested,list) or not requested or any(s not in CONTRACTS for s in requested):
+            raise HTTPException(422,'Specify known collection sources.')
+        pilots = [b for b in journal.batches() if json.loads(b['context_json']).get('pilot') and b['source'] in requested]
+        def supported(batch):
+            if batch['source'] != 'google':
+                return batch['new_count']+batch['updated_count']+batch['duplicate_count'] > 0
+            # A search pilot establishes search-result evidence, never a vacancy.
+            with store._connection() as connection:
+                for row in connection.execute('SELECT payload_json FROM campaign_items WHERE batch_id=?',(batch['id'],)):
+                    item=json.loads(row[0])
+                    if any(isinstance(r,dict) and r.get('url') and (r.get('title') or r.get('description')) for r in item.get('organicResults',[])):
+                        return True
+            return False
+        verified = [b for b in pilots if b['state']=='done' and b['remote_status']=='SUCCEEDED' and b['charge_units'] is not None and supported(b)]
+        if not all(any(b['source']==s for b in verified) for s in requested):
+            raise HTTPException(409,'Each requested source needs a successful, reconciled isolated validation with returned evidence.')
         if not store.get_meta('last_backup') or not all(store.get_meta('campaign_contract_'+b['source']) for b in pilots):
             raise HTTPException(409,'Backup and current actor contract verification are required.')
         await asyncio.to_thread(worker.refresh_accounts,time.time())
@@ -343,7 +378,9 @@ async def activate_campaign(payload:dict,request:Request,user=Depends(verify_cre
             raise HTTPException(422,'Provide the verified pilot evidence reference.')
         evidence = {**payload,'backup_verified':True,'contracts_verified':True,'verified_at':datetime.now(timezone.utc).isoformat()}
         try:
-            store.set_meta('campaign_validated_sources',sorted({b['source'] for b in pilots}))
+            store.set_meta('campaign_validated_sources',sorted(set(store.get_meta('campaign_validated_sources',[])) | set(requested)))
+            for source in requested:
+                journal.source(source,due_at=time.time(),blocked_reason=None)
             journal.activate(evidence)
             return journal.status()
         except ValueError as exc:
@@ -354,8 +391,8 @@ async def activate_campaign(payload:dict,request:Request,user=Depends(verify_cre
 def campaign_report(user=Depends(verify_credentials),store=Depends(get_store)):
     return {**CampaignStore(store).status(), 'activation':store.get_meta('campaign_activation'),
             'limitations':['Credit expiry is unknown unless verified separately.',
-                          'LinkedIn and Google search obey their current robots restrictions.',
-                          'Career crawling awaits verified redirect/private-network isolation.']}
+                          'Cultjobs remains a separately specified dated import.',
+                          'Future unattended cycles and deadline shutdown require observed runtime evidence.']}
 
 
 @app.get('/api/audit/records/{job_id}')

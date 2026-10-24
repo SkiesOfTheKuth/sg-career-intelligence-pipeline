@@ -15,7 +15,7 @@ import uuid
 
 from campaign_apify import Apify, ApiError
 from campaign_sources import (CONTRACTS, CORE, HISTORICAL, NAMES, AccessBlocked,
-    access_url, canonical_url, check_robots, input_for, merge_job, normalize,
+    access_url, canonical_url, extract_links, input_for, merge_job, normalize,
     queries, relevant_career_url, validate_input)
 from campaign_store import CampaignStore, DAY, ACTIVE, encode, units
 from evidence import source_key, salary_presentation
@@ -39,7 +39,7 @@ def disk_capacity(store):
 
 
 class CampaignWorker:
-    def __init__(self, store, api=None, access=check_robots, clock=time.time):
+    def __init__(self, store, api=None, access=None, clock=time.time):
         self.store, self.journal = store, CampaignStore(store)
         try:
             self.api = api if api is not None else Apify()
@@ -48,7 +48,9 @@ class CampaignWorker:
             # or its independent free MCF scheduler offline.
             self.api = Apify([])
             store.set_meta('campaign_account_error','Invalid APIFY_TOKENS_JSON configuration; paid collection is unavailable.')
-        self.access, self.clock = access, clock
+        # ``access`` remains an ignored compatibility argument for callers of
+        # the first campaign worker. URL identity never performs network checks.
+        self.clock = clock
         self.owner = uuid.uuid4().hex
         self.last_accounts = 0
         self.contracts = {}
@@ -72,16 +74,38 @@ class CampaignWorker:
         self.refresh_accounts(self.clock())
         return self.journal.status()
 
-    def pilot(self):
+    def pilot(self, source='indeed', urls=None):
+        if source not in NAMES:
+            raise ValueError('Unknown validation source')
         if not self.journal.current():
             self.prepare()
         now = self.clock()
-        # One bounded Indeed search checks current schema, location, exact text,
-        # identity and billing in isolated tables. Other eligible actors receive
-        # their own pilot before activation; inaccessible actors remain blocked.
-        payload = input_for('indeed','Marketing Executive',10)
-        self.journal.enqueue('indeed','pilot:indeed',payload,{'query':'Marketing Executive','pilot':True,'cap_usd':.20},now)
-        self.journal.state('pilot')
+        campaign = self.journal.current()
+        if campaign['state'] in ('paused','stopped'):
+            raise ValueError('Resume the campaign before requesting validation')
+        query = 'Marketing Executive Singapore careers vacancy' if source == 'google' else 'Marketing Executive'
+        if source == 'careers':
+            if isinstance(urls,str):
+                urls = [urls]
+            if not urls:
+                with self.store._connection() as c:
+                    row = c.execute("SELECT url FROM campaign_discovery WHERE campaign_id=? AND state='queued' ORDER BY discovered_at,url LIMIT 1",(campaign['id'],)).fetchone()
+                urls = [row[0]] if row else []
+            if not urls:
+                raise ValueError('Career validation requires a discovered career URL')
+            urls = list(dict.fromkeys(canonical_url(url) for url in urls))
+            if len(urls)>10 or len({urlsplit(url).hostname for url in urls})!=1:
+                raise ValueError('Career validation accepts up to ten URLs on one domain')
+            query = urls
+        payload = input_for(source,query,10)
+        context = {'query':query,'pilot':True,'cap_usd':.50 if source in ('google','careers') else .20}
+        if source == 'careers':
+            context.update(urls=urls,domain=urlsplit(urls[0]).hostname,depth=0,root_url=urls[0])
+        # A source's supplemental validation never changes an active campaign's
+        # mode, original start time, ledger, or recurring sources.
+        self.journal.enqueue(source,'pilot:'+source,payload,context,now)
+        if campaign['mode']=='pilot' and campaign['state']=='prepared':
+            self.journal.state('pilot')
         return self.journal.status()
 
     def discover(self, c, cid, url, parent, depth, root, evidence, now):
@@ -91,21 +115,34 @@ class CampaignWorker:
             return
         if parent:
             c.execute('INSERT OR IGNORE INTO campaign_edges VALUES(?,?,?,?)', (cid,parent,url,encode(evidence)))
-        if not relevant_career_url(url, str(evidence.get('title',''))):
+        if not evidence.get('recheck') and not relevant_career_url(url, str(evidence.get('title',''))):
             return
         reason = None
         if depth > 2:
             reason = 'Maximum discovery depth reached'
         host = urlsplit(url).hostname
         if host == 'cultjobs.com' or host.endswith('.cultjobs.com'):
-            reason = 'Cultjobs consent requirement remains unresolved'
+            reason = 'Cultjobs remains a separately specified dated import'
         c.execute('''INSERT OR IGNORE INTO campaign_discovery VALUES(?,?,?,?,?,?,?,?,?,?,?)''',
                   (cid,url,host,parent,root or url,depth,'blocked' if reason else 'queued',now,None,encode(evidence),reason))
+
+    def career_failure(self, c, cid, url, reason, now):
+        """Retain a failed attempt without advancing successful verification."""
+        row = c.execute('SELECT evidence_json FROM campaign_discovery WHERE campaign_id=? AND url=?',(cid,url)).fetchone()
+        c.execute("UPDATE campaign_discovery SET state='failed',checked_at=?,reason=? WHERE campaign_id=? AND url=?",
+                  (now,reason,cid,url))
+        jid = json.loads(row[0]).get('job_id') if row else None
+        old = c.execute('SELECT data_json FROM jobs WHERE id=?',(jid,)).fetchone() if jid else None
+        if old:
+            job = json.loads(old[0])
+            job['verification'] = {**job.get('verification',{}),'last_attempt_at':iso(now),'last_error':reason,'status':'error'}
+            c.execute('UPDATE jobs SET data_json=?,updated_at=? WHERE id=?',(encode(job),iso(now),jid))
 
     def import_page(self, batch, items, now):
         cid = batch['campaign_id']
         campaign = self.journal.current()
-        pilot = campaign['mode']=='pilot' or json.loads(batch['context_json']).get('pilot',False)
+        context = json.loads(batch['context_json'])
+        pilot = context.get('pilot',False) or campaign['mode']=='pilot'
         with self.store._connection(write=True) as c:
             current = c.execute('SELECT checkpoint FROM campaign_batches WHERE id=?',(batch['id'],)).fetchone()[0]
             if current != batch['checkpoint']:
@@ -134,6 +171,7 @@ class CampaignWorker:
                         candidates = [j['id'] for j in originals if str(j.get('title','')).casefold()==job['title'].casefold() and str(j.get('company','')).casefold()==str(job.get('company','')).casefold()]
                         if candidates:
                             job['possible_duplicate_ids'] = candidates[:20]
+                        originals.append(job)
                     if pilot:
                         c.execute('INSERT INTO campaign_pilot_jobs VALUES(?,?,?) ON CONFLICT(campaign_id,job_id) DO UPDATE SET data_json=excluded.data_json',(cid,job['id'],encode(job)))
                     else:
@@ -144,14 +182,40 @@ class CampaignWorker:
                     if raw.get('id'): by_id[(raw['source'],str(raw['id']))] = job
                 counts[outcome+'_count'] += 1
                 c.execute('INSERT INTO campaign_items VALUES(?,?,?,?,?)',(batch['id'],index,encode(item),job['id'] if job else None,outcome))
-                if isinstance(item,dict):
+                if isinstance(item,dict) and not pilot:
                     leads = item.get('organicResults',[]) if batch['source']=='google' else []
                     if batch['source']=='careers':
-                        leads = [{'url':url,'title':''} for url in item.get('links',[]) if isinstance(url,str)]
-                    context = json.loads(batch['context_json'])
+                        leads = extract_links(item)
+                        returned = item.get('crawl',{}).get('loadedUrl') or item.get('url')
+                        requested = item.get('url')
+                        try:
+                            requested = canonical_url(requested)
+                        except (AccessBlocked,TypeError):
+                            requested = None
+                        if requested in context.get('urls',[]):
+                            status = item.get('crawl',{}).get('httpStatusCode')
+                            failed = isinstance(status,int) and status>=400
+                            if failed:
+                                self.career_failure(c,cid,requested,'Provider returned HTTP '+str(status),now)
+                                c.execute('UPDATE campaign_batches SET error=?,error_category=? WHERE id=?',
+                                          ('Provider returned HTTP '+str(status),'source_access' if status in (401,403,429) else 'provider_response',batch['id']))
+                            else:
+                                c.execute("UPDATE campaign_discovery SET state='done',checked_at=?,reason=NULL WHERE campaign_id=? AND url=?",
+                                          (now,cid,requested))
+                        # Redirect targets remain identity evidence, without a
+                        # pre-navigation DNS or redirect admission policy.
+                        if returned and returned != requested:
+                            c.execute('INSERT OR IGNORE INTO campaign_edges VALUES(?,?,?,?)',
+                                      (cid,requested or access_url(batch['source'],json.loads(batch['input_json'])),returned,
+                                       encode({'relation':'returned_page','batch_id':batch['id'],'item_index':index})))
                     for lead in leads:
-                        self.discover(c,cid,lead.get('url',''),item.get('url') or access_url(batch['source'],json.loads(batch['input_json'])),
-                                      context.get('depth',-1)+1,context.get('root_url'),lead,now)
+                        if not isinstance(lead,dict):
+                            continue
+                        parent = lead.get('parent_url') or item.get('url') or access_url(batch['source'],json.loads(batch['input_json']))
+                        page = next((page for page in context.get('pages',[]) if page['url']==item.get('url')),{})
+                        evidence = {**lead,'parent_batch_id':batch['id'],'parent_item_index':index,'parent_run_id':batch['run_id']}
+                        root = lead.get('url') if batch['source']=='google' else page.get('root_url') or context.get('root_url') or parent
+                        self.discover(c,cid,lead.get('url',''),parent,context.get('depth',-1)+1,root,evidence,now)
             c.execute('''UPDATE campaign_batches SET checkpoint=?,new_count=new_count+?,updated_count=updated_count+?,
                 duplicate_count=duplicate_count+?,lead_count=lead_count+? WHERE id=?''',
                 (current+len(items),counts['new_count'],counts['updated_count'],counts['duplicate_count'],counts['lead_count'],batch['id']))
@@ -165,49 +229,170 @@ class CampaignWorker:
             if source['due_at'] > now:
                 continue
             cycle = source['cycle']
-            with self.store._connection(write=True) as c:
-                c.execute("UPDATE campaign_batches SET state='superseded',error='Replaced by the next scheduled cycle before launch.' WHERE campaign_id=? AND source=? AND state='queued' AND batch_key NOT LIKE 'pilot:%'",(status['id'],name))
+            if name != 'careers':
+                with self.store._connection(write=True) as c:
+                    c.execute("UPDATE campaign_batches SET state='superseded',error='Replaced by the next scheduled cycle before launch.' WHERE campaign_id=? AND source=? AND state='queued' AND batch_key NOT LIKE 'pilot:%'",(status['id'],name))
             if name in ('linkedin','indeed'):
                 for query in queries(cycle):
-                    self.journal.enqueue(name,f'{name}:{cycle}:{query}',input_for(name,query),{'query':query,'cycle':cycle,'cap_usd':.25 if name=='linkedin' else .70},now)
+                    self.journal.enqueue(name,f'{name}:{cycle}:{query}',input_for(name,query),{'query':query,'cycle':cycle,'cap_usd':.25 if name=='linkedin' else .6875},now)
             elif name=='google':
                 candidates = [f'{q} Singapore careers vacancy' for q in CORE+HISTORICAL]
                 employers = sorted({j.get('company','').strip() for j in self.store.list_jobs() if j.get('company') and j.get('company') not in ('Verified via Search Result','Not stated')})
                 # Rotating named employers and agencies supplement role families.
                 start = (cycle*24)%max(1,len(employers))
                 candidates += [f'"{name}" Singapore careers jobs' for name in (employers[start:]+employers[:start])[:24]]
-                for query in list(dict.fromkeys(candidates))[:40]:
-                    self.journal.enqueue(name,f'google:{cycle}:{query}',input_for(name,query),{'query':query,'cycle':cycle,'cap_usd':.06},now)
+                distinct = list(dict.fromkeys(candidates))[:40]
+                for offset in range(0,len(distinct),20):
+                    group = distinct[offset:offset+20]
+                    self.journal.enqueue(name,f'google:{cycle}:{offset//20}',input_for(name,'\n'.join(group)),
+                                         {'queries':group,'cycle':cycle,'cap_usd':.50},now)
             else:
                 self.schedule_careers(now,cycle)
             self.journal.source(name,due_at=now+(21600 if name in ('linkedin','indeed') else DAY),cycle=cycle+1)
+        # Process newly returned links immediately; the durable daily domain and
+        # page accounting below also applies to these later depth batches.
+        career = next((s for s in status['sources'] if s['source']=='careers'),None)
+        if career:
+            self.schedule_careers(now,career['cycle'],seed_rechecks=False)
 
-    def schedule_careers(self, now, cycle):
+    def schedule_careers(self, now, cycle, seed_rechecks=True):
         cid = self.journal.current()['id']
         with self.store._connection(write=True) as c:
-            # Saved non-closed applications go first; other listings rotate by
-            # oldest successful check. Queue uniqueness prevents crawl cycles.
-            saved = {r['job_id'] for r in c.execute("SELECT job_id FROM applications WHERE stage!='Closed'")}
-            jobs = [json.loads(r[0]) for r in c.execute('SELECT data_json FROM jobs')]
-            jobs.sort(key=lambda j:(j['id'] not in saved,j.get('verification',{}).get('last_success_at') or '',j['id']))
-            for j in jobs[:100]:
-                if j.get('url'):
-                    self.discover(c,cid,j['url'],None,0,j['url'],{'job_id':j['id'],'title':j.get('title'),'recheck':True,'priority':j['id'] in saved},now)
-            queue = c.execute("SELECT * FROM campaign_discovery WHERE campaign_id=? AND state='queued' ORDER BY discovered_at,url",(cid,)).fetchall()
-            domains = set()
-            pages = {}
+            if seed_rechecks:
+                saved = {r['job_id'] for r in c.execute("SELECT job_id FROM applications WHERE stage!='Closed'")}
+                jobs = [json.loads(r[0]) for r in c.execute('SELECT data_json FROM jobs')]
+                jobs.sort(key=lambda j:(j['id'] not in saved,j.get('verification',{}).get('last_success_at') or '',j['id']))
+                for j in jobs:
+                    if not j.get('url'):
+                        continue
+                    evidence = {'job_id':j['id'],'title':j.get('title'),'recheck':True,'priority':j['id'] in saved,
+                                'last_success_at':j.get('verification',{}).get('last_success_at')}
+                    self.discover(c,cid,j['url'],None,0,j['url'],evidence,now)
+                    try:
+                        url = canonical_url(j['url'])
+                    except AccessBlocked:
+                        continue
+                    # Completed/failed checks rotate again next day; unreturned
+                    # pages in active batches are never launched twice.
+                    c.execute("""UPDATE campaign_discovery SET state='queued',evidence_json=?,reason=NULL
+                        WHERE campaign_id=? AND url=? AND state IN ('done','failed') AND checked_at<=?""",
+                              (encode(evidence),cid,url,now-DAY))
+                    c.execute("UPDATE campaign_discovery SET evidence_json=? WHERE campaign_id=? AND url=? AND state='queued'",
+                              (encode(evidence),cid,url))
+            batches = c.execute("SELECT * FROM campaign_batches WHERE campaign_id=? AND source='careers'",(cid,)).fetchall()
+            first_domains, page_counts = {}, {}
+            for batch in batches:
+                context = json.loads(batch['context_json'])
+                if context.get('pilot') or batch['state']=='superseded' and batch['reserved_at'] is None:
+                    continue
+                domain = context.get('domain')
+                if not domain:
+                    continue
+                first_domains[domain] = min(first_domains.get(domain,batch['created_at']),batch['created_at'])
+                # Persisted batch membership is a page reservation, including
+                # queued runs; this survives restarts and partial imports.
+                if batch['created_at']>now-DAY or batch['state'] in ACTIVE or batch['state']=='queued':
+                    page_counts[domain] = page_counts.get(domain,0)+len(context.get('urls',[]))
+            new_domains = {domain for domain,at in first_domains.items() if at>now-DAY}
+            queue = [dict(row) for row in c.execute("SELECT * FROM campaign_discovery WHERE campaign_id=? AND state='queued' AND depth<=2",(cid,))]
+            def priority(row):
+                ev = json.loads(row['evidence_json'])
+                return (not ev.get('priority',False),not ev.get('recheck',False),ev.get('last_success_at') or '',row['discovered_at'],row['url'])
+            queue.sort(key=priority)
+            groups = {}
             for row in queue:
-                if row['domain'] not in domains and len(domains)>=20:
+                domain = row['domain']
+                if domain not in first_domains and len(new_domains)>=20:
                     continue
-                if pages.get(row['domain'],0)>=50:
+                if page_counts.get(domain,0)>=50:
                     continue
-                domains.add(row['domain']);pages[row['domain']]=pages.get(row['domain'],0)+1
-                # The official crawler's public schema only offers a post-load
-                # pageFunction, not a pre-navigation redirect/IP guard. Do not
-                # assert SSRF safety that this actor contract cannot guarantee.
-                c.execute("UPDATE campaign_discovery SET state='blocked',reason=?,checked_at=? WHERE campaign_id=? AND url=?",
-                          ('Official crawler redirect/private-network isolation is not verified.',now,cid,row['url']))
-        self.journal.source('careers',blocked_reason='Official crawler redirect/private-network isolation is not verified; queued career leads are retained.')
+                if domain not in first_domains:
+                    first_domains[domain] = now
+                    new_domains.add(domain)
+                page_counts[domain] = page_counts.get(domain,0)+1
+                groups.setdefault((domain,row['depth']),[]).append(row)
+            for (domain,depth),rows in groups.items():
+                urls = [r['url'] for r in rows]
+                context = {'cycle':cycle,'cap_usd':.50,'domain':domain,'depth':depth,'urls':urls,
+                           'root_url':rows[0]['root_url'],'pages':[{'url':r['url'],'root_url':r['root_url']} for r in rows],
+                           'recheck':any(json.loads(r['evidence_json']).get('recheck') for r in rows),
+                           'priority':any(json.loads(r['evidence_json']).get('priority') for r in rows)}
+                bid = uuid.uuid4().hex
+                c.execute('''INSERT INTO campaign_batches
+                    (id,campaign_id,source,batch_key,input_json,context_json,state,created_at)
+                    VALUES(?,?,'careers',?,?,?,'queued',?)''',
+                          (bid,cid,'careers:'+bid,encode(input_for('careers',urls)),encode(context),now))
+                for row in rows:
+                    c.execute("UPDATE campaign_discovery SET state='scheduled',reason=NULL WHERE campaign_id=? AND url=?",(cid,row['url']))
+        self.journal.source('careers',blocked_reason=None)
+
+    def repair_removed_policy(self, now):
+        """Supersede only unlaunched work denied by the removed local policy."""
+        if self.store.get_meta('campaign_policy_correction_v2'):
+            return
+        prefixes = ('Source robots directives','Robots directives unavailable','Source crawl-delay',
+                    'Source access check unavailable','Destination resolves to a non-public address',
+                    'Official crawler redirect/private-network isolation','Unsafe URL','Private or malformed address')
+        observations = []
+        with self.store._connection(write=True) as c:
+            cid = self.journal.current()['id']
+            sources = set()
+            for row in c.execute("SELECT * FROM campaign_batches WHERE campaign_id=? AND state IN ('blocked','queued') AND reserved_at IS NULL",(cid,)).fetchall():
+                if not (row['error'] or '').startswith(prefixes):
+                    continue
+                observations.append({'kind':'batch','id':row['id'],'state':row['state'],'reason':row['error']})
+                c.execute("UPDATE campaign_batches SET state='superseded',error=?,error_category='superseded_policy' WHERE id=?",
+                          ('Superseded local-policy observation: '+row['error'],row['id']))
+                sources.add(row['source'])
+            for row in c.execute("SELECT * FROM campaign_discovery WHERE campaign_id=? AND state='blocked'",(cid,)).fetchall():
+                if not (row['reason'] or '').startswith(prefixes):
+                    continue
+                observations.append({'kind':'discovery','url':row['url'],'state':row['state'],'reason':row['reason']})
+                c.execute("UPDATE campaign_discovery SET state='queued',reason=NULL WHERE campaign_id=? AND url=?",(cid,row['url']))
+                sources.add('careers')
+            for source in sources:
+                c.execute('UPDATE campaign_sources SET due_at=?,blocked_reason=NULL WHERE campaign_id=? AND source=?',(now,cid,source))
+            c.execute('INSERT INTO metadata VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json',
+                      ('campaign_policy_correction_v2',encode({'at':iso(now),'superseded_observations':observations})))
+
+    def import_career_errors(self, batch, reference, now):
+        """Checkpoint the official crawler's documented named errors dataset.
+
+        Negative item indices distinguish error rows from the default dataset's
+        nonnegative offsets, retaining exact output without moving its checkpoint.
+        """
+        remote = self.store.get_meta('campaign_remote_'+batch['id']) or {}
+        dataset = remote.get('storageIds',{}).get('datasets',{}).get('errors')
+        if not dataset:
+            return True
+        key = 'campaign_crawl_errors_'+batch['id']
+        saved = self.store.get_meta(key) or {'checkpoint':0,'complete':False,'dataset_id':dataset}
+        if saved['complete']:
+            return True
+        items = self.api.items(reference,dataset,saved['checkpoint'])
+        context = json.loads(batch['context_json'])
+        with self.store._connection(write=True) as c:
+            current = c.execute('SELECT value_json FROM metadata WHERE key=?',(key,)).fetchone()
+            if current and json.loads(current[0])['checkpoint']!=saved['checkpoint']:
+                return False
+            for offset,item in enumerate(items,saved['checkpoint']):
+                c.execute('INSERT OR IGNORE INTO campaign_items VALUES(?,?,?,?,?)',
+                          (batch['id'],-1-offset,encode(item),None,'error'))
+                if not isinstance(item,dict):
+                    continue
+                status = item.get('httpStatus')
+                reason = str(item.get('errorExplanation') or item.get('errorCode') or 'Provider crawl failure')
+                category = 'source_access' if status in (401,403,429) else 'provider_response' if status else 'runtime'
+                c.execute('UPDATE campaign_batches SET error=?,error_category=? WHERE id=?',(reason,category,batch['id']))
+                try:
+                    url = canonical_url(item.get('url'))
+                except AccessBlocked:
+                    continue
+                if url in context.get('urls',[]) and not context.get('pilot'):
+                    self.career_failure(c,batch['campaign_id'],url,reason,now)
+            saved.update(checkpoint=saved['checkpoint']+len(items),complete=not bool(items))
+            c.execute('INSERT INTO metadata VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json',(key,encode(saved)))
+        return not bool(items)
 
     def poll(self, batch, now, expired=False, paused=False):
         account = next((a for a in self.journal.accounts() if a['account_id']==batch['account_id']),None)
@@ -236,7 +421,7 @@ class CampaignWorker:
                 if cost is None or not isinstance(cost,(int,float)) or cost<0:
                     self.journal.update_batch(batch['id'],error='Final run cost is unknown; reservation retained.',retry_at=now+300)
                     return
-                self.store.set_meta('campaign_remote_'+batch['id'],{k:run.get(k) for k in ('id','status','startedAt','finishedAt','usageTotalUsd','options')})
+                self.store.set_meta('campaign_remote_'+batch['id'],{k:run.get(k) for k in ('id','status','statusMessage','startedAt','finishedAt','usageTotalUsd','options','storageIds')})
                 self.journal.update_batch(batch['id'],state='importing',remote_status=run['status'],charge_units=units(cost),
                                           dataset_id=run.get('defaultDatasetId'),error=None)
                 batch = {**batch,'state':'importing','dataset_id':run.get('defaultDatasetId'),'remote_status':run['status']}
@@ -248,18 +433,41 @@ class CampaignWorker:
                 if items:
                     self.import_page(batch,items,now)
                 else:
+                    if batch['source']=='careers' and not self.import_career_errors(batch,ref,now):
+                        return
+                    success = batch['remote_status']=='SUCCEEDED'
+                    context = json.loads(batch['context_json'])
+                    error = None if success else 'Partial results retained from '+str(batch['remote_status'])
+                    remote = self.store.get_meta('campaign_remote_'+batch['id']) or {}
+                    message = str(remote.get('statusMessage') or '')
+                    category = None if success else 'source_access' if any(x in message.lower() for x in ('access denied','forbidden','captcha','blocked by','http 403','http 401')) else 'runtime'
+                    if message and not success:
+                        error += ': '+message
+                    final_errors = {'error':error,'error_category':category}
+                    if success:
+                        with self.store._connection() as c:
+                            latest = c.execute('SELECT error_category FROM campaign_batches WHERE id=?',(batch['id'],)).fetchone()
+                        if latest[0] in ('source_access','provider_response','runtime'):
+                            final_errors = {}  # Keep returned per-page failures.
                     self.journal.update_batch(batch['id'],state='done' if batch['remote_status']=='SUCCEEDED' else 'failed',finished_at=now,
-                                              error=None if batch['remote_status']=='SUCCEEDED' else 'Partial results retained from '+str(batch['remote_status']))
+                                              **final_errors)
+                    if batch['source']=='careers' and not context.get('pilot'):
+                        with self.store._connection(write=True) as c:
+                            for url in context.get('urls',[]):
+                                pending = c.execute("SELECT 1 FROM campaign_discovery WHERE campaign_id=? AND url=? AND state='scheduled'",(batch['campaign_id'],url)).fetchone()
+                                if pending:
+                                    self.career_failure(c,batch['campaign_id'],url,error or 'Provider returned no page for this requested URL',now)
                     if batch['remote_status']=='SUCCEEDED':
                         self.journal.source(batch['source'],last_success=now)
         except ApiError as e:
-            self.journal.update_batch(batch['id'],error=str(e),retry_at=now+300)
+            self.journal.update_batch(batch['id'],error=str(e),error_category=e.kind,retry_at=now+300)
 
     def tick(self):
         now = self.clock()
         campaign = self.journal.current()
         if not campaign or not self.journal.claim(self.owner,now):
             return
+        self.repair_removed_policy(now)
         self.repair_normalization()
         expired = bool(campaign['stops_at'] and now>=campaign['stops_at'])
         if expired and campaign['state']!='stopped':
@@ -276,7 +484,7 @@ class CampaignWorker:
                     try:
                         run=self.api.run(account['reference'],batch['run_id'])
                         if run['status'] in TERMINAL:
-                            self.store.set_meta('campaign_remote_'+batch['id'],{k:run.get(k) for k in ('id','status','startedAt','finishedAt','usageTotalUsd','options')})
+                            self.store.set_meta('campaign_remote_'+batch['id'],{k:run.get(k) for k in ('id','status','statusMessage','startedAt','finishedAt','usageTotalUsd','options','storageIds')})
                     except ApiError:
                         pass  # The final report keeps this evidence unresolved.
                 break  # Bound recovery reads per tick.
@@ -306,7 +514,10 @@ class CampaignWorker:
         if not self.journal.claim(self.owner,now):
             return
         self.schedule(now)
-        for batch in self.journal.batches(('queued',)):
+        queued = self.journal.batches(('queued',))
+        queued.sort(key=lambda b:(not json.loads(b['context_json']).get('pilot',False),
+                                  not json.loads(b['context_json']).get('priority',False),b['created_at'],b['id']))
+        for batch in queued:
             if batch['retry_at']>now:
                 continue
             if len(self.journal.batches(ACTIVE))>=2:
@@ -315,11 +526,11 @@ class CampaignWorker:
             try:
                 payload = json.loads(batch['input_json'])
                 validate_input(source,payload)
-                evidence = self.access(access_url(source,payload))
-                self.store.set_meta('campaign_access_'+source,{**evidence,'checked_at':iso(now)})
                 # Every enabled source must pass its own bounded isolated pilot.
-                if campaign['mode']=='production' and source not in self.store.get_meta('campaign_validated_sources',[]):
-                    raise AccessBlocked('This source has not passed a verified pilot.')
+                context = json.loads(batch['context_json'])
+                if campaign['mode']=='production' and not context.get('pilot') and source not in self.store.get_meta('campaign_validated_sources',[]):
+                    self.journal.source(source,blocked_reason='Source validation has not completed.')
+                    continue
                 launched = False
                 cap = json.loads(batch['context_json'])['cap_usd']
                 commitments = self.journal.batches()
@@ -350,16 +561,20 @@ class CampaignWorker:
                     except ApiError as e:
                         certain = e.kind in ('input','authentication','exhausted','campaign_expired_before_launch')
                         self.journal.update_batch(batch['id'],state='failed' if certain else 'ambiguous',error=str(e),
-                                                  finished_at=self.clock() if certain else None,retry_at=self.clock()+300)
+                                                  error_category=e.kind,finished_at=self.clock() if certain else None,retry_at=self.clock()+300)
+                        if certain and source=='careers' and not context.get('pilot'):
+                            with self.store._connection(write=True) as c:
+                                for url in context.get('urls',[]):
+                                    self.career_failure(c,batch['campaign_id'],url,str(e),self.clock())
                     launched = True
                     break
                 if not launched:
                     self.journal.update_batch(batch['id'],retry_at=now+300,error='No account currently admits this reservation.')
             except (AccessBlocked,ValueError) as e:
-                self.journal.update_batch(batch['id'],state='blocked',error=str(e))
+                self.journal.update_batch(batch['id'],state='blocked',error=str(e),error_category='input')
                 self.journal.source(source,blocked_reason=str(e),last_attempt=now)
             except ApiError as e:
-                self.journal.update_batch(batch['id'],error=str(e),retry_at=now+300)
+                self.journal.update_batch(batch['id'],error=str(e),error_category=e.kind,retry_at=now+300)
                 self.journal.source(source,blocked_reason=str(e))
         self.store.set_meta('campaign_report',self.journal.status(self.clock()))
 

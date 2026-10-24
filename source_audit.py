@@ -14,7 +14,7 @@ SOURCE_CATALOG = [
     {'id':'indeed','name':'Indeed','match':'indeed','method':'Retained Apify collector records','mode':'retained','home':'https://sg.indeed.com/','retained_file':'apify_jobs_raw.json','scope':'Imported listing evidence. No recurring Indeed collector is running.'},
     {'id':'cultjobs','name':'Cultjobs','match':'cultjobs','method':'Retained site collector records','mode':'retained','home':'https://www.cultjobs.com/','retained_file':'cultjobs_raw.json','scope':'Imported listing evidence. Some descriptions were truncated by the original collector. No recurring Cultjobs collector is running.'},
     {'id':'google','name':'Google search','match':'google','method':'Retained search-result snippets','mode':'retained','home':'https://www.google.com/','retained_file':'apify_jobs_raw.json','scope':'Search results are leads, not verified vacancies. Identified aggregate results pages are excluded from discovery.'},
-    {'id':'careers','name':'Career websites','match':'career websites','method':'Vetted public career leads','mode':'retained','scope':'Career leads and listing rechecks are retained in a bounded queue. Crawling awaits verified redirect/private-network isolation.'},
+    {'id':'careers','name':'Career websites','match':'career websites','method':'Official Website Content Crawler','mode':'retained','scope':'Career pages are queued by domain and discovery depth. Returned evidence must support role, employer, Singapore location and vacancy description before promotion.'},
 ]
 
 
@@ -83,9 +83,10 @@ def build_audit(store, *, scheduler_enabled, running, interval_seconds):
                           last_success=datetime.fromtimestamp(paid['last_success'],timezone.utc).isoformat() if paid['last_success'] else source['last_success'])
             source['state'] = 'blocked' if paid['blocked_reason'] else campaign['state']
             source['method'] = 'Bounded Apify campaign with persisted run and import checkpoints'
-            source['scope'] = {'linkedin':'Eight Singapore queries every six hours, up to 100 results each, subject to access and budget checks.',
-                               'indeed':'Eight Singapore queries every six hours, up to 100 results each, subject to access and budget checks.',
-                               'google':'Up to 40 distinct discovery queries daily, three result pages each. Results remain leads.'}.get(source['id'],source['scope'])
+            source['scope'] = {'linkedin':'Eight Singapore queries every six hours, up to 100 results each. Provider authentication, input and runtime outcomes are recorded.',
+                               'indeed':'Eight Singapore queries every six hours, up to 100 results each. Provider authentication, input and runtime outcomes are recorded.',
+                               'google':'Up to 40 distinct discovery queries daily, three result pages each. Search-result evidence remains inspectable leads until a career page supports promotion.',
+                               'careers':'Up to 20 new domains daily, depth two and 50 pages per domain. Returned pages must supply role, employer, Singapore location and description evidence to promote a vacancy.'}.get(source['id'],source['scope'])
     return {'generated_at':now.isoformat(),'total':len(jobs),'sources':sources,'coverage':coverage(jobs),'campaign':campaign,
             'discovery_count':sum(j['status'] not in ('expired','closed','unavailable') for j in jobs),
             'excluded_count':sum(j['status'] in ('expired','closed','unavailable') for j in jobs),

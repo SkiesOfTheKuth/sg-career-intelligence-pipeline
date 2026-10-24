@@ -1,4 +1,14 @@
-# Independent workspace acceptance — 23 October 2026
+# Campaign continuation — 24 October 2026 (acceptance pending)
+
+The user's corrected plan removes local robots, DNS/private-network and redirect admission restrictions and remote actor isolation verification. The official crawler's optional robots setting is false; canonical URLs continue to identify and deduplicate evidence. Prior gate descriptions below are **superseded historical observations**, not current collection prerequisites. The original campaign identity, spending ledger and **30 October 2026, 21:37:21 SGT** deadline remain unchanged.
+
+Implementation is being extended for LinkedIn, Google and career crawling with source-specific isolated validation, daily Google batches at the US$0.50 minimum, persistent bounded career discovery/extraction, production versus validation counts and inspectable leads. Historical policy-blocked unlaunched work is eligible for targeted supersession/requeue; completed runs, reservations, checkpoints and provider failures must remain. The requested full workflow is **not yet accepted**.
+
+Pre-rollout verification on 24 October: all four pinned actor/build schemas and pricing still match live Apify metadata. A fresh production backup contains 4,927 jobs, 5,744 source-evidence rows, 2,219 campaign items, 89 batches and zero server-side applications. Additive migration, repeat migration and restoration preserve complete original table content digests; nonempty notes/drafts/snapshots/history are covered by isolated regressions. The explicit full suite passes **227 tests**; all three JavaScript syntax checks pass. A 20,000-record projected search benchmark improved from 8.845 to **1.679 seconds** by avoiding redundant copies of nested read-only evidence before pagination; scoring and filter semantics remain unchanged. Artifacts are in `output/campaign/continuation/`. Live deployment and source-validation results follow separately.
+
+Current verification must distinguish local regression results from fresh production backup/restoration comparisons, deployed source validation and charge reconciliation, real returned-record journeys at 390/768/1,440 px, disposable application editing/persistence and projected-volume performance. Two unattended six-hour cycles, a daily discovery/crawl cycle, production restart recovery and actual final paid-work shutdown/import completion remain required observed evidence. Subsequent verified results belong in this current section; the earlier snapshots below do not prove today's state.
+
+# Historical independent workspace acceptance — 23 October 2026
 
 Verified workspace: **https://sg-career-intelligence.onrender.com**. Release **2.2.2**, deployed revision **`ef71193d68456ea4437da4433685cbf46a81a617`**, Render deployment **`dep-dbdirnp5efls73atcgh0`**, live **09:51:47 UTC / 17:51:47 SGT**. This independent audit supersedes the reports below. No substantiated critical or major defect remains after fixes, a separate reviewer, and deployed verification.
 
@@ -214,7 +224,7 @@ During verification, broad unittest discovery imported three ignored historical 
 The three local probes now have `__main__` guards, and committed `test_offline_safety.py` verifies that importing them cannot issue GET/POST requests. The final suite used explicit test modules. The credential-bearing historical probes remain excluded from Git. No credentials were rotated, revoked or deleted. This incident was disclosed during the task and is retained in `output/verification-side-effect.json`.
 
 
-## Seven-day campaign phase — 23 October 2026 (operational acceptance pending)
+## Historical seven-day campaign phase — 23 October 2026 (policy gates superseded; operational acceptance pending)
 
 Implemented the native lifespan campaign worker, additive schema-v3 journal, transactional conservative budgets, current actor contracts, account references/usage checks, launch reconciliation, checkpointed imports, isolated pilot tables, stop/abort policy, discovery queue and authenticated status/pause/report controls. The campaign has not yet demonstrated two real unattended six-hour cycles or actual seven-day shutdown.
 

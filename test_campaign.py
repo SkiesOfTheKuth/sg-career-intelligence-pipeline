@@ -10,7 +10,7 @@ from unittest.mock import patch
 from campaign import CampaignWorker, iso
 from campaign_apify import ApiError
 from campaign_apify import Apify
-from campaign_sources import (AccessBlocked, canonical_url, public_addresses, check_robots,
+from campaign_sources import (AccessBlocked, canonical_url,
     input_for, validate_input, queries)
 from campaign_store import CampaignStore, DAY, units
 from storage import Store
@@ -228,10 +228,10 @@ class CampaignTests(unittest.TestCase):
         self.assertEqual(worker.api.tokens,{})
         self.assertIn('Invalid APIFY',self.store.get_meta('campaign_account_error'))
 
-    def test_access_failure_has_explicit_status_without_charge(self):
+    def test_removed_access_callback_cannot_block_actor_submission(self):
         self.enqueue();self.worker.access=lambda u:(_ for _ in ()).throw(AccessBlocked('robots disallow'))
-        self.worker.tick();self.assertEqual(self.j.batches()[0]['state'],'blocked')
-        self.assertEqual(self.j.status()['actor_committed_usd'],0)
+        self.worker.tick();self.assertEqual(self.j.batches()[0]['state'],'running')
+        self.assertEqual(self.j.status()['actor_committed_usd'],.2)
 
     def test_discovery_cycles_and_depth_limit(self):
         cid=self.j.current()['id']
@@ -258,19 +258,15 @@ class CampaignTests(unittest.TestCase):
 
 
 class URLTests(unittest.TestCase):
-    def test_unsafe_urls(self):
-        for url in ['file:///etc/passwd','http://127.0.0.1/a','http://169.254.169.254/x','http://[::1]/','http://user:pass@example.org','http://localhost/','http://example.local/','https://example.org:8080/','https://example.org\\@127.0.0.1/']:
+    def test_non_http_or_malformed_urls_have_no_http_identity(self):
+        for url in ['file:///etc/passwd','https://example.org\\@127.0.0.1/']:
             with self.subTest(url=url),self.assertRaises(AccessBlocked):canonical_url(url)
         self.assertEqual(canonical_url('https://example.org/jobs?utm_source=a&id=1#x'),'https://example.org/jobs?id=1')
 
-    def test_private_dns_and_mixed_answer_rejected(self):
-        with patch('socket.getaddrinfo',return_value=[(2,1,6,'',('93.184.216.34',443)),(2,1,6,'',('127.0.0.1',443))]):
-            with self.assertRaises(AccessBlocked):public_addresses('example.org')
-
-    def test_robots_denial_unknown_and_delay(self):
-        for status,text in [(200,'User-agent: *\nDisallow: /jobs'),(403,''),(200,'User-agent: *\nCrawl-delay: 5')]:
-            with self.assertRaises(AccessBlocked):check_robots('https://example.org/jobs',lambda u:(u,status,text))
-        self.assertTrue(check_robots('https://example.org/jobs',lambda u:(u,404,''))['allowed'])
+    def test_private_network_and_nonstandard_ports_remain_identities(self):
+        with patch('socket.getaddrinfo',side_effect=AssertionError('Canonicalization must not resolve DNS')):
+            for url in ['http://127.0.0.1/a','http://169.254.169.254/x','http://[::1]/','http://localhost/','http://example.local/','https://example.org:8080/']:
+                self.assertEqual(canonical_url(url),url)
 
     def test_native_run_cap_timeout_and_no_automatic_restart(self):
         api=Apify(['test-token'])

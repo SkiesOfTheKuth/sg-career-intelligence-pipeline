@@ -464,11 +464,17 @@ def build_job(raw, job_id, legacy=None):
     return present_job(job)
 
 
-def present_job(job, now=None, *, with_assessment=True):
+def present_job(job, now=None, *, with_assessment=True, copy_result=True):
     raw_evidence = job.get('raw_evidence')
     # The stored assessment is obsolete derived data and will be replaced below.
     # Copying its entire evidence tree for every search is wasted work.
-    job = {k: copy.deepcopy(v) for k,v in job.items() if k != 'assessment' and (with_assessment or k != 'raw_evidence')}
+    # Search/export only read nested evidence. Avoid duplicating every quotation
+    # for thousands of rows before pagination; normal callers keep detached data.
+    job = {k: copy.deepcopy(v) if copy_result else v for k,v in job.items() if k != 'assessment' and (with_assessment or k != 'raw_evidence')}
+    if not copy_result:
+        job['verification'] = dict(job.get('verification') or {})
+        if job.get('field_provenance'):
+            job['field_provenance'] = dict(job['field_provenance'])
     now = parse_date(now) if isinstance(now, str) else now or datetime.now(UTC)
     if now.tzinfo is None:
         now = now.replace(tzinfo=UTC)
@@ -495,8 +501,9 @@ def present_job(job, now=None, *, with_assessment=True):
     requirements = job.get('requirements') or {}
     job['employment_types'] = normalize_employment_types(job.get('employment_type'))
     if with_assessment:
-        job['assessment'] = copy.deepcopy(_current_assessment(job.get('title') or '', job.get('description') or '',
-            tuple(requirements.get('mandatory') or []), tuple(requirements.get('preferred') or []), bool(job.get('description_complete'))))
+        assessment = _current_assessment(job.get('title') or '', job.get('description') or '',
+            tuple(requirements.get('mandatory') or []), tuple(requirements.get('preferred') or []), bool(job.get('description_complete')))
+        job['assessment'] = copy.deepcopy(assessment) if copy_result else assessment
         job['assessment_summary'] = job['assessment']['summary']
     return job
 

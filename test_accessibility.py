@@ -84,7 +84,7 @@ class AccessibilityContracts(unittest.TestCase):
         self.page.keyboard.press('Tab')
         self.assertEqual(self.page.locator(':focus').get_attribute('id'), 'record-query')
         order = self.page.locator('#audit-content > *').evaluate_all('(nodes)=>nodes.map(n=>n.classList[0])')
-        self.assertEqual(order, ['collection-status', 'records-section', 'flow-section', 'audit-detail-disclosure', 'history-section'])
+        self.assertEqual(order, ['collection-status', 'records-section', 'leads-section', 'flow-section', 'audit-detail-disclosure', 'history-section'])
 
     def test_desktop_sources_keep_flow_first_in_reading_and_keyboard_order(self):
         self.page.set_viewport_size({'width': 1440, 'height': 900})

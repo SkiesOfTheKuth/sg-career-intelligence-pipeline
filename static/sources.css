@@ -49,7 +49,7 @@ progress { display: block; width: 100%; height: 7px; border: 0; border-radius: 4
 progress::-webkit-progress-bar { background: #e8edf4; border-radius: 4px; }
 progress::-webkit-progress-value { background: var(--accent); border-radius: 4px; }
 progress::-moz-progress-bar { background: var(--accent); border-radius: 4px; }
-.records-section, .history-section { margin-top: 2.7rem; }
+.records-section, .leads-section, .history-section { margin-top: 2.7rem; }
 .section-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: .5rem; }
 .section-heading a { min-height: 44px; display: inline-flex; align-items: center; font-size: .85rem; }
 .record-filters { display: flex; align-items: flex-end; flex-wrap: wrap; gap: .8rem; margin: .5rem 0 1rem; }
@@ -145,3 +145,9 @@ body.inspector-open { overflow: hidden; }
 .campaign-options li { margin-block: .6rem; overflow-wrap: anywhere; }
 .campaign-options .inspector-facts { max-width: 75ch; }
 .campaign-options a { display: inline-flex; min-height: 44px; align-items: center; }
+.campaign-source { padding: .8rem 0; border-top: 1px solid var(--line); }
+.campaign-source h3 { color: var(--ink); margin: 0 0 .4rem; }
+.campaign-source p { font-size: .85rem; overflow-wrap: anywhere; }
+.leads-section > p { font-size: .85rem; max-width: 75ch; }
+.leads-section .audit-record p { overflow-wrap: anywhere; }
+.leads-section .pagination { flex-wrap: wrap; }

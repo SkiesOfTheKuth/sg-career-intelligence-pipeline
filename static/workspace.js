@@ -800,7 +800,7 @@
     const title = el('h2', '', job.title || 'Unavailable listing'); title.id = 'detail-title'; title.tabIndex = -1;
     header.append(title, paragraph(job.company || 'Company not stated', 'company'), roleMetadata(job));
     const facts = el('dl', 'detail-facts');
-    for (const [label, value] of [['Work arrangement', job.work_arrangement], ['Thai relevance', job.thai_relevance], ['Deadline', date(job.deadline)]]) {
+    for (const [label, value] of [['Work arrangement', job.work_arrangement], ['Thai relevance', job.thai_relevance], ['First collected', date(job.discovered_at || job.collected_at)], ['Employer posting date', date(job.posted_at)], ['Deadline', date(job.deadline)]]) {
       if (value && value !== 'None' && value !== 'Unknown') facts.append(el('dt', '', label), el('dd', '', value));
     }
     if (facts.children.length) header.append(facts);

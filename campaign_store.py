@@ -70,6 +70,9 @@ def initialize(connection):
     ]
     for statement in statements:
         connection.execute(statement)
+    columns = {r[1] for r in connection.execute('PRAGMA table_info(campaign_batches)')}
+    if 'error_category' not in columns:
+        connection.execute('ALTER TABLE campaign_batches ADD COLUMN error_category TEXT')
 
 
 class CampaignStore:
@@ -214,6 +217,16 @@ class CampaignStore:
             if not account or not account['available'] or account['expiry'] and account['expiry'] <= now:
                 return False, 'Account is unavailable.'
             rows, recent, caps, rolling, observed, extra = self._exposure(c, campaign['id'], now)
+            # Supplemental validation shares the original pilot allowance even
+            # after production activation. It never resets the campaign clock.
+            is_pilot = bool(json.loads(b['context_json']).get('pilot')) or campaign['mode'] == 'pilot'
+            if is_pilot:
+                pilot_rows = [r for r in rows if json.loads(r['context_json']).get('pilot') or r['batch_key'].startswith('pilot:')]
+                pilot_caps = sum(max(r['reserved_units'], r['charge_units'] or 0) for r in pilot_rows)
+                if pilot_caps + amount > units(2.5) or pilot_caps + amount + extra > units(3):
+                    return False, 'The original pilot allowance is fully committed.'
+            if b['source'] == 'google' and amount < units(.5):
+                return False, 'Google requires a minimum US$0.50 reservation.'
             # Reserve $35 across seven days for ancillary use; $5 each rolling day.
             total_limit = units(2.5) if campaign['mode'] == 'pilot' else units(315)
             if caps + amount > total_limit or caps + amount + extra > units(3 if campaign['mode'] == 'pilot' else 350):
@@ -234,7 +247,7 @@ class CampaignStore:
             return True, None
 
     def update_batch(self, batch_id, **fields):
-        allowed = {'state','run_id','dataset_id','remote_status','charge_units','finished_at','error','retry_at','attempts'}
+        allowed = {'state','run_id','dataset_id','remote_status','charge_units','finished_at','error','error_category','retry_at','attempts'}
         if not fields or set(fields) - allowed:
             raise ValueError('Invalid run update')
         with self.store._connection(write=True) as c:
@@ -260,6 +273,13 @@ class CampaignStore:
             unique = c.execute('SELECT COUNT(DISTINCT i.job_id) FROM campaign_items i JOIN campaign_batches b ON b.id=i.batch_id WHERE b.campaign_id=? AND i.job_id IS NOT NULL',(row['id'],)).fetchone()[0]
             all_batches = c.execute('SELECT * FROM campaign_batches WHERE campaign_id=?',(row['id'],)).fetchall()
             domains = c.execute('SELECT COUNT(DISTINCT domain) FROM campaign_discovery WHERE campaign_id=?',(row['id'],)).fetchone()[0]
+            identities = [(r['source'], bool(json.loads(r['context_json']).get('pilot')), r['job_id']) for r in c.execute(
+                'SELECT DISTINCT b.source,b.context_json,i.job_id FROM campaign_items i JOIN campaign_batches b ON b.id=i.batch_id WHERE b.campaign_id=? AND i.job_id IS NOT NULL', (row['id'],))]
+        def counts(batches, pilot, source=None):
+            relevant = [b for b in batches if bool(json.loads(b['context_json']).get('pilot')) == pilot and (source is None or b['source']==source)]
+            return {**{key:sum(b[key] for b in relevant) for key in ('new_count','updated_count','duplicate_count','lead_count')},
+                    'runs':sum(b['reserved_at'] is not None for b in relevant),
+                    'unique_supported_vacancies':len({jid for src,p,jid in identities if p==pilot and (source is None or src==source)})}
         cycles = {}
         for batch in all_batches:
             context=json.loads(batch['context_json'])
@@ -277,6 +297,15 @@ class CampaignStore:
             for key in ('new_count','updated_count','duplicate_count','lead_count'):
                 s[key] = sum(r[key] for r in relevant)
             s['runs'] = len(relevant)
+            s['actor_committed_usd'] = sum(r['reserved_units'] for r in relevant)/1e6
+            s['reported_run_charges_usd'] = sum(r['charge_units'] or 0 for r in relevant)/1e6
+            s['production_counts'] = counts(all_batches, False, s['source'])
+            s['pilot_counts'] = counts(all_batches, True, s['source'])
+            latest = [b for b in all_batches if b['source']==s['source'] and b['state']!='superseded']
+            latest.sort(key=lambda b:b['reserved_at'] or b['created_at'],reverse=True)
+            if latest:
+                s['outcome'] = latest[0]['state']
+                s['error_category'] = latest[0]['error_category']
         return {**{k:v for k,v in row.items() if k not in ('owner','lease_until')},
                 'actor_committed_usd':caps/1e6, 'rolling_actor_committed_usd':rolling/1e6,
                 'reported_run_charges_usd':sum(r['charge_units'] or 0 for r in rows)/1e6,
@@ -284,8 +313,11 @@ class CampaignStore:
                 'total_ceiling_usd':350, 'rolling_ceiling_usd':50, 'pilot_ceiling_usd':3,
                 'sources':sources, 'discovery':queue,
                 'unique_supported_vacancies':unique,
+                'production_counts':counts(all_batches,False), 'pilot_counts':counts(all_batches,True),
                 'discovered_domains':domains, 'cycles':list(cycles.values()),
                 'shutdown_verification':self.store.get_meta('campaign_shutdown_verification'),
                 'accounts':{'verified':accounts[0], 'available':accounts[1] or 0, 'unknown_expiry':accounts[2] or 0},
-                'runs':[{k:r[k] for k in ('id','source','state','reserved_at','finished_at','run_id','remote_status','checkpoint','new_count','updated_count','duplicate_count','lead_count','error')} for r in rows[-100:]],
+                'runs':[{**{k:r[k] for k in ('id','source','state','reserved_at','finished_at','run_id','remote_status','checkpoint','new_count','updated_count','duplicate_count','lead_count','error','error_category')},
+                         'pilot':bool(json.loads(r['context_json']).get('pilot')),
+                         'cap_usd':r['reserved_units']/1e6,'charge_usd':r['charge_units']/1e6 if r['charge_units'] is not None else None} for r in all_batches[-100:]],
                 'accounting_note':'Caps remain committed after completion. Account usage includes storage, reads and transfers; credit expiry is unknown unless independently verified.'}

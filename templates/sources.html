@@ -73,6 +73,18 @@
         <div id="records" class="audit-records" aria-busy="false"></div>
         <div class="pagination"><button type="button" id="previous-records">Previous</button><span id="record-page"></span><button type="button" id="next-records">Next</button></div>
       </section>
+      <section aria-labelledby="leads-heading" class="leads-section">
+        <h2 id="leads-heading">Inspect discovery leads</h2>
+        <p class="secondary">Search results and pages with incomplete vacancy evidence remain here. Only supported vacancies appear in Find roles.</p>
+        <form id="lead-filters" class="record-filters">
+          <label>Lead source<select id="lead-source"><option value="">All campaign sources</option><option value="google">Google</option><option value="careers">Career websites</option><option value="linkedin">LinkedIn</option><option value="indeed">Indeed</option></select></label>
+          <label>Collection scope<select id="lead-scope"><option value="false">Production collection</option><option value="true">Isolated validation</option></select></label>
+          <button type="submit">Reload leads</button>
+        </form>
+        <p id="lead-count" class="secondary" role="status" aria-live="polite"></p>
+        <div id="leads" class="audit-records" aria-busy="false"></div>
+        <div class="pagination"><button type="button" id="previous-leads">Previous leads</button><span id="lead-page"></span><button type="button" id="next-leads">Next leads</button></div>
+      </section>
       <section aria-labelledby="history-heading" class="history-section"><h2 id="history-heading">Collection history</h2><p class="secondary">The most recent 100 runs. Each run records query outcomes; it does not verify every stored listing.</p><div id="history"></div></section>
     </div>
   </main>

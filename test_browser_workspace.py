@@ -218,7 +218,13 @@ class EditorRegression(unittest.TestCase):
     def test_user_draft_edit_wins_over_late_generation(self):
         page=self.page();held=[]
         page.route('**/api/drafts/role-1',lambda route:held.append(route))
-        page.get_by_role('button',name='Prepare application',exact=True).click()
+        # Establish the Preparing revision before testing a late generation
+        # response; otherwise the fixture can race its unrelated stage save.
+        with page.expect_response(lambda response: response.request.method == 'PUT'
+                and response.url.endswith('/api/applications/role-1')
+                and response.request.post_data_json.get('stage') == 'Preparing'):
+            page.get_by_role('button',name='Prepare application',exact=True).click()
+        expect(page.locator('#save-feedback > .save-status')).to_have_text('Saved')
         with page.expect_response(lambda response: response.request.method == 'PUT'
                 and response.url.endswith('/api/applications/role-1')
                 and (response.request.post_data_json.get('drafts') or {}).get('cover_letter') == 'my truthful draft'):
