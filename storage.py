@@ -127,7 +127,7 @@ class Store:
             """)
         with self._connection(write=True) as connection:
             version = connection.execute('PRAGMA user_version').fetchone()[0]
-            if version > 4:
+            if version > 5:
                 raise ValueError('Database schema is newer than this application supports')
             if version < 2:
                 columns = {row['name'] for row in connection.execute('PRAGMA table_info(import_conflicts)')}
@@ -139,6 +139,10 @@ class Store:
                 from campaign_store import initialize as initialize_campaign
                 initialize_campaign(connection)
                 connection.execute('PRAGMA user_version = 4')
+            if version < 5:
+                from campaign_bursts import initialize as initialize_bursts
+                initialize_bursts(connection)
+                connection.execute('PRAGMA user_version = 5')
         return self
 
     @staticmethod

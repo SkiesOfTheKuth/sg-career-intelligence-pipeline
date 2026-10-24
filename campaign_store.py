@@ -192,6 +192,10 @@ class CampaignStore:
         return rows, recent, caps, rolling, observed, extra
 
     def _budget_reason(self, c, campaign, b, amount, now):
+        from campaign_bursts import Bursts
+        burst_reason = Bursts(self).budget_reason(c, campaign, b, amount, now)
+        if burst_reason:
+            return burst_reason
         rows, recent, caps, rolling, observed, extra = self._exposure(c, campaign['id'], now)
         is_pilot = bool(json.loads(b['context_json']).get('pilot')) or campaign['mode'] == 'pilot'
         if is_pilot:
@@ -204,6 +208,8 @@ class CampaignStore:
         total_limit = units(2.5) if campaign['mode'] == 'pilot' else units(315)
         if caps + amount > total_limit or caps + amount + extra > units(3 if campaign['mode'] == 'pilot' else 350):
             return 'Campaign budget is fully committed.'
+        if b['burst_id']:
+            return None  # One-day limits already checked; campaign totals still apply.
         if rolling + amount > units(45) or rolling + amount + extra > units(50):
             return 'Rolling 24-hour budget is fully committed.'
         if sum(r['reserved_units'] for r in recent if r['source'] == b['source']) + amount > units(ALLOWANCES[b['source']]):
@@ -255,10 +261,10 @@ class CampaignStore:
             if reason:
                 return False, reason
             rows = c.execute('SELECT * FROM campaign_batches WHERE campaign_id=? AND reserved_at IS NOT NULL', (campaign['id'],)).fetchall()
-            account_caps = sum(r['reserved_units'] for r in rows if r['account_id'] == account_id)
             # Both observed usage and campaign commitments count against the
             # verified hard limit. No cash-overage settings are ever changed.
-            if max(account['usage_units'], account['baseline_units'] + account_caps) + amount + units(.15) > account['limit_units']:
+            from campaign_bursts import account_headroom
+            if amount > account_headroom(c, campaign['id'], account):
                 return False, 'Account credit capacity is exhausted.'
             if not campaign['started_at']:
                 c.execute('UPDATE campaigns SET started_at=?,stops_at=? WHERE id=?', (now, now + 7 * DAY, campaign['id']))
@@ -281,6 +287,7 @@ class CampaignStore:
             c.execute('UPDATE campaign_sources SET ' + ','.join(k+'=?' for k in fields) + ' WHERE campaign_id=? AND source=?', [*fields.values(), row['id'], source])
 
     def status(self, now=None):
+        from campaign_bursts import Bursts
         now = time.time() if now is None else now
         row = self.current()
         if not row:
@@ -331,6 +338,7 @@ class CampaignStore:
                 'reported_run_charges_usd':sum(r['charge_units'] or 0 for r in rows)/1e6,
                 'observed_account_usage_usd':observed/1e6, 'ancillary_or_unreconciled_usd':extra/1e6,
                 'total_ceiling_usd':350, 'rolling_ceiling_usd':50, 'pilot_ceiling_usd':3,
+                'burst':Bursts(self).report(now),
                 'sources':sources, 'discovery':queue,
                 'unique_supported_vacancies':unique,
                 'production_counts':counts(all_batches,False), 'pilot_counts':counts(all_batches,True),
@@ -338,6 +346,6 @@ class CampaignStore:
                 'shutdown_verification':self.store.get_meta('campaign_shutdown_verification'),
                 'accounts':{'verified':accounts[0], 'available':accounts[1] or 0, 'unknown_expiry':accounts[2] or 0},
                 'runs':[{**{k:r[k] for k in ('id','source','state','reserved_at','finished_at','run_id','remote_status','checkpoint','new_count','updated_count','duplicate_count','lead_count','error','error_category')},
-                         'pilot':bool(json.loads(r['context_json']).get('pilot')),
+                         'pilot':bool(json.loads(r['context_json']).get('pilot')), 'burst_id':r['burst_id'],
                          'cap_usd':r['reserved_units']/1e6,'charge_usd':r['charge_units']/1e6 if r['charge_units'] is not None else None} for r in all_batches[-100:]],
                 'accounting_note':'Caps remain committed after completion. Account usage includes storage, reads and transfers; credit expiry is unknown unless independently verified.'}

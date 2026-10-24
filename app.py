@@ -398,6 +398,22 @@ def campaign_report(user=Depends(verify_credentials),store=Depends(get_store)):
                           'Future unattended cycles and deadline shutdown require observed runtime evidence.']}
 
 
+@app.post('/api/campaign/burst')
+async def start_campaign_burst(payload:dict,request:Request,user=Depends(verify_credentials)):
+    worker=request.app.state.campaign_worker
+    if set(payload) != {'burst_id'}:
+        raise HTTPException(422,'Provide only the stable burst_id; authorized limits are fixed server-side.')
+    try:
+        return await owned_operation(worker,lambda:worker.start_burst(payload['burst_id']))
+    except ValueError as exc:
+        raise HTTPException(409,str(exc))
+    except Exception as exc:
+        from campaign_apify import ApiError
+        if isinstance(exc,ApiError):
+            raise HTTPException(409,str(exc))
+        raise
+
+
 @app.get('/api/audit/records/{job_id}')
 def source_record(job_id:str,offset:int=Query(0,ge=0),limit:int=Query(10,ge=1,le=50),user=Depends(verify_credentials),store=Depends(get_store)):
     result=inspect_record(store,job_id,offset,limit)

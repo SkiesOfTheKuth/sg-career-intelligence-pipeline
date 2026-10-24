@@ -23,7 +23,7 @@ class ContinuationTests(unittest.TestCase):
             c.execute('PRAGMA user_version=3')
         store.initialize()
         with store._connection() as c:
-            self.assertEqual(c.execute('PRAGMA user_version').fetchone()[0],4)
+            self.assertEqual(c.execute('PRAGMA user_version').fetchone()[0],5)
             self.assertIn('error_category',[r[1] for r in c.execute('PRAGMA table_info(campaign_batches)')])
         journal=CampaignStore(store);journal.create();journal.status()
     def setUp(self):

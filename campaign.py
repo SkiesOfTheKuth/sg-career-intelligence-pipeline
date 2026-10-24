@@ -18,6 +18,7 @@ from campaign_sources import (CONTRACTS, CORE, HISTORICAL, NAMES, AccessBlocked,
     access_url, canonical_url, extract_links, input_for, merge_job, normalize,
     queries, relevant_career_url, validate_input)
 from campaign_store import CampaignStore, DAY, ACTIVE, encode, units
+from campaign_bursts import Bursts, account_headroom
 from evidence import source_key, salary_presentation
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,7 @@ def disk_capacity(store):
 class CampaignWorker:
     def __init__(self, store, api=None, access=None, clock=time.time):
         self.store, self.journal = store, CampaignStore(store)
+        self.bursts = Bursts(self.journal)
         try:
             self.api = api if api is not None else Apify()
         except (ValueError,TypeError):
@@ -73,6 +75,30 @@ class CampaignWorker:
         campaign = self.journal.current() or self.journal.create(self.clock())
         self.refresh_accounts(self.clock())
         return self.journal.status()
+
+    def start_burst(self, burst_id):
+        existing = self.bursts.current()
+        if existing:
+            if existing['id'] != burst_id:
+                raise ValueError('The authorized burst already exists; reuse its burst_id.')
+            self.bursts.reconcile(self.clock(), self.store.get_meta('campaign_account_error'))
+            return self.bursts.report(self.clock())
+        if not disk_capacity(self.store)['safe'] or not self.store.get_meta('last_backup'):
+            raise ValueError('Verified backup and sufficient disk capacity are required.')
+        if not self.refresh_accounts(self.clock()):
+            raise ValueError('Account authentication/capacity verification failed; no burst was started.')
+        if not {'indeed','linkedin','google','careers'} <= set(self.store.get_meta('campaign_validated_sources',[])):
+            raise ValueError('All burst sources require their existing isolated validation.')
+        account = next((a for a in self.journal.accounts() if a['available']), None)
+        if not account:
+            raise ValueError('No configured verified account is currently available.')
+        for source in ('indeed','linkedin','google','careers'):
+            contract = self.api.contract(account['reference'],source)
+            self.store.set_meta('campaign_contract_'+source,contract)
+            self.contracts[source]=self.clock()
+        self.bursts.create(burst_id,self.clock())
+        self.bursts.reconcile(self.clock())
+        return self.bursts.report(self.clock())
 
     def pilot(self, source='indeed', urls=None, retry_of=None):
         if source not in NAMES:
@@ -205,6 +231,12 @@ class CampaignWorker:
                 c.execute('INSERT INTO campaign_items VALUES(?,?,?,?,?)',(batch['id'],index,encode(item),job['id'] if job else None,outcome))
                 if isinstance(item,dict) and not pilot:
                     leads = item.get('organicResults',[]) if batch['source']=='google' else []
+                    if batch['source'] in ('indeed','linkedin'):
+                        # Returned links remain discovery evidence; neither a
+                        # query nor a company homepage establishes a vacancy.
+                        leads=[{'url':item[key],'title':item.get('positionName') or item.get('title') or 'Returned career link'}
+                               for key in ('applyUrl','companyWebsite','companyCareerUrl','careerUrl')
+                               if isinstance(item.get(key),str) and relevant_career_url(item[key])]
                     if batch['source']=='careers':
                         leads = extract_links(item)
                         returned = item.get('crawl',{}).get('loadedUrl') or item.get('url')
@@ -245,6 +277,9 @@ class CampaignWorker:
         status = self.journal.status(now)
         if status.get('mode')!='production' or status['state']!='active':
             return
+        if self.bursts.in_window(now):
+            self.bursts.schedule(self,now)
+            return
         for source in status['sources']:
             name = source['source']
             if source['due_at'] > now:
@@ -252,7 +287,7 @@ class CampaignWorker:
             cycle = source['cycle']
             if name != 'careers':
                 with self.store._connection(write=True) as c:
-                    c.execute("UPDATE campaign_batches SET state='superseded',error='Replaced by the next scheduled cycle before launch.' WHERE campaign_id=? AND source=? AND state='queued' AND batch_key NOT LIKE 'pilot:%'",(status['id'],name))
+                    c.execute("UPDATE campaign_batches SET state='superseded',error='Replaced by the next scheduled cycle before launch.' WHERE campaign_id=? AND source=? AND state='queued' AND burst_id IS NULL AND batch_key NOT LIKE 'pilot:%'",(status['id'],name))
             if name in ('linkedin','indeed'):
                 for query in queries(cycle):
                     self.journal.enqueue(name,f'{name}:{cycle}:{query}',input_for(name,query),{'query':query,'cycle':cycle,'cap_usd':.25 if name=='linkedin' else .6875},now)
@@ -276,7 +311,7 @@ class CampaignWorker:
         if career:
             self.schedule_careers(now,career['cycle'],seed_rechecks=False)
 
-    def schedule_careers(self, now, cycle, seed_rechecks=True):
+    def schedule_careers(self, now, cycle, seed_rechecks=True, burst_id=None, batch_limit=None):
         cid = self.journal.current()['id']
         with self.store._connection(write=True) as c:
             if seed_rechecks:
@@ -332,17 +367,20 @@ class CampaignWorker:
                     new_domains.add(domain)
                 page_counts[domain] = page_counts.get(domain,0)+1
                 groups.setdefault((domain,row['depth']),[]).append(row)
-            for (domain,depth),rows in groups.items():
+            for (domain,depth),rows in list(groups.items())[:batch_limit]:
                 urls = [r['url'] for r in rows]
                 context = {'cycle':cycle,'cap_usd':.50,'domain':domain,'depth':depth,'urls':urls,
                            'root_url':rows[0]['root_url'],'pages':[{'url':r['url'],'root_url':r['root_url']} for r in rows],
                            'recheck':any(json.loads(r['evidence_json']).get('recheck') for r in rows),
                            'priority':any(json.loads(r['evidence_json']).get('priority') for r in rows)}
+                context['oldest_success_at'] = min((json.loads(r['evidence_json']).get('last_success_at') or '' for r in rows),default='')
+                if burst_id:
+                    context['burst_id']=burst_id
                 bid = uuid.uuid4().hex
                 c.execute('''INSERT INTO campaign_batches
-                    (id,campaign_id,source,batch_key,input_json,context_json,state,created_at)
-                    VALUES(?,?,'careers',?,?,?,'queued',?)''',
-                          (bid,cid,'careers:'+bid,encode(input_for('careers',urls)),encode(context),now))
+                    (id,campaign_id,source,batch_key,input_json,context_json,state,created_at,burst_id)
+                    VALUES(?,?,'careers',?,?,?,'queued',?,?)''',
+                          (bid,cid,'careers:'+bid,encode(input_for('careers',urls)),encode(context),now,burst_id))
                 for row in rows:
                     c.execute("UPDATE campaign_discovery SET state='scheduled',reason=NULL WHERE campaign_id=? AND url=?",(cid,row['url']))
         self.journal.source('careers',blocked_reason=None)
@@ -516,6 +554,9 @@ class CampaignWorker:
                         self.journal.source(batch['source'],last_success=now)
         except ApiError as e:
             self.journal.update_batch(batch['id'],error=str(e),error_category=e.kind,retry_at=now+300)
+            if e.kind in ('authentication','exhausted','credit_capacity_unverified'):
+                self.store.set_meta('campaign_account_error',str(e))
+                self.bursts.reconcile(self.clock(),str(e))
 
     def tick(self):
         now = self.clock()
@@ -539,7 +580,10 @@ class CampaignWorker:
             self.journal.state('stopped','The 168-hour campaign has ended.')
         for batch in self.journal.batches(ACTIVE):
             if batch['retry_at']<=now or expired:
-                self.poll(batch,now,expired=expired,paused=campaign['state'] in ('paused','stopped'))
+                burst=self.bursts.current() if batch['burst_id'] else None
+                self.poll(batch,now,expired=expired or bool(burst and now>=burst['window_end']),paused=campaign['state'] in ('paused','stopped'))
+        self.bursts.reconcile(self.clock(),self.store.get_meta('campaign_account_error'))
+        self.bursts.close_queued(self.clock())
         # A deployment may introduce richer run evidence after an earlier pilot
         # already completed. Recover its terminal metadata before retention ends.
         for batch in self.journal.batches(('done','failed')):
@@ -573,6 +617,7 @@ class CampaignWorker:
             return
         if now-self.last_accounts>=120:
             self.refresh_accounts(self.clock())
+        self.bursts.reconcile(self.clock(),self.store.get_meta('campaign_account_error'))
         if self.store.get_meta('campaign_account_error'):
             return
         now = self.clock()
@@ -580,7 +625,12 @@ class CampaignWorker:
             return
         self.schedule(now)
         queued = self.journal.batches(('queued',))
+        burst=self.bursts.in_window(now)
+        if burst:
+            queued=[b for b in queued if b['burst_id']==burst['id']]
+        career_slice=sum(b['reserved_units'] for b in self.journal.batches() if burst and b['burst_id']==burst['id'] and b['source']=='careers')
         queued.sort(key=lambda b:(not json.loads(b['context_json']).get('pilot',False),
+                                  (0 if b['source']=='google' or b['source']=='careers' and career_slice<units(2) else 2 if b['source']=='careers' else 1) if b['burst_id'] else 0,
                                   not json.loads(b['context_json']).get('priority',False),b['created_at'],b['id']))
         for batch in queued:
             if batch['retry_at']>now:
@@ -602,14 +652,16 @@ class CampaignWorker:
                 if reason:
                     self.journal.source(source,blocked_reason=reason)
                     self.journal.update_batch(batch['id'],retry_at=self.clock()+300,error=reason)
+                    self.bursts.settle_admission(batch,reason,self.clock())
                     continue
                 commitments = self.journal.batches()
                 occupied = {b['account_id'] for b in commitments if b['state'] in ACTIVE}
                 for account in self.journal.accounts():
                     if not account['available'] or account['account_id'] in occupied:
                         continue
-                    committed_units = sum(b['reserved_units'] for b in commitments if b['account_id']==account['account_id'])
-                    if max(account['usage_units'],account['baseline_units']+committed_units)+units(cap+.15)>account['limit_units']:
+                    with self.store._connection() as c:
+                        headroom=account_headroom(c,campaign['id'],account)
+                    if units(cap)>headroom:
                         continue
                     live = self.api.snapshot(account['reference'])
                     self.journal.account(live,self.clock())
@@ -627,18 +679,26 @@ class CampaignWorker:
                         break  # Another account cannot fix campaign-wide rejection.
                     committed = next(b for b in self.journal.batches(('launching',)) if b['id']==batch['id'])
                     try:
-                        run = self.api.launch(account['reference'],committed,self.journal.current()['stops_at'],self.clock())
+                        stop=self.journal.current()['stops_at']
+                        if committed['burst_id']:
+                            stop=min(stop,self.bursts.current()['window_end'])
+                        run = self.api.launch(account['reference'],committed,stop,self.clock())
                         if not run.get('id'):
                             raise ApiError('ambiguous_write')
                         self.journal.update_batch(batch['id'],state='running',run_id=run['id'],dataset_id=run.get('defaultDatasetId'),remote_status=run['status'])
                     except ApiError as e:
                         certain = e.kind in ('input','authentication','exhausted','campaign_expired_before_launch')
                         self.journal.update_batch(batch['id'],state='failed' if certain else 'ambiguous',error=str(e),
-                                                  error_category=e.kind,finished_at=self.clock() if certain else None,retry_at=self.clock()+300)
+                                                  error_category=e.kind,finished_at=self.clock() if certain else None,
+                                                  charge_units=0 if certain else None,retry_at=self.clock()+300)
                         if certain and source=='careers' and not context.get('pilot'):
                             with self.store._connection(write=True) as c:
                                 for url in context.get('urls',[]):
                                     self.career_failure(c,batch['campaign_id'],url,str(e),self.clock())
+                        if e.kind in ('authentication','exhausted'):
+                            self.store.set_meta('campaign_account_error',str(e))
+                            self.bursts.reconcile(self.clock(),str(e))
+                            return
                     launched = True
                     break
                 if not launched:
@@ -649,6 +709,11 @@ class CampaignWorker:
             except ApiError as e:
                 self.journal.update_batch(batch['id'],error=str(e),error_category=e.kind,retry_at=now+300)
                 self.journal.source(source,blocked_reason=str(e))
+                if e.kind in ('authentication','exhausted','credit_capacity_unverified'):
+                    self.store.set_meta('campaign_account_error',str(e))
+                    self.bursts.reconcile(self.clock(),str(e))
+                    return
+        self.bursts.reconcile(self.clock(),self.store.get_meta('campaign_account_error'))
         self.store.set_meta('campaign_report',self.journal.status(self.clock()))
 
     def repair_locality_leads(self, now):

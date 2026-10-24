@@ -120,7 +120,28 @@
     if (!campaign || campaign.state === 'not_prepared') {detail.append(el('p', 'Paid collection has not started. MyCareersFuture keeps its existing schedule.')); return;}
     facts(detail, [['Automatic stop',date(campaign.stops_at)],['Reported run charges',money(campaign.reported_run_charges_usd)],
       ['Account usage since baseline',money(campaign.observed_account_usage_usd)],['Actor budget committed',`${money(campaign.actor_committed_usd)} total; ${money(campaign.rolling_actor_committed_usd)} in the rolling day`],
-      ['Ceilings','US$50 per rolling 24 hours; US$350 total'],['Last worker heartbeat',date(campaign.heartbeat)]]);
+      ['Ceilings',campaign.burst && !campaign.burst.recurring_policy_restored ? 'One-day burst limits below; US$350 campaign total' : 'US$50 per rolling 24 hours; US$350 total'],['Last worker heartbeat',date(campaign.heartbeat)]]);
+    const burst = campaign.burst;
+    if (burst) {
+      const section = el('section', null, 'campaign-source');
+      section.append(el('h3', `One-day burst · ${burst.local_day} SGT`), el('p', `${burst.state.replaceAll('_', ' ')}${burst.reason ? ': '+burst.reason : ''}`));
+      facts(section, [['Incremental target / soft cap',`${money(burst.target_usd)} / ${money(burst.soft_cap_usd)}`],
+        ['Burst actor charges',money(burst.charged_usd)],['Reserved exposure',money(burst.reserved_exposure_usd)],
+        ['Observed ancillary / shared usage',money(burst.observed_ancillary_usd)],['Verified capacity ceiling',money(burst.capacity_ceiling_usd)],
+        ['Still below the charge target',money(burst.shortfall_usd)],['Burst ends',date(burst.window_end)],
+        ['Imports still pending',number(burst.pending_imports)]]);
+      section.append(el('p', `The target is additional to ${money(burst.baseline_campaign_charged_usd)} already charged. Existing account capacity may leave it underfilled.`, 'field-help'));
+      section.append(el('p', burst.recurring_policy_restored ? 'The recurring campaign policy is restored.' : 'The recurring campaign policy resumes after this SGT-day window.', 'field-help'));
+      for (const source of burst.sources || []) {
+        const outcome = el('details'); outcome.append(el('summary',`${sourceName(source.source)} · ${money(source.charged_usd)} charged · ${number(source.new_count)} new`));
+        outcome.append(el('p',`Allocation: ${money(source.target_allocation_usd)} target, ${money(source.soft_allocation_usd)} soft ceiling. ${money(source.reserved_usd)} committed.`),
+          el('p',`${counts(source)}; ${number(source.failures)} failures. ${source.reason || source.state}.`));
+        const latest = (source.tranches || []).at(-1);
+        if (latest) outcome.append(el('p',`Latest tranche: ${latest.fresh_per_dollar === null ? 'Charge not available for a dollar comparison' : number(Math.round(latest.fresh_per_dollar*100)/100)+' fresh vacancies per charged dollar'}; ${Math.round(latest.duplicate_lead_ratio*100)}% duplicate or lead outcomes.`));
+        section.append(outcome);
+      }
+      section.append(el('p',burst.accounting_note,'field-help')); detail.append(section);
+    }
     if (campaign.reason) detail.append(el('p',campaign.reason,'audit-error'));
     if (campaign.accounting_error) detail.append(el('p',`Admissions blocked: ${campaign.accounting_error}`,'audit-error'));
     if (campaign.worker_error) detail.append(el('p',`Worker needs inspection: ${campaign.worker_error.type}. Last recorded ${date(campaign.worker_error.at)}.`,'audit-error'));
@@ -143,7 +164,7 @@
     if (!(campaign.runs || []).length) runs.append(el('p','No paid batch has been admitted.'));
     for (const run of (campaign.runs || []).slice(-20).reverse()) {
       const row = el('div',null,'history-run');
-      row.append(el('p',`${sourceName(run.source)} · ${run.pilot ? 'Isolated validation' : 'Production'} · ${run.state} · ${date(run.reserved_at)}`),el('p',counts(run)+'.'));
+      row.append(el('p',`${sourceName(run.source)} · ${run.pilot ? 'Isolated validation' : run.burst_id ? 'One-day burst' : 'Production'} · ${run.state} · ${date(run.reserved_at)}`),el('p',counts(run)+'.'));
       row.append(el('p', `Reserved: ${money(run.cap_usd)}. Reported charge: ${money(run.charge_usd)}.${run.error_category ? ' Failure category: '+run.error_category+'.' : ''}`));
       if (run.error) row.append(el('p',run.error,'audit-error'));
       if (run.run_id) row.append(link('Inspect Apify run ↗',`https://console.apify.com/actors/runs/${encodeURIComponent(run.run_id)}`,true));

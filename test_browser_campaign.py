@@ -19,6 +19,14 @@ class CampaignBrowserTests(unittest.TestCase):
                     'reported_run_charges_usd':.06,'observed_account_usage_usd':.061,
                     'actor_committed_usd':.2,'rolling_actor_committed_usd':.2,
                     'accounting_note':'Caps remain committed after completion.',
+                    'burst':{'id':'one-day-20261024','local_day':'2026-10-24','state':'capacity',
+                        'reason':'Verified capacity is committed.','target_usd':150,'soft_cap_usd':200,
+                        'charged_usd':38.2,'reserved_exposure_usd':60.5,'observed_ancillary_usd':.04,
+                        'capacity_ceiling_usd':60.5,'shortfall_usd':111.8,'window_end':1792857600,
+                        'baseline_campaign_charged_usd':19.08,'pending_imports':0,'recurring_policy_restored':False,
+                        'accounting_note':'Completed caps stay committed; shared usage is separate.',
+                        'sources':[{'source':'indeed','charged_usd':28,'reserved_usd':40,'new_count':200,'duplicate_count':12,
+                            'target_allocation_usd':70,'soft_allocation_usd':95,'state':'active','tranches':[], 'failures':0}]},
                     'sources':[{'source':'indeed','new_count':4,'updated_count':0,'duplicate_count':6,'lead_count':0,'due_at':1792780000},
                                {'source':'linkedin','blocked_reason':'Source robots directives disallow this path'}]}
                 pauses=[];errors=[]
@@ -36,7 +44,9 @@ class CampaignBrowserTests(unittest.TestCase):
                 page.goto('https://workspace.test/sources');page.locator('#audit-content').wait_for(state='visible')
                 if width<=650:page.locator('.audit-detail-disclosure > summary').click()
                 page.locator('#campaign-summary').click()
-                expect(page.locator('#campaign-detail')).to_contain_text('US$50 per rolling 24 hours')
+                expect(page.locator('#campaign-detail')).to_contain_text('One-day burst limits below')
+                expect(page.locator('#campaign-detail')).to_contain_text('Verified capacity ceiling')
+                expect(page.locator('#campaign-detail')).to_contain_text('$111.80')
                 expect(page.locator('#campaign-detail')).to_contain_text('robots directives')
                 self.assertLessEqual(page.evaluate('document.documentElement.scrollWidth'),width)
                 page.locator('#campaign-summary').scroll_into_view_if_needed()

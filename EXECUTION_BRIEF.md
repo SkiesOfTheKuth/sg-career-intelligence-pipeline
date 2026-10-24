@@ -4,6 +4,14 @@ Act as a principal product designer and workflow architect who can implement and
 
 ## Authorized seven-day collection campaign — 23 October 2026
 
+### Approved one-day burst — 24 October 2026
+
+Implement and start one idempotent, authenticated burst within today's Asia/Singapore day: **US$150 additional actor charges targeted**, **US$200 conservative exposure soft cap**, with initial Indeed 70/95, LinkedIn 64/84, Google 1/1 and career-validation 15/20 US-dollar target/soft allocations. Preserve the original campaign, ledger, US$350 ceiling and 30 October 2026 21:37:21 SGT deadline. Read [CAMPAIGN.md](CAMPAIGN.md) for the complete current admission, source-value and restoration rules.
+
+Use only existing configured keys deduplicated by verified account ID. Verify pinned contracts, authentication and live credit capacity; hard-stop at available capacity and report exact underfill. The approximately US$15.48 prior charge and US$87.56 headroom estimates are not immutable facts: capture the actual baseline when starting. Fresh 24 October verification found US$19.08 already charged and US$83.95 raw positive credit headroom before conservative commitments. New role/employer/agency inputs must be unused, with exact identities and payloads journaled. Keep Google/day and career/domain/depth/page limits, optional enrichment prohibitions, value-based tranche stopping/reallocation, unchanged fit/application snapshots and separate actor/ancillary accounting.
+
+Capture a fresh production backup, compare full original content after additive migration and restoration, run the explicit full suite and responsive Sources checks, then push once through the existing Render auto-deploy. Start through the authenticated burst endpoint; reconcile run charges, outcomes, imports and provider failures. Do not trigger a manual second deployment. The native worker restores prior recurring policy after the burst window. The target can underfill; no new credentials, upgrades or cash overages are authorized.
+
 The user-approved campaign plan supersedes the paid-collection and new-source restrictions in section 2, items 5–6, solely for the 168-hour campaign beginning at the first paid pilot. All identity, evidence, authentication, application-preservation and deployment safeguards remain in force. The campaign policy, implemented bounds and explicit source gates are recorded in [CAMPAIGN.md](CAMPAIGN.md). MyCareersFuture retains its four queries × ten results every 12 hours. No claim of unattended or seven-day acceptance is established by implementation tests.
 
 ### Campaign correction — 24 October 2026
